@@ -1,0 +1,25 @@
+version: '3.9'
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports: ["5432:5432"]
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+
+  web:
+    build: .
+    env_file: .env
+    ports: ["8000:8000"]
+    depends_on: [db]
+    volumes:
+      - .:/app
+    command: >
+      sh -c "python workxplorer_backend/manage.py migrate &&
+             gunicorn core.wsgi:application --chdir workxplorer_backend
+             --bind 0.0.0.0:8000 --workers 3 --timeout 120"
+
+volumes:
+  pgdata:

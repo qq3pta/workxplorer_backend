@@ -19,6 +19,9 @@ psycopg = {version = "^3.1.18", extras = ["binary"]}
 gunicorn = "^21.2.0"
 celery = "^5.4.0"
 redis = "^5.0.7"
+djangorestframework-simplejwt = "^5.5.1"
+psycopg2-binary = "^2.9.10"
+pillow = "^11.3.0"
 
 [tool.poetry.group.dev.dependencies]
 black = "^24.3.0"

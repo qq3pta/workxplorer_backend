@@ -33,7 +33,7 @@ INSTALLED_APPS = [
 
     # API
     "api.accounts",
-    # "api.loads",
+    "api.loads",
     # "api.offers",
     # "api.deals",
     # "api.ratings",

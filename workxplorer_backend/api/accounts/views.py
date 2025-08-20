@@ -13,6 +13,8 @@ from .serializers import (
     ProfileSerializer,
     ChangeRoleSerializer,
     ChangePasswordSerializer,
+    VerifyEmailSerializer,
+    LogoutSerializer,
 )
 
 class RegisterView(generics.CreateAPIView):
@@ -27,14 +29,19 @@ class RegisterView(generics.CreateAPIView):
 
 class VerifyEmailView(generics.GenericAPIView):
     permission_classes = [permissions.AllowAny]
+    serializer_class = VerifyEmailSerializer   # <-- добавили
 
     def post(self, request):
-        email = request.data.get("email")
-        code = request.data.get("code")
+        s = self.get_serializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        email = s.validated_data["email"]
+        code = s.validated_data["code"]
+
         user = User.objects.filter(email=email).first()
         otp = user and user.otps.filter(code=code, is_used=False).first()
         if not (user and otp):
             return Response({"detail": "Invalid code"}, status=status.HTTP_400_BAD_REQUEST)
+
         user.is_active = True
         user.save()
         otp.is_used = True
@@ -68,8 +75,13 @@ class LoginView(generics.GenericAPIView):
         )
 
 class LogoutView(generics.GenericAPIView):
+    serializer_class = LogoutSerializer   # <-- добавили
+
     def post(self, request):
-        refresh = request.data.get("refresh")
+        s = self.get_serializer(data=request.data)
+        s.is_valid(raise_exception=False)
+        refresh = s.validated_data.get("refresh")
+
         if refresh:
             try:
                 token = RefreshToken(refresh)

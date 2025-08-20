@@ -112,7 +112,7 @@ REST_FRAMEWORK = {
 }
 
 SPECTACULAR_SETTINGS = {
-    "TITLE": "Freight Exchange API",
+    "TITLE": "Workxplorer Backend API",
     "VERSION": "0.1.0",
 }
 

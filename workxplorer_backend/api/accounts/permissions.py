@@ -1,28 +1,42 @@
 from rest_framework.permissions import BasePermission
 from .models import UserRole
 
+def _is_verified(user) -> bool:
+    return bool(user and user.is_authenticated and getattr(user, "is_email_verified", False))
 
-def _role(user):
-    return getattr(user, "role", None)
-
+class IsAuthenticatedAndVerified(BasePermission):
+    """Любая роль, но пользователь авторизован и подтвердил e-mail."""
+    def has_permission(self, request, view):
+        return _is_verified(request.user)
 
 class IsLogistic(BasePermission):
-    """Доступ только логисту."""
+    """Только логист (полный доступ по ТЗ)."""
     def has_permission(self, request, view):
-        return bool(request.user and request.user.is_authenticated and _role(request.user) == UserRole.LOGISTIC)
-
+        u = request.user
+        return _is_verified(u) and u.role == UserRole.LOGISTIC
 
 class IsCustomer(BasePermission):
-    """Доступ заказчику, а также логисту (полный доступ по ТЗ)."""
+    """Доступ для Заказчика; Логист также проходит (полный доступ по ТЗ)."""
     def has_permission(self, request, view):
-        if not (request.user and request.user.is_authenticated):
-            return False
-        return _role(request.user) in (UserRole.CUSTOMER, UserRole.LOGISTIC)
-
+        u = request.user
+        return _is_verified(u) and (u.role == UserRole.CUSTOMER or u.role == UserRole.LOGISTIC)
 
 class IsCarrier(BasePermission):
-    """Доступ перевозчику, а также логисту (полный доступ по ТЗ)."""
+    """Доступ для Перевозчика; Логист также проходит (полный доступ по ТЗ)."""
     def has_permission(self, request, view):
-        if not (request.user and request.user.is_authenticated):
+        u = request.user
+        return _is_verified(u) and (u.role == UserRole.CARRIER or u.role == UserRole.LOGISTIC)
+
+class RolePermission(BasePermission):
+    """
+    Универсально: во вьюхе укажи allowed_roles = [UserRole.CUSTOMER, ...]
+    Логист всегда проходит.
+    """
+    def has_permission(self, request, view):
+        u = request.user
+        if not _is_verified(u):
             return False
-        return _role(request.user) in (UserRole.CARRIER, UserRole.LOGISTIC)
+        if u.role == UserRole.LOGISTIC:
+            return True
+        allowed = getattr(view, "allowed_roles", None)
+        return True if not allowed else u.role in allowed

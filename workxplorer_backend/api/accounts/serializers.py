@@ -1,90 +1,130 @@
-from django.contrib.auth.password_validation import validate_password
+from django.contrib.auth import get_user_model, authenticate, password_validation
 from rest_framework import serializers
-from rest_framework.validators import UniqueValidator
+from .models import EmailOTP, UserRole
+from .emails import send_code_email
 
-from .models import User, UserRole
-
+User = get_user_model()
 
 class RegisterSerializer(serializers.ModelSerializer):
-    email = serializers.EmailField(
-        validators=[UniqueValidator(User.objects.all(), message="Email уже используется")]
-    )
-    username = serializers.CharField(
-        validators=[UniqueValidator(User.objects.all(), message="Логин уже используется")]
-    )
-    phone = serializers.CharField(
-        validators=[UniqueValidator(User.objects.all(), message="Телефон уже используется")]
-    )
+    password = serializers.CharField(write_only=True)
+    password2 = serializers.CharField(write_only=True)
 
     class Meta:
         model = User
-        fields = ("username", "email", "phone", "company_name", "password")
-        extra_kwargs = {"password": {"write_only": True}}
+        fields = ("username","email","password","password2","first_name","phone","company_name")
 
-    def validate_password(self, value):
-        validate_password(value)
-        return value
+    def validate(self, attrs):
+        if attrs["password"] != attrs.pop("password2"):
+            raise serializers.ValidationError({"password": "Пароли не совпадают"})
+        password_validation.validate_password(attrs["password"])
+        return attrs
 
-    def create(self, validated_data):
-        user = User(
-            username=validated_data["username"],
-            email=validated_data["email"],
-            phone=validated_data["phone"],
-            company_name=validated_data.get("company_name", ""),
-            role=UserRole.LOGISTIC,  # стартовая роль — логист
-            is_active=False,         # активируется после подтверждения email
-        )
-        user.set_password(validated_data["password"])
+    def create(self, validated):
+        pwd = validated.pop("password")
+        # стартовая роль — логист
+        user = User.objects.create(role=UserRole.LOGISTIC, **validated)
+        user.set_password(pwd)
         user.save()
+        _, raw = EmailOTP.create_otp(user, EmailOTP.PURPOSE_VERIFY, ttl_min=15)
+        send_code_email(user.email, raw, purpose="verify")
         return user
-
-
-class LoginSerializer(serializers.Serializer):
-    login = serializers.CharField()
-    password = serializers.CharField(write_only=True)
-
 
 class VerifyEmailSerializer(serializers.Serializer):
     email = serializers.EmailField()
     code = serializers.CharField(max_length=6)
 
+    def save(self, **kwargs):
+        email = self.validated_data["email"]
+        code  = self.validated_data["code"]
+        user = User.objects.filter(email=email).first()
+        if not user:
+            raise serializers.ValidationError({"email": "Пользователь не найден"})
+        otp = (EmailOTP.objects
+               .filter(user=user, purpose=EmailOTP.PURPOSE_VERIFY, is_used=False)
+               .order_by("-created_at").first())
+        if not otp or not otp.check_and_consume(code):
+            raise serializers.ValidationError({"code": "Неверный или просроченный код"})
+        user.is_email_verified = True
+        user.save(update_fields=["is_email_verified"])
+        return user
 
-class LogoutSerializer(serializers.Serializer):
-    # если refresh не передан — разлогиним все токены пользователя
-    refresh = serializers.CharField(required=False, allow_blank=True)
+class ResendVerifySerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    def save(self, **kwargs):
+        email = self.validated_data["email"]
+        user = User.objects.filter(email=email).first()
+        if user and not user.is_email_verified:
+            _, raw = EmailOTP.create_otp(user, EmailOTP.PURPOSE_VERIFY, ttl_min=15)
+            send_code_email(user.email, raw, purpose="verify")
+        return {"detail": "Если e-mail существует — код отправлен"}
 
+class LoginSerializer(serializers.Serializer):
+    login = serializers.CharField()            # email или username
+    password = serializers.CharField()
+    remember_me = serializers.BooleanField(default=False)
 
-class ProfileSerializer(serializers.ModelSerializer):
+    def validate(self, attrs):
+        login = attrs["login"]
+        password = attrs["password"]
+
+        u = User.objects.filter(email=login).first()
+        username = u.username if u else login
+        user = authenticate(username=username, password=password)
+        if not user:
+            raise serializers.ValidationError({"detail": "Неверные учетные данные"})
+        if not user.is_email_verified:
+            raise serializers.ValidationError({"detail": "Email не подтвержден"})
+        attrs["user"] = user
+        return attrs
+
+class MeSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        read_only_fields = (
-            "username",
-            "email",
-            "rating_as_customer",
-            "rating_as_carrier",
-            "role",
-        )
-        fields = (
-            "id",
-            "photo",
-            "username",
-            "company_name",
-            "role",
-            "email",
-            "phone",
-            "rating_as_customer",
-            "rating_as_carrier",
-        )
+        fields = ("id","username","email","first_name","phone","company_name","photo",
+                  "role","rating_as_customer","rating_as_carrier","is_email_verified")
 
+class UpdateMeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ("first_name","phone","company_name","photo","role")
 
-class ChangeRoleSerializer(serializers.Serializer):
-    role = serializers.ChoiceField(choices=UserRole.choices)
-
-
-class ChangePasswordSerializer(serializers.Serializer):
-    old_password = serializers.CharField(write_only=True)
-    new_password = serializers.CharField(write_only=True)
-
-    def validate_new_password(self, value):
-        validate_password(value)
+    def validate_role(self, value):
+        if value not in (UserRole.LOGISTIC, UserRole.CUSTOMER, UserRole.CARRIER):
+            raise serializers.ValidationError("Недопустимая роль")
         return value
+
+class ForgotPasswordSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+    def save(self, **kwargs):
+        email = self.validated_data["email"]
+        user = User.objects.filter(email=email).first()
+        if user:
+            _, raw = EmailOTP.create_otp(user, EmailOTP.PURPOSE_RESET, ttl_min=15)
+            send_code_email(user.email, raw, purpose="reset")
+        return {"detail": "Если e-mail существует — код отправлен"}
+
+class ResetPasswordSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    code  = serializers.CharField(max_length=6)
+    new_password = serializers.CharField()
+
+    def validate(self, attrs):
+        password_validation.validate_password(attrs["new_password"])
+        return attrs
+
+    def save(self, **kwargs):
+        email = self.validated_data["email"]
+        code  = self.validated_data["code"]
+        newp  = self.validated_data["new_password"]
+        user = User.objects.filter(email=email).first()
+        if not user:
+            raise serializers.ValidationError({"email": "Пользователь не найден"})
+        otp = (EmailOTP.objects
+               .filter(user=user, purpose=EmailOTP.PURPOSE_RESET, is_used=False)
+               .order_by("-created_at").first())
+        if not otp or not otp.check_and_consume(code):
+            raise serializers.ValidationError({"code": "Неверный или просроченный код"})
+        user.set_password(newp)
+        user.save(update_fields=["password"])
+        return {"detail": "Пароль обновлен"}

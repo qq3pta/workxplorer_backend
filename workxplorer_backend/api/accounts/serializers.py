@@ -1,5 +1,9 @@
+from datetime import timedelta
 from django.contrib.auth import get_user_model, authenticate, password_validation
+from django.db.models import Q
+from django.utils import timezone
 from rest_framework import serializers
+from rest_framework_simplejwt.tokens import RefreshToken
 from .models import EmailOTP, UserRole
 from .emails import send_code_email
 
@@ -16,18 +20,28 @@ class RegisterSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         if attrs["password"] != attrs.pop("password2"):
             raise serializers.ValidationError({"password": "Пароли не совпадают"})
+        if User.objects.filter(email__iexact=attrs["email"]).exists():
+            raise serializers.ValidationError({"email": "Этот e-mail уже зарегистрирован"})
+        if User.objects.filter(username__iexact=attrs["username"]).exists():
+            raise serializers.ValidationError({"username": "Этот логин уже занят"})
         password_validation.validate_password(attrs["password"])
         return attrs
 
     def create(self, validated):
         pwd = validated.pop("password")
-        # стартовая роль — логист
-        user = User.objects.create(role=UserRole.LOGISTIC, **validated)
+        user = User.objects.create(
+            role=UserRole.LOGISTIC,
+            is_active=False,
+            is_email_verified=False,
+            **validated
+        )
         user.set_password(pwd)
         user.save()
-        _, raw = EmailOTP.create_otp(user, EmailOTP.PURPOSE_VERIFY, ttl_min=15)
+
+        otp, raw = EmailOTP.create_otp(user, EmailOTP.PURPOSE_VERIFY, ttl_min=15)
         send_code_email(user.email, raw, purpose="verify")
         return user
+
 
 class VerifyEmailSerializer(serializers.Serializer):
     email = serializers.EmailField()
@@ -36,27 +50,39 @@ class VerifyEmailSerializer(serializers.Serializer):
     def save(self, **kwargs):
         email = self.validated_data["email"]
         code  = self.validated_data["code"]
-        user = User.objects.filter(email=email).first()
+        user = User.objects.filter(email__iexact=email).first()
         if not user:
             raise serializers.ValidationError({"email": "Пользователь не найден"})
         otp = (EmailOTP.objects
-               .filter(user=user, purpose=EmailOTP.PURPOSE_VERIFY, is_used=False)
+               .filter(user=user, purpose=EmailOTP.PURPOSE_VERIFY, is_used=False, expires_at__gte=timezone.now())
                .order_by("-created_at").first())
         if not otp or not otp.check_and_consume(code):
             raise serializers.ValidationError({"code": "Неверный или просроченный код"})
-        user.is_email_verified = True
-        user.save(update_fields=["is_email_verified"])
+
+        if not user.is_email_verified:
+            user.is_email_verified = True
+            user.is_active = True
+            user.save(update_fields=["is_email_verified","is_active"])
         return user
+
 
 class ResendVerifySerializer(serializers.Serializer):
     email = serializers.EmailField()
+
     def save(self, **kwargs):
         email = self.validated_data["email"]
-        user = User.objects.filter(email=email).first()
+        user = User.objects.filter(email__iexact=email).first()
         if user and not user.is_email_verified:
-            _, raw = EmailOTP.create_otp(user, EmailOTP.PURPOSE_VERIFY, ttl_min=15)
+            last = (EmailOTP.objects
+                    .filter(user=user, purpose=EmailOTP.PURPOSE_VERIFY)
+                    .order_by("-created_at").first())
+            if last and (timezone.now() - last.created_at).total_seconds() < 60:
+                raise serializers.ValidationError({"detail": "Код уже отправлен. Подождите минуту."})
+
+            otp, raw = EmailOTP.create_otp(user, EmailOTP.PURPOSE_VERIFY, ttl_min=15)
             send_code_email(user.email, raw, purpose="verify")
         return {"detail": "Если e-mail существует — код отправлен"}
+
 
 class LoginSerializer(serializers.Serializer):
     login = serializers.CharField()            # email или username
@@ -66,22 +92,33 @@ class LoginSerializer(serializers.Serializer):
     def validate(self, attrs):
         login = attrs["login"]
         password = attrs["password"]
-
-        u = User.objects.filter(email=login).first()
+        # поддержка входа по email или username
+        u = User.objects.filter(Q(email__iexact=login) | Q(username__iexact=login)).first()
         username = u.username if u else login
         user = authenticate(username=username, password=password)
         if not user:
             raise serializers.ValidationError({"detail": "Неверные учетные данные"})
         if not user.is_email_verified:
             raise serializers.ValidationError({"detail": "Email не подтвержден"})
+
+        # выдаём токены (+ поддержка remember_me)
+        refresh = RefreshToken.for_user(user)
+        access = refresh.access_token
+        if attrs.get("remember_me"):
+            refresh.set_exp(lifetime=timedelta(days=30))
+            access.set_exp(lifetime=timedelta(hours=12))  # можно скорректировать под продукт
+
+        attrs["tokens"] = {"access": str(access), "refresh": str(refresh)}
         attrs["user"] = user
         return attrs
+
 
 class MeSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ("id","username","email","first_name","phone","company_name","photo",
                   "role","rating_as_customer","rating_as_carrier","is_email_verified")
+
 
 class UpdateMeSerializer(serializers.ModelSerializer):
     class Meta:
@@ -93,16 +130,18 @@ class UpdateMeSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Недопустимая роль")
         return value
 
+
 class ForgotPasswordSerializer(serializers.Serializer):
     email = serializers.EmailField()
 
     def save(self, **kwargs):
         email = self.validated_data["email"]
-        user = User.objects.filter(email=email).first()
+        user = User.objects.filter(email__iexact=email).first()
         if user:
-            _, raw = EmailOTP.create_otp(user, EmailOTP.PURPOSE_RESET, ttl_min=15)
+            otp, raw = EmailOTP.create_otp(user, EmailOTP.PURPOSE_RESET, ttl_min=15)
             send_code_email(user.email, raw, purpose="reset")
         return {"detail": "Если e-mail существует — код отправлен"}
+
 
 class ResetPasswordSerializer(serializers.Serializer):
     email = serializers.EmailField()
@@ -117,11 +156,11 @@ class ResetPasswordSerializer(serializers.Serializer):
         email = self.validated_data["email"]
         code  = self.validated_data["code"]
         newp  = self.validated_data["new_password"]
-        user = User.objects.filter(email=email).first()
+        user = User.objects.filter(email__iexact=email).first()
         if not user:
             raise serializers.ValidationError({"email": "Пользователь не найден"})
         otp = (EmailOTP.objects
-               .filter(user=user, purpose=EmailOTP.PURPOSE_RESET, is_used=False)
+               .filter(user=user, purpose=EmailOTP.PURPOSE_RESET, is_used=False, expires_at__gte=timezone.now())
                .order_by("-created_at").first())
         if not otp or not otp.check_and_consume(code):
             raise serializers.ValidationError({"code": "Неверный или просроченный код"})

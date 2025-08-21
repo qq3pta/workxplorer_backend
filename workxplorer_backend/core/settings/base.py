@@ -118,14 +118,15 @@ REST_FRAMEWORK = {
 SPECTACULAR_SETTINGS = {
     "TITLE": "Workxplorer Backend API",
     "VERSION": "0.1.0",
+    "COMPONENT_SPLIT_REQUEST": True,
 }
 
-ACCESS_MIN = int(os.getenv("JWT_ACCESS_MIN", "60"))      # 60 мин
-REFRESH_DAYS = int(os.getenv("JWT_REFRESH_DAYS", "7"))   # 7 дней
+ACCESS_MIN = int(os.getenv("JWT_ACCESS_MIN", "60"))
+REFRESH_DAYS = int(os.getenv("JWT_REFRESH_DAYS", "7"))
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=ACCESS_MIN),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=REFRESH_DAYS),
-    "ROTATE_REFRESH_TOKENS": False,
+    "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
     "AUTH_HEADER_TYPES": ("Bearer",),
 }

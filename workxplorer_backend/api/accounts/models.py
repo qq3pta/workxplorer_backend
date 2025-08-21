@@ -8,12 +8,25 @@ class UserRole(models.TextChoices):
 
 class User(AbstractUser):
     email = models.EmailField(unique=True)
-    phone = models.CharField(max_length=20, unique=True)
+    phone = models.CharField(
+        max_length=20,
+        unique=True,
+        blank=True,
+        null=True,
+        default=None
+    )
     company_name = models.CharField(max_length=255, blank=True)
     photo = models.ImageField(upload_to="avatars/", blank=True, null=True)
     role = models.CharField(max_length=16, choices=UserRole.choices, default=UserRole.LOGISTIC)
     rating_as_customer = models.FloatField(default=0)
     rating_as_carrier  = models.FloatField(default=0)
+
+    REQUIRED_FIELDS = ["email"]
+
+    def save(self, *args, **kwargs):
+        if self.phone == "":
+            self.phone = None
+        super().save(*args, **kwargs)
 
 class EmailOTP(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="otps")

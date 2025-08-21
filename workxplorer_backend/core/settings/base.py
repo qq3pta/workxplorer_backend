@@ -37,7 +37,7 @@ INSTALLED_APPS = [
     # "api.offers",
     # "api.deals",
     # "api.ratings",
-    # "api.search",
+    "api.search",
 ]
 
 MIDDLEWARE = [

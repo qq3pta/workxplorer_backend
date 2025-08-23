@@ -10,7 +10,7 @@ class CargoSearchView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated, IsCarrier]
     serializer_class = CargoListSerializer
     filter_backends = [DjangoFilterBackend]
-    filterset_fields = ["pickup_city", "delivery_city"]
+    filterset_fields = ["origin_city", "destination_city"]
 
     def get_queryset(self):
         qs = Cargo.objects.filter(status=CargoStatus.POSTED)

@@ -7,12 +7,10 @@ class TransportType(TextChoices):
     DUMP   = "DUMP",   "Самосвал"
     CARTR  = "CARTR",  "Автотранспортер"
     GRAIN  = "GRAIN",  "Зерновоз"
-    CRANE  = "CRANE",  "Кран"
     LOG    = "LOG",    "Лесовоз"
     PICKUP = "PICKUP", "Пикап"
-    CEM    = "CEM",    "Цементовоз"
-    TANK   = "TANK",   "Автоцистерна"
     MEGA   = "MEGA",   "Мега фура"
+    OTHER = "OTHER", "Другое"
 
 class Currency(TextChoices):
     UZS = "UZS", "сум"

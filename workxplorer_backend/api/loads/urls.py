@@ -1,7 +1,16 @@
 from django.urls import path
-from .views import CargoCreateView, MyCargosView
+from .views import (
+    PublishCargoView,
+    CargoDetailView,
+    CargoRefreshView,
+    MyCargosView,
+    MyCargosBoardView,
+)
 
 urlpatterns = [
-    path("create/", CargoCreateView.as_view()),
+    path("create/", PublishCargoView.as_view()),
     path("mine/",   MyCargosView.as_view()),
+    path("board/",  MyCargosBoardView.as_view()),
+    path("<int:pk>/", CargoDetailView.as_view()),
+    path("<int:pk>/refresh/", CargoRefreshView.as_view()),
 ]

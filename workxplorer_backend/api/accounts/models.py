@@ -1,13 +1,17 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+from django.db.models import UniqueConstraint
+from django.db.models.functions import Lower
 from django.utils import timezone
 from datetime import timedelta
 import secrets
+
 
 class UserRole(models.TextChoices):
     LOGISTIC = "LOGISTIC", "Логист"
     CUSTOMER = "CUSTOMER", "Заказчик"
     CARRIER  = "CARRIER",  "Перевозчик"
+
 
 class User(AbstractUser):
     email = models.EmailField(unique=True)
@@ -24,13 +28,38 @@ class User(AbstractUser):
 
     REQUIRED_FIELDS = ["email"]
 
+    class Meta:
+        indexes = [
+            models.Index(fields=["role"]),
+            models.Index(fields=["phone"]),
+        ]
+        constraints = [
+            UniqueConstraint(Lower("email"), name="user_email_ci_unique"),
+            UniqueConstraint(Lower("username"), name="user_username_ci_unique"),
+        ]
+
     def save(self, *args, **kwargs):
+        if self.email:
+            self.email = self.email.strip().lower()
         if self.phone == "":
             self.phone = None
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return self.username or self.email
+        return self.username or self.email or f"User#{self.pk}"
+
+    @property
+    def is_logistic(self) -> bool:
+        return self.role == UserRole.LOGISTIC
+
+    @property
+    def is_customer(self) -> bool:
+        return self.role == UserRole.CUSTOMER
+
+    @property
+    def is_carrier(self) -> bool:
+        return self.role == UserRole.CARRIER
+
 
 class EmailOTP(models.Model):
     PURPOSE_VERIFY = "verify"

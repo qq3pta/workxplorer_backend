@@ -16,7 +16,7 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ("username","email","password","password2","first_name","phone","company_name")
+        fields = ("username", "email", "password", "password2", "first_name", "phone", "company_name")
 
     def validate(self, attrs):
         if attrs["password"] != attrs.pop("password2"):
@@ -39,8 +39,8 @@ class RegisterSerializer(serializers.ModelSerializer):
     def create(self, validated):
         pwd = validated.pop("password")
         user = User.objects.create(
-            role=UserRole.LOGISTIC,
-            is_active=False,
+            role=UserRole.LOGISTIC,          # по ТЗ дефолт — логист
+            is_active=False,                 # до подтверждения email
             is_email_verified=False,
             **validated
         )
@@ -58,20 +58,23 @@ class VerifyEmailSerializer(serializers.Serializer):
 
     def save(self, **kwargs):
         email = self.validated_data["email"]
-        code  = self.validated_data["code"]
+        code = self.validated_data["code"]
         user = User.objects.filter(email__iexact=email).first()
         if not user:
             raise serializers.ValidationError({"email": "Пользователь не найден"})
-        otp = (EmailOTP.objects
-               .filter(user=user, purpose=EmailOTP.PURPOSE_VERIFY, is_used=False, expires_at__gte=timezone.now())
-               .order_by("-created_at").first())
+        otp = (
+            EmailOTP.objects
+            .filter(user=user, purpose=EmailOTP.PURPOSE_VERIFY, is_used=False, expires_at__gte=timezone.now())
+            .order_by("-created_at")
+            .first()
+        )
         if not otp or not otp.check_and_consume(code):
             raise serializers.ValidationError({"code": "Неверный или просроченный код"})
 
         if not user.is_email_verified:
             user.is_email_verified = True
             user.is_active = True
-            user.save(update_fields=["is_email_verified","is_active"])
+            user.save(update_fields=["is_email_verified", "is_active"])
         return user
 
 
@@ -82,9 +85,13 @@ class ResendVerifySerializer(serializers.Serializer):
         email = self.validated_data["email"]
         user = User.objects.filter(email__iexact=email).first()
         if user and not user.is_email_verified:
-            last = (EmailOTP.objects
-                    .filter(user=user, purpose=EmailOTP.PURPOSE_VERIFY)
-                    .order_by("-created_at").first())
+            # anti-abuse: не чаще 1 раза в минуту
+            last = (
+                EmailOTP.objects
+                .filter(user=user, purpose=EmailOTP.PURPOSE_VERIFY)
+                .order_by("-created_at")
+                .first()
+            )
             if last and (timezone.now() - last.created_at).total_seconds() < 60:
                 raise serializers.ValidationError({"detail": "Код уже отправлен. Подождите минуту."})
 
@@ -123,19 +130,18 @@ class LoginSerializer(serializers.Serializer):
 class MeSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ("id","username","email","first_name","phone","company_name","photo",
-                  "role","rating_as_customer","rating_as_carrier","is_email_verified")
+        fields = (
+            "id", "username", "email", "first_name", "phone", "company_name", "photo",
+            "role", "rating_as_customer", "rating_as_carrier", "is_email_verified",
+        )
+        read_only_fields = ("id", "username", "email", "role", "rating_as_customer", "rating_as_carrier", "is_email_verified")
 
 
 class UpdateMeSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ("first_name","phone","company_name","photo","role")
-
-    def validate_role(self, value):
-        if value not in (UserRole.LOGISTIC, UserRole.CUSTOMER, UserRole.CARRIER):
-            raise serializers.ValidationError("Недопустимая роль")
-        return value
+        # Роль исключена — меняется отдельной ручкой (ChangeRoleView)
+        fields = ("first_name", "phone", "company_name", "photo")
 
     def validate_phone(self, value):
         if value and User.objects.filter(phone=value).exclude(pk=self.instance.pk).exists():
@@ -191,3 +197,17 @@ class ResetPasswordSerializer(serializers.Serializer):
         user.set_password(newp)
         user.save(update_fields=["password"])
         return {"detail": "Пароль обновлен"}
+
+
+# --- Отдельный сериализатор для смены роли (по ТЗ) ---
+class RoleChangeSerializer(serializers.Serializer):
+    role = serializers.ChoiceField(choices=UserRole.choices)
+
+    def save(self, **kwargs):
+        user = self.context["request"].user
+        new_role = self.validated_data["role"]
+        if user.role == new_role:
+            return {"detail": "Роль уже установлена"}
+        user.role = new_role
+        user.save(update_fields=["role"])
+        return {"detail": "Роль обновлена", "role": user.role}

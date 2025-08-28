@@ -1,16 +1,16 @@
 from django.utils import timezone
-from rest_framework import generics, permissions, status
+from django.shortcuts import get_object_or_404
+from django.core.exceptions import ValidationError
+
+from rest_framework import generics, status
 from rest_framework import serializers as drf_serializers
 from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema
 
-from .models import Cargo
+from .models import Cargo, CargoStatus
 from .choices import ModerationStatus
 from .serializers import CargoPublishSerializer, CargoListSerializer
-from ..accounts.permissions import IsCustomer
-
-
-QUERYSET = Cargo.objects.none()
+from ..accounts.permissions import IsAuthenticatedAndVerified, IsCustomer
 
 
 def _swagger(view) -> bool:
@@ -25,28 +25,27 @@ class RefreshResponseSerializer(drf_serializers.Serializer):
 
 @extend_schema(tags=["loads"])
 class PublishCargoView(generics.CreateAPIView):
-    permission_classes = [permissions.IsAuthenticated, IsCustomer]
+    permission_classes = [IsAuthenticatedAndVerified, IsCustomer]
     serializer_class = CargoPublishSerializer
-    queryset = QUERYSET
-    filter_backends = []
+    queryset = Cargo.objects.all()
 
     def create(self, request, *args, **kwargs):
-        s = self.get_serializer(data=request.data)
-        s.is_valid(raise_exception=True)
-        cargo = s.save(customer=request.user, moderation_status=ModerationStatus.PENDING)
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        # customer и moderation_status выставляются в сериализаторе (create)
+        cargo = serializer.save()
         return Response(
             {"message": "Заявка успешно опубликована и отправлена на модерацию", "id": cargo.id},
             status=status.HTTP_201_CREATED,
-            headers=self.get_success_headers(s.data),
+            headers=self.get_success_headers(serializer.data),
         )
 
 
 @extend_schema(tags=["loads"])
 class CargoDetailView(generics.RetrieveUpdateAPIView):
-    permission_classes = [permissions.IsAuthenticated, IsCustomer]
+    permission_classes = [IsAuthenticatedAndVerified, IsCustomer]
     serializer_class = CargoPublishSerializer
-    queryset = QUERYSET
-    filter_backends = []
+    queryset = Cargo.objects.all()
 
     def get_queryset(self):
         if _swagger(self):
@@ -61,57 +60,55 @@ class CargoDetailView(generics.RetrieveUpdateAPIView):
 
 @extend_schema(tags=["loads"], responses=RefreshResponseSerializer)
 class CargoRefreshView(generics.GenericAPIView):
-    permission_classes = [permissions.IsAuthenticated, IsCustomer]
+    permission_classes = [IsAuthenticatedAndVerified, IsCustomer]
     serializer_class = RefreshResponseSerializer
-    queryset = QUERYSET
-    filter_backends = []
+    queryset = Cargo.objects.all()
 
     def post(self, request, pk: int):
         if _swagger(self):
             # Возвращаем валидный пример, чтобы схема строилась
             return Response({"detail": "schema"}, status=status.HTTP_200_OK)
 
+        obj = get_object_or_404(Cargo, pk=pk, customer=request.user)
         try:
-            obj = Cargo.objects.get(pk=pk, customer=request.user)
-        except Cargo.DoesNotExist:
-            return Response({"detail": "Не найдено"}, status=status.HTTP_404_NOT_FOUND)
-
-        if (timezone.now() - obj.refreshed_at).total_seconds() < 15 * 60:
-            return Response(
-                {"detail": "Можно обновлять раз в 15 минут"},
-                status=status.HTTP_429_TOO_MANY_REQUESTS,
-            )
-
-        obj.refreshed_at = timezone.now()
-        obj.save(update_fields=["refreshed_at"])
+            obj.bump()  # проверит cooldown и обновит refreshed_at
+        except ValidationError as e:
+            return Response({"detail": str(e)}, status=status.HTTP_429_TOO_MANY_REQUESTS)
         return Response({"detail": "Обновлено"}, status=status.HTTP_200_OK)
 
 
 @extend_schema(tags=["loads"])
 class MyCargosView(generics.ListAPIView):
-    permission_classes = [permissions.IsAuthenticated, IsCustomer]
+    permission_classes = [IsAuthenticatedAndVerified, IsCustomer]
     serializer_class = CargoListSerializer
-    queryset = QUERYSET
-    filter_backends = []
+    queryset = Cargo.objects.all()
 
     def get_queryset(self):
         if _swagger(self):
             return Cargo.objects.none()
-        return Cargo.objects.filter(customer=self.request.user).order_by("-created_at")
+        return (
+            Cargo.objects
+            .filter(customer=self.request.user)
+            .order_by("-refreshed_at", "-created_at")
+        )
 
 
 @extend_schema(tags=["loads"])
 class MyCargosBoardView(generics.ListAPIView):
-    permission_classes = [permissions.IsAuthenticated, IsCustomer]
+    permission_classes = [IsAuthenticatedAndVerified, IsCustomer]
     serializer_class = CargoListSerializer
-    queryset = QUERYSET
-    filter_backends = []
+    queryset = Cargo.objects.all()
 
     def get_queryset(self):
         if _swagger(self):
             return Cargo.objects.none()
 
-        qs = Cargo.objects.filter(customer=self.request.user, status="POSTED")
+        qs = Cargo.objects.filter(
+            customer=self.request.user,
+            status=CargoStatus.POSTED,
+            is_hidden=False,
+            moderation_status=ModerationStatus.APPROVED,
+        )
 
         p = self.request.query_params
         if p.get("origin_city"):
@@ -125,4 +122,4 @@ class MyCargosBoardView(generics.ListAPIView):
         if p.get("id"):
             qs = qs.filter(id=p["id"])
 
-        return qs.order_by("-refreshed_at")
+        return qs.order_by("-refreshed_at", "-created_at")

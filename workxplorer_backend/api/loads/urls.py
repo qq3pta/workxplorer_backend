@@ -8,9 +8,9 @@ from .views import (
 )
 
 urlpatterns = [
-    path("create/", PublishCargoView.as_view()),
-    path("mine/",   MyCargosView.as_view()),
-    path("board/",  MyCargosBoardView.as_view()),
-    path("<int:pk>/", CargoDetailView.as_view()),
-    path("<int:pk>/refresh/", CargoRefreshView.as_view()),
+    path("create/",  PublishCargoView.as_view(),  name="create"),
+    path("mine/",    MyCargosView.as_view(),      name="mine"),
+    path("board/",   MyCargosBoardView.as_view(), name="board"),
+    path("<int:pk>/",            CargoDetailView.as_view(),   name="detail"),
+    path("<int:pk>/refresh/",    CargoRefreshView.as_view(),  name="refresh"),
 ]

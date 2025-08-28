@@ -2,7 +2,7 @@ from datetime import timedelta
 from django.conf import settings
 
 from django.contrib.auth import get_user_model
-from rest_framework import generics, status, serializers  # serializers для inline_serializer
+from rest_framework import generics, status, serializers
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -24,6 +24,7 @@ from .serializers import (
     UpdateMeSerializer,
     ForgotPasswordSerializer,
     ResetPasswordSerializer,
+    RoleChangeSerializer,
 )
 
 User = get_user_model()
@@ -216,6 +217,23 @@ class UpdateMeView(generics.UpdateAPIView):
 
     def get_object(self):
         return self.request.user
+
+
+@extend_schema(
+    tags=["auth"],
+    request=RoleChangeSerializer,
+    responses=inline_serializer(
+        "RoleChangeResponse",
+        {"detail": serializers.CharField(), "role": serializers.CharField(required=False)},
+    ),
+)
+class ChangeRoleView(APIView):
+    permission_classes = [IsAuthenticatedAndVerified]
+
+    def post(self, request):
+        s = RoleChangeSerializer(data=request.data, context={"request": request})
+        s.is_valid(raise_exception=True)
+        return Response(s.save())
 
 
 @extend_schema(

@@ -4,10 +4,10 @@ from .models import Cargo
 @admin.register(Cargo)
 class CargoAdmin(admin.ModelAdmin):
     list_display = (
-        "id", "title",
+        "id", "product",
         "origin_city", "destination_city", "load_date",
         "transport_type", "weight_kg",
-        "price_value", "price_currency",
+        "price_value",
         "contact_pref", "is_hidden",
         "status", "moderation_status",
         "age_minutes_display",
@@ -15,10 +15,10 @@ class CargoAdmin(admin.ModelAdmin):
     )
     list_filter = (
         "status", "moderation_status", "transport_type",
-        "price_currency", "is_hidden", "load_date",
+        "is_hidden", "load_date",
         "origin_city", "destination_city",
     )
-    search_fields = ("title", "origin_city", "destination_city", "customer__username", "customer__email")
+    search_fields = ("product", "origin_city", "destination_city", "customer__username", "customer__email")
     ordering = ("-refreshed_at",)
     date_hierarchy = "created_at"
 

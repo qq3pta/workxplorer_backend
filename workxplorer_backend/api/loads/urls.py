@@ -5,9 +5,11 @@ from .views import (
     CargoRefreshView,
     MyCargosView,
     MyCargosBoardView,
+    PublicLoadsView,
 )
 
 urlpatterns = [
+    path("public/", PublicLoadsView.as_view(),  name="public"),
     path("create/",  PublishCargoView.as_view(),  name="create"),
     path("mine/",    MyCargosView.as_view(),      name="mine"),
     path("board/",   MyCargosBoardView.as_view(), name="board"),

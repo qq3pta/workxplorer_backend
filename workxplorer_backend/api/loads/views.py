@@ -10,7 +10,7 @@ from drf_spectacular.utils import extend_schema
 from .models import Cargo, CargoStatus
 from .choices import ModerationStatus
 from .serializers import CargoPublishSerializer, CargoListSerializer
-from ..accounts.permissions import IsAuthenticatedAndVerified, IsCustomer
+from ..accounts.permissions import IsAuthenticatedAndVerified, IsCustomer, IsCarrier  # ← добавили IsCarrier
 
 
 def _swagger(view) -> bool:
@@ -121,5 +121,49 @@ class MyCargosBoardView(generics.ListAPIView):
             qs = qs.filter(transport_type=p["transport_type"])
         if p.get("id"):
             qs = qs.filter(id=p["id"])
+
+        return qs.order_by("-refreshed_at", "-created_at")
+
+
+@extend_schema(tags=["loads"])
+class PublicLoadsView(generics.ListAPIView):
+    """
+    Публичная доска: видна Перевозчику/Логисту.
+    Показывает только одобренные, не скрытые и активные заявки.
+    Поддерживает фильтры по макету.
+    """
+    permission_classes = [IsAuthenticatedAndVerified, IsCarrier]
+    serializer_class = CargoListSerializer
+    queryset = Cargo.objects.all()
+
+    def get_queryset(self):
+        qs = Cargo.objects.filter(
+            is_hidden=False,
+            moderation_status=ModerationStatus.APPROVED,
+            status=CargoStatus.POSTED,
+        )
+
+        p = self.request.query_params
+        if p.get("origin_city"):
+            qs = qs.filter(origin_city__iexact=p["origin_city"])
+        if p.get("destination_city"):
+            qs = qs.filter(destination_city__iexact=p["destination_city"])
+        if p.get("load_date"):
+            qs = qs.filter(load_date=p["load_date"])
+        if p.get("transport_type"):
+            qs = qs.filter(transport_type=p["transport_type"])
+        if p.get("id"):
+            qs = qs.filter(id=p["id"])
+
+        # ценовые фильтры (без конвертации)
+        if p.get("min_price"):
+            qs = qs.filter(price_value__gte=p["min_price"])
+        if p.get("max_price"):
+            qs = qs.filter(price_value__lte=p["max_price"])
+
+        # фильтр по валюте (если поле есть в модели)
+        price_currency = p.get("price_currency")
+        if price_currency and any(f.name == "price_currency" for f in Cargo._meta.get_fields()):
+            qs = qs.filter(price_currency=price_currency)
 
         return qs.order_by("-refreshed_at", "-created_at")

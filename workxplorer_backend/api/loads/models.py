@@ -4,7 +4,7 @@ from django.db import models
 from django.db.models.manager import Manager as DjangoManager
 from django.utils import timezone
 
-from .choices import TransportType, ContactPref, ModerationStatus
+from .choices import TransportType, ContactPref, ModerationStatus, Currency
 
 
 class CargoStatus(models.TextChoices):
@@ -32,6 +32,7 @@ class Cargo(models.Model):
     transport_type = models.CharField(max_length=10, choices=TransportType.choices)
     weight_kg = models.DecimalField(max_digits=12, decimal_places=2)
     price_value = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    price_currency = models.CharField(max_length=3,choices=Currency.choices,default=Currency.UZS)
     contact_pref = models.CharField(max_length=10, choices=ContactPref.choices)
     is_hidden = models.BooleanField(default=False)
 
@@ -46,7 +47,6 @@ class Cargo(models.Model):
     status = models.CharField(max_length=20, choices=CargoStatus.choices, default=CargoStatus.POSTED)
     created_at = models.DateTimeField(auto_now_add=True)
 
-    # менеджер с аннотацией для IDE (убирает "unresolved reference objects")
     objects: DjangoManager["Cargo"] = models.Manager()
 
     class Meta:
@@ -57,12 +57,13 @@ class Cargo(models.Model):
             models.Index(fields=["is_hidden"]),
             models.Index(fields=["status"]),
             models.Index(fields=["refreshed_at"]),
+            models.Index(fields=["price_value"]),
+            models.Index(fields=["price_currency"]),
         ]
 
     def __str__(self):
         return f"{self.product} ({self.origin_city} → {self.destination_city})"
 
-    # ------------ Валидации и бизнес-логика ------------
 
     def clean(self):
         """Базовая бизнес-валидация полей."""

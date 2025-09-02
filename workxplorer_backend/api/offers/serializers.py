@@ -1,3 +1,4 @@
+from decimal import Decimal
 from rest_framework import serializers
 
 from api.loads.models import Cargo, CargoStatus
@@ -76,6 +77,6 @@ class OfferDetailSerializer(serializers.ModelSerializer):
 
 
 class OfferCounterSerializer(serializers.Serializer):
-    price_value = serializers.DecimalField(max_digits=14, decimal_places=2, min_value=0.01)
+    price_value = serializers.DecimalField(max_digits=14, decimal_places=2, min_value=Decimal("0.01"))
     price_currency = serializers.CharField(required=False, allow_blank=True, max_length=3)
     message = serializers.CharField(required=False, allow_blank=True)

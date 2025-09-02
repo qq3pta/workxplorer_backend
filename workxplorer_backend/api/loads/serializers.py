@@ -37,7 +37,6 @@ class CargoPublishSerializer(serializers.ModelSerializer):
             if missing:
                 raise serializers.ValidationError({f: "Обязательное поле по ТЗ 2.6.13" for f in missing})
 
-        # справочники: даём дружелюбные сообщения (DRF и так валидирует choices)
         transport_type = self._val_or_instance(attrs, "transport_type")
         contact_pref   = self._val_or_instance(attrs, "contact_pref")
         price_currency = self._val_or_instance(attrs, "price_currency")
@@ -77,6 +76,7 @@ class CargoPublishSerializer(serializers.ModelSerializer):
 
 class CargoListSerializer(serializers.ModelSerializer):
     age_minutes = serializers.IntegerField(read_only=True)
+    has_offers = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = Cargo
@@ -92,5 +92,6 @@ class CargoListSerializer(serializers.ModelSerializer):
             "contact_pref", "is_hidden",
             "moderation_status", "status",
             "age_minutes", "created_at", "refreshed_at",
+            "has_offers",
         )
         read_only_fields = fields

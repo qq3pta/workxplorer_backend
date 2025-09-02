@@ -13,7 +13,6 @@ class Offer(models.Model):
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="offers"
     )
 
-    # условия оффера (опционально)
     price_value = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
     price_currency = models.CharField(
         max_length=3, choices=Currency.choices, default=Currency.UZS
@@ -44,6 +43,32 @@ class Offer(models.Model):
         return f"Offer#{self.pk} cargo={self.cargo_id} carrier={self.carrier_id}"
 
     # ---------------- Бизнес-логика ----------------
+
+    def make_counter(self, *, price_value, price_currency=None, message=None):
+        """
+        Контр-предложение:
+        - обновляет price_value/price_currency/message (если заданы),
+        - сбрасывает акцепты обеих сторон,
+        - оставляет оффер активным.
+        """
+        # цена
+        if price_value is not None:
+            self.price_value = price_value
+        # валюта (опционально)
+        if price_currency:
+            self.price_currency = price_currency
+        # сообщение/комментарий (опционально)
+        if message is not None:
+            self.message = message
+
+        # сброс «принятости»
+        self.accepted_by_customer = False
+        self.accepted_by_carrier = False
+
+        self.save(update_fields=[
+            "price_value", "price_currency", "message",
+            "accepted_by_customer", "accepted_by_carrier", "updated_at"
+        ])
 
     @property
     def is_handshake(self) -> bool:

@@ -33,7 +33,6 @@ class PublishCargoView(generics.CreateAPIView):
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        # customer и moderation_status выставляются в сериализаторе (create)
         cargo = serializer.save()
         return Response(
             {"message": "Заявка успешно опубликована и отправлена на модерацию", "id": cargo.id},
@@ -67,12 +66,11 @@ class CargoRefreshView(generics.GenericAPIView):
 
     def post(self, request, pk: int):
         if _swagger(self):
-            # Возвращаем валидный пример, чтобы схема строилась
             return Response({"detail": "schema"}, status=status.HTTP_200_OK)
 
         obj = get_object_or_404(Cargo, pk=pk, customer=request.user)
         try:
-            obj.bump()  # проверит cooldown и обновит refreshed_at
+            obj.bump()
         except ValidationError as e:
             return Response({"detail": str(e)}, status=status.HTTP_429_TOO_MANY_REQUESTS)
         return Response({"detail": "Обновлено"}, status=status.HTTP_200_OK)
@@ -145,7 +143,6 @@ class PublicLoadsView(generics.ListAPIView):
                 status=CargoStatus.POSTED,
             )
             .annotate(
-                # related_name у Offer -> Cargo должен быть 'offers'; если другой — поменяй здесь и ниже
                 offers_active=Count("offers", filter=Q(offers__is_active=True))
             )
             .annotate(has_offers=Q(offers_active__gt=0))

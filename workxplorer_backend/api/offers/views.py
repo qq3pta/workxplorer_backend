@@ -99,7 +99,6 @@ class OfferRejectView(APIView):
         return Response({"detail": "Отклонено"}, status=status.HTTP_200_OK)
 
 
-# NEW: Торговаться / контр-предложение
 @extend_schema(tags=["offers"], request=OfferCounterSerializer, responses=OfferDetailSerializer)
 class OfferCounterView(APIView):
     """

@@ -6,6 +6,7 @@ from .views import (
     OfferDetailView,
     OfferAcceptView,
     OfferRejectView,
+    OfferCounterView,
 )
 
 app_name = "offers"
@@ -17,4 +18,5 @@ urlpatterns = [
     path("<int:pk>/", OfferDetailView.as_view(), name="detail"),
     path("<int:pk>/accept/", OfferAcceptView.as_view(), name="accept"),
     path("<int:pk>/reject/", OfferRejectView.as_view(), name="reject"),
+    path("<int:pk>/counter/", OfferCounterView.as_view(), name="offer-counter"),
 ]

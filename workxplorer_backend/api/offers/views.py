@@ -1,5 +1,6 @@
 from django.shortcuts import get_object_or_404
-from django.core.exceptions import ValidationError, PermissionDenied
+from django.core.exceptions import PermissionDenied
+from django.db import transaction
 
 from rest_framework import generics, status
 from rest_framework.response import Response
@@ -7,12 +8,12 @@ from rest_framework.views import APIView
 from drf_spectacular.utils import extend_schema
 
 from ..accounts.permissions import IsAuthenticatedAndVerified, IsCarrier, IsCustomer
-from api.loads.models import Cargo
 from .models import Offer
 from .serializers import (
     OfferCreateSerializer,
     OfferShortSerializer,
     OfferDetailSerializer,
+    OfferCounterSerializer,
 )
 
 
@@ -75,7 +76,11 @@ class OfferAcceptView(APIView):
         except PermissionDenied as e:
             return Response({"detail": str(e)}, status=status.HTTP_403_FORBIDDEN)
         return Response(
-            {"detail": "Принято", "accepted_by_customer": offer.accepted_by_customer, "accepted_by_carrier": offer.accepted_by_carrier},
+            {
+                "detail": "Принято",
+                "accepted_by_customer": offer.accepted_by_customer,
+                "accepted_by_carrier": offer.accepted_by_carrier,
+            },
             status=status.HTTP_200_OK,
         )
 
@@ -92,3 +97,32 @@ class OfferRejectView(APIView):
         except PermissionDenied as e:
             return Response({"detail": str(e)}, status=status.HTTP_403_FORBIDDEN)
         return Response({"detail": "Отклонено"}, status=status.HTTP_200_OK)
+
+
+# NEW: Торговаться / контр-предложение
+@extend_schema(tags=["offers"], request=OfferCounterSerializer, responses=OfferDetailSerializer)
+class OfferCounterView(APIView):
+    """
+    Контр-предложение по офферу.
+    Разрешено владельцу груза (customer оффера.cargo) ИЛИ перевозчику этого оффера (carrier).
+    """
+    permission_classes = [IsAuthenticatedAndVerified]
+
+    def post(self, request, pk: int):
+        offer = get_object_or_404(Offer.objects.select_related("cargo"), pk=pk, is_active=True)
+
+        u = request.user
+        if u.id not in (offer.cargo.customer_id, offer.carrier_id) and not getattr(u, "is_staff", False):
+            return Response({"detail": "Forbidden"}, status=status.HTTP_403_FORBIDDEN)
+
+        serializer = OfferCounterSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        with transaction.atomic():
+            offer.make_counter(
+                price_value=serializer.validated_data["price_value"],
+                price_currency=serializer.validated_data.get("price_currency"),
+                message=serializer.validated_data.get("message"),
+            )
+
+        return Response(OfferDetailSerializer(offer).data, status=status.HTTP_200_OK)

@@ -1,6 +1,7 @@
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from django.core.exceptions import ValidationError
+from django.db.models import Count, Q
 
 from rest_framework import generics, status
 from rest_framework import serializers as drf_serializers
@@ -137,10 +138,17 @@ class PublicLoadsView(generics.ListAPIView):
     queryset = Cargo.objects.all()
 
     def get_queryset(self):
-        qs = Cargo.objects.filter(
-            is_hidden=False,
-            moderation_status=ModerationStatus.APPROVED,
-            status=CargoStatus.POSTED,
+        qs = (
+            Cargo.objects.filter(
+                is_hidden=False,
+                moderation_status=ModerationStatus.APPROVED,
+                status=CargoStatus.POSTED,
+            )
+            .annotate(
+                # related_name у Offer -> Cargo должен быть 'offers'; если другой — поменяй здесь и ниже
+                offers_active=Count("offers", filter=Q(offers__is_active=True))
+            )
+            .annotate(has_offers=Q(offers_active__gt=0))
         )
 
         p = self.request.query_params
@@ -155,6 +163,12 @@ class PublicLoadsView(generics.ListAPIView):
         if p.get("id"):
             qs = qs.filter(id=p["id"])
 
+        # вес (тоннаж)
+        if p.get("min_weight"):
+            qs = qs.filter(weight_kg__gte=p["min_weight"])
+        if p.get("max_weight"):
+            qs = qs.filter(weight_kg__lte=p["max_weight"])
+
         # ценовые фильтры (без конвертации)
         if p.get("min_price"):
             qs = qs.filter(price_value__gte=p["min_price"])
@@ -165,5 +179,12 @@ class PublicLoadsView(generics.ListAPIView):
         price_currency = p.get("price_currency")
         if price_currency and any(f.name == "price_currency" for f in Cargo._meta.get_fields()):
             qs = qs.filter(price_currency=price_currency)
+
+        # фильтр по наличию предложений
+        has_offers = p.get("has_offers")
+        if has_offers in {"true", "1"}:
+            qs = qs.filter(offers_active__gt=0)
+        elif has_offers in {"false", "0"}:
+            qs = qs.filter(offers_active=0)
 
         return qs.order_by("-refreshed_at", "-created_at")

@@ -73,3 +73,10 @@ class OfferDetailSerializer(serializers.ModelSerializer):
         model = Offer
         fields = "__all__"
         read_only_fields = ("carrier", "accepted_by_customer", "accepted_by_carrier", "is_active")
+
+
+# NEW: сериалайзер для контр-предложения (торг)
+class OfferCounterSerializer(serializers.Serializer):
+    price_value = serializers.DecimalField(max_digits=14, decimal_places=2, min_value=0.01)
+    price_currency = serializers.CharField(required=False, allow_blank=True, max_length=3)
+    message = serializers.CharField(required=False, allow_blank=True)

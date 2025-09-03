@@ -1,5 +1,6 @@
 from django.contrib.gis.db import models as gis_models
 from django.db import models
+from django.contrib.postgres.indexes import GistIndex
 
 class GeoPlace(models.Model):
     name = models.CharField(max_length=128)
@@ -13,7 +14,7 @@ class GeoPlace(models.Model):
     class Meta:
         unique_together = [("name", "country_code")]
         indexes = [
-            gis_models.GISIndex(fields=["point"]),
+            GistIndex(fields=["point"], name="geoplace_point_gix"),
             models.Index(fields=["country_code", "name"]),
         ]
 

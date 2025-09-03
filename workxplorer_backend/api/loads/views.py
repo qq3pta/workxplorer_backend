@@ -1,7 +1,8 @@
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from django.core.exceptions import ValidationError
-from django.db.models import Count, Q
+from django.db.models import Count, Q, F, FloatField
+from django.db.models.expressions import Func
 
 from rest_framework import generics, status
 from rest_framework import serializers as drf_serializers
@@ -11,7 +12,7 @@ from drf_spectacular.utils import extend_schema
 from .models import Cargo, CargoStatus
 from .choices import ModerationStatus
 from .serializers import CargoPublishSerializer, CargoListSerializer
-from ..accounts.permissions import IsAuthenticatedAndVerified, IsCustomer, IsCarrier  # ← добавили IsCarrier
+from ..accounts.permissions import IsAuthenticatedAndVerified, IsCustomer, IsCarrier
 
 
 def _swagger(view) -> bool:
@@ -135,6 +136,15 @@ class PublicLoadsView(generics.ListAPIView):
     serializer_class = CargoListSerializer
     queryset = Cargo.objects.all()
 
+    class DistanceGeography(Func):
+        output_field = FloatField()
+        function = "ST_Distance"
+        def as_sql(self, compiler, connection, **extra_context):
+            lhs, lhs_params = compiler.compile(self.source_expressions[0])
+            rhs, rhs_params = compiler.compile(self.source_expressions[1])
+            sql = f"ST_Distance({lhs}::geography, {rhs}::geography)"
+            return sql, lhs_params + rhs_params
+
     def get_queryset(self):
         qs = (
             Cargo.objects.filter(
@@ -184,4 +194,15 @@ class PublicLoadsView(generics.ListAPIView):
         elif has_offers in {"false", "0"}:
             qs = qs.filter(offers_active=0)
 
-        return qs.order_by("-refreshed_at", "-created_at")
+        # расстояние между origin и destination в КМ (метры -> км)
+        qs = qs.annotate(path_m=self.DistanceGeography(F("origin_point"), F("dest_point")))
+        qs = qs.annotate(path_km=F("path_m") / 1000.0)
+
+        # сортировка (по умолчанию — свежие сверху)
+        order = p.get("order")
+        if order in {"path_km", "-path_km", "price_value", "-price_value", "load_date", "-load_date"}:
+            qs = qs.order_by(order)
+        else:
+            qs = qs.order_by("-refreshed_at", "-created_at")
+
+        return qs

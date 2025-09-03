@@ -3,9 +3,7 @@ import os
 from datetime import timedelta
 from dotenv import load_dotenv
 
-
 BASE_DIR = Path(__file__).resolve().parents[2]
-
 load_dotenv(BASE_DIR / ".env")
 
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "dev-secret")
@@ -23,6 +21,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "django.contrib.gis",
 
     # 3rd-party
     "rest_framework",
@@ -34,10 +33,9 @@ INSTALLED_APPS = [
     # API
     "api.accounts",
     "api.loads",
-     "api.offers",
-    # "api.deals",
-    # "api.ratings",
+    "api.offers",
     "api.search",
+    "api.geo",
 ]
 
 MIDDLEWARE = [
@@ -72,17 +70,17 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "core.wsgi.application"
 
-
 # Database
 if os.getenv("DATABASE_URL"):
     import dj_database_url
     DATABASES = {
         "default": dj_database_url.parse(os.getenv("DATABASE_URL"), conn_max_age=600, ssl_require=False)
     }
+    DATABASES["default"]["ENGINE"] = "django.contrib.gis.db.backends.postgis"
 else:
     DATABASES = {
         "default": {
-            "ENGINE": "django.db.backends.postgresql",
+            "ENGINE": "django.contrib.gis.db.backends.postgis",  # NEW: PostGIS
             "NAME": os.getenv("DB_NAME", "postgres"),
             "USER": os.getenv("DB_USER", "postgres"),
             "PASSWORD": os.getenv("DB_PASSWORD", "postgres"),
@@ -116,6 +114,8 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # DRF
 REST_FRAMEWORK = {
+    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "PAGE_SIZE": 10,
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",
@@ -151,3 +151,5 @@ DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "noreply@example.com")
 MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_MB", "20"))
 FILE_UPLOAD_MAX_MEMORY_SIZE = MAX_UPLOAD_MB * 1024 * 1024
 DATA_UPLOAD_MAX_MEMORY_SIZE = MAX_UPLOAD_MB * 1024 * 1024
+
+GEO_NOMINATIM_USER_AGENT = os.getenv("GEO_NOMINATIM_USER_AGENT", "workxplorer/1.0 (+contact@example.com)")

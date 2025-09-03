@@ -1,6 +1,6 @@
 services:
   db:
-    image: postgres:16
+    image: postgis/postgis:16-3.4
     env_file:
       - ./.env
     ports:
@@ -23,9 +23,11 @@ services:
     ports:
       - "8000:8000"
     command: >
-      sh -c "python workxplorer_backend/manage.py collectstatic --noinput &&
-             python workxplorer_backend/manage.py migrate &&
-             gunicorn core.wsgi:application --chdir workxplorer_backend -b 0.0.0.0:8000 -w 3 --timeout 120"
+      sh -c "
+        python workxplorer_backend/manage.py collectstatic --noinput &&
+        python workxplorer_backend/manage.py migrate &&
+        gunicorn core.wsgi:application --chdir workxplorer_backend -b 0.0.0.0:8000 -w 3 --timeout 120
+      "
 
 volumes:
   pgdata:

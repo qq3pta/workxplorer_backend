@@ -34,9 +34,22 @@ Django/DRF backend для онлайн-платформы грузоперево
 - **JWT (rest_framework_simplejwt)**
 - **drf-spectacular** (OpenAPI/Swagger)
 - **django-filter**, **corsheaders**, **whitenoise**
-- **PostgreSQL**
+- **PostgreSQL** + **PostGIS**
 
 ---
 
 ## Структура проекта
 
+```bash
+workxplorer_backend/
+├── api/
+│   ├── accounts/       # Регистрация, логин, роли
+│   ├── loads/          # Грузы и заявки
+│   ├── offers/         # Предложения и торги
+│   ├── search/         # Поиск и фильтры
+│   └── ...
+├── settings/           # Настройки (dev/prod)
+├── manage.py
+├── Dockerfile
+├── docker-compose.yml
+└── README.md

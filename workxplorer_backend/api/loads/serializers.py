@@ -39,13 +39,11 @@ class CargoPublishSerializer(serializers.ModelSerializer):
         return None
 
     def _need_regeocode(self, attrs) -> tuple[bool, bool]:
-        """Определяем, нужно ли пересчитать origin_point и/или dest_point."""
+        """Нужно ли пересчитать origin_point и/или dest_point."""
         o_fields = {"origin_country", "origin_city", "origin_address"}
         d_fields = {"destination_country", "destination_city", "destination_address"}
-
         origin_changed = any(f in attrs for f in o_fields)
         dest_changed   = any(f in attrs for f in d_fields)
-
         if self.instance is None:
             return True, True
         return origin_changed, dest_changed
@@ -91,9 +89,11 @@ class CargoPublishSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"contact_pref": "Недопустимый способ связи"})
         if price_currency is not None and price_currency not in Currency.values:
             raise serializers.ValidationError({"price_currency": "Недопустимая валюта"})
+
         weight = self._val_or_instance(attrs, "weight_kg")
         if weight is not None and weight <= 0:
             raise serializers.ValidationError({"weight_kg": "Вес должен быть > 0"})
+
         price = self._val_or_instance(attrs, "price_value")
         if price is not None and price < 0:
             raise serializers.ValidationError({"price_value": "Цена не может быть отрицательной"})
@@ -135,13 +135,15 @@ class CargoPublishSerializer(serializers.ModelSerializer):
 
 class CargoListSerializer(serializers.ModelSerializer):
     """
-    Листинг/борда. Поле path_km приходит из аннотации queryset'а:
-      ST_DistanceSphere(origin_point, dest_point)/1000.0
-    Также оставляем age_minutes/has_offers как в проекте.
+    Листинг/борда. Поля рассчитываются так:
+    - path_km    — приходит из аннотации queryset'а: ST_Distance(origin_point::geography, dest_point::geography) / 1000.0
+    - origin_dist_km — приходит из аннотации (если задан фильтр радиуса origin), иначе будет None
+    - has_offers — вычисляется тут (если есть аннотация offers_active — используем её; иначе exists())
     """
     age_minutes = serializers.IntegerField(read_only=True)
-    has_offers = serializers.BooleanField(read_only=True)
-    path_km = serializers.FloatField(read_only=True)
+    path_km = serializers.FloatField(read_only=True, required=False)
+    origin_dist_km = serializers.FloatField(read_only=True, required=False)
+    has_offers = serializers.SerializerMethodField()
 
     class Meta:
         model = Cargo
@@ -160,7 +162,15 @@ class CargoListSerializer(serializers.ModelSerializer):
 
             "moderation_status", "status",
             "age_minutes", "created_at", "refreshed_at",
+
             "has_offers",
             "path_km",
+            "origin_dist_km",
         )
         read_only_fields = fields
+
+    def get_has_offers(self, obj) -> bool:
+        offers_active = getattr(obj, "offers_active", None)
+        if offers_active is not None:
+            return offers_active > 0
+        return obj.offers.filter(is_active=True).exists()

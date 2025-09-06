@@ -9,6 +9,10 @@ from rest_framework import serializers as drf_serializers
 from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema
 
+from django.contrib.gis.geos import Point
+from django.contrib.gis.measure import D
+from django.contrib.gis.db.models.functions import Distance
+
 from .models import Cargo, CargoStatus
 from .choices import ModerationStatus
 from .serializers import CargoPublishSerializer, CargoListSerializer
@@ -130,7 +134,14 @@ class PublicLoadsView(generics.ListAPIView):
     """
     Публичная доска: видна Перевозчику/Логисту.
     Показывает только одобренные, не скрытые и активные заявки.
-    Поддерживает фильтры по макету.
+
+    Поддерживаемые query params:
+    - origin_city, destination_city, load_date, transport_type, id
+    - min_weight, max_weight, min_price, max_price, price_currency
+    - has_offers = true|false
+    - origin_lat, origin_lng, origin_radius_km
+    - dest_lat,   dest_lng,   dest_radius_km
+    - order = path_km|-path_km|origin_dist_km|-origin_dist_km|price_value|-price_value|load_date|-load_date
     """
     permission_classes = [IsAuthenticatedAndVerified, IsCarrier]
     serializer_class = CargoListSerializer
@@ -155,10 +166,11 @@ class PublicLoadsView(generics.ListAPIView):
             .annotate(
                 offers_active=Count("offers", filter=Q(offers__is_active=True))
             )
-            .annotate(has_offers=Q(offers_active__gt=0))
         )
 
         p = self.request.query_params
+
+        # Город/дата/тип/id
         if p.get("origin_city"):
             qs = qs.filter(origin_city__iexact=p["origin_city"])
         if p.get("destination_city"):
@@ -170,39 +182,95 @@ class PublicLoadsView(generics.ListAPIView):
         if p.get("id"):
             qs = qs.filter(id=p["id"])
 
-        # вес (тоннаж)
+        # Вес
         if p.get("min_weight"):
             qs = qs.filter(weight_kg__gte=p["min_weight"])
         if p.get("max_weight"):
             qs = qs.filter(weight_kg__lte=p["max_weight"])
 
-        # ценовые фильтры (без конвертации)
+        # Цена и валюта (без конвертации)
         if p.get("min_price"):
             qs = qs.filter(price_value__gte=p["min_price"])
         if p.get("max_price"):
             qs = qs.filter(price_value__lte=p["max_price"])
-
-        # фильтр по валюте (если поле есть в модели)
         price_currency = p.get("price_currency")
         if price_currency and any(f.name == "price_currency" for f in Cargo._meta.get_fields()):
             qs = qs.filter(price_currency=price_currency)
 
-        # фильтр по наличию предложений
+        # Наличие активных предложений
         has_offers = p.get("has_offers")
         if has_offers in {"true", "1"}:
             qs = qs.filter(offers_active__gt=0)
         elif has_offers in {"false", "0"}:
             qs = qs.filter(offers_active=0)
 
-        # расстояние между origin и destination в КМ (метры -> км)
+        # --- NEW: Радиусные фильтры (PostGIS) ---
+        o_lat = p.get("origin_lat")
+        o_lng = p.get("origin_lng")
+        o_r   = p.get("origin_radius_km")
+        origin_point_for_order = None
+        if o_lat and o_lng and o_r:
+            origin_point_for_order = Point(float(o_lng), float(o_lat), srid=4326)
+            qs = qs.filter(origin_point__distance_lte=(origin_point_for_order, D(km=float(o_r))))
+            # аннотируем расстояние до origin в км (метры -> км)
+            qs = qs.annotate(
+                origin_dist_km=Distance("origin_point", origin_point_for_order) / 1000.0
+            )
+
+        d_lat = p.get("dest_lat")
+        d_lng = p.get("dest_lng")
+        d_r   = p.get("dest_radius_km")
+        if d_lat and d_lng and d_r:
+            dest_point_for_filter = Point(float(d_lng), float(d_lat), srid=4326)
+            qs = qs.filter(dest_point__distance_lte=(dest_point_for_filter, D(km=float(d_r))))
+
         qs = qs.annotate(path_m=self.DistanceGeography(F("origin_point"), F("dest_point")))
         qs = qs.annotate(path_km=F("path_m") / 1000.0)
 
-        # сортировка (по умолчанию — свежие сверху)
         order = p.get("order")
-        if order in {"path_km", "-path_km", "price_value", "-price_value", "load_date", "-load_date"}:
+        allowed = {
+            "path_km", "-path_km",
+            "origin_dist_km", "-origin_dist_km",
+            "price_value", "-price_value",
+            "load_date", "-load_date",
+        }
+        if order in allowed:
             qs = qs.order_by(order)
         else:
-            qs = qs.order_by("-refreshed_at", "-created_at")
+            if origin_point_for_order is not None:
+                qs = qs.order_by("origin_dist_km", "-refreshed_at", "-created_at")
+            else:
+                qs = qs.order_by("-refreshed_at", "-created_at")
 
         return qs
+
+
+@extend_schema(tags=["loads"])
+class CargoCancelView(generics.GenericAPIView):
+    """
+    Отмена активной перевозки:
+    - право: автор груза ИЛИ назначенный перевозчик
+    - доступна только для статусов: POSTED, MATCHED
+    - ставит статус CANCELLED и деактивирует офферы
+    """
+    permission_classes = [IsAuthenticatedAndVerified]
+    serializer_class = RefreshResponseSerializer  # простой ответ
+    queryset = Cargo.objects.all()
+
+    def post(self, request, pk: int):
+        if _swagger(self):
+            return Response({"detail": "schema"}, status=status.HTTP_200_OK)
+
+        cargo = get_object_or_404(Cargo, pk=pk)
+
+        user_id = request.user.id
+        if user_id not in (cargo.customer_id, getattr(cargo, "assigned_carrier_id", None)):
+            return Response({"detail": "Нет доступа"}, status=status.HTTP_403_FORBIDDEN)
+
+        if cargo.status in (CargoStatus.DELIVERED, CargoStatus.COMPLETED, CargoStatus.CANCELLED):
+            return Response({"detail": "Статус уже финальный"}, status=status.HTTP_400_BAD_REQUEST)
+
+        cargo.status = CargoStatus.CANCELLED
+        cargo.save(update_fields=["status"])
+        cargo.offers.update(is_active=False)
+        return Response({"detail": "Перевозка отменена"}, status=status.HTTP_200_OK)

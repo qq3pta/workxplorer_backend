@@ -1,22 +1,26 @@
 from django.conf import settings
-from django.db import models
-from django.db.models import UniqueConstraint
-from django.apps import apps
+from django.db import models, transaction
+from django.db.models import UniqueConstraint, Q
+from django.core.exceptions import PermissionDenied, ValidationError
 
 from api.loads.models import Cargo, CargoStatus
-from api.loads.choices import Currency, ModerationStatus
+from api.loads.choices import Currency
 
 
 class Offer(models.Model):
-    cargo = models.ForeignKey(Cargo, on_delete=models.CASCADE, related_name="offers")
+    cargo = models.ForeignKey(
+        Cargo,
+        on_delete=models.CASCADE,
+        related_name="offers",
+    )
     carrier = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="offers"
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="offers",
     )
 
     price_value = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
-    price_currency = models.CharField(
-        max_length=3, choices=Currency.choices, default=Currency.UZS
-    )
+    price_currency = models.CharField(max_length=3, choices=Currency.choices, default=Currency.UZS)
     message = models.TextField(blank=True)
 
     # согласия сторон
@@ -31,8 +35,13 @@ class Offer(models.Model):
     class Meta:
         ordering = ["-created_at"]
         constraints = [
-            # Один активный оффер от перевозчика на конкретный груз
-            UniqueConstraint(fields=["cargo", "carrier"], name="uniq_offer_per_carrier_per_cargo"),
+            # Разрешаем сколько угодно НЕактивных офферов,
+            # но только ОДИН активный от перевозчика на конкретный груз
+            UniqueConstraint(
+                fields=["cargo", "carrier"],
+                condition=Q(is_active=True),
+                name="uniq_active_offer_per_carrier_per_cargo",
+            ),
         ]
         indexes = [
             models.Index(fields=["cargo", "is_active"]),
@@ -51,89 +60,103 @@ class Offer(models.Model):
         - сбрасывает акцепты обеих сторон,
         - оставляет оффер активным.
         """
-        # цена
         if price_value is not None:
             self.price_value = price_value
-        # валюта (опционально)
         if price_currency:
             self.price_currency = price_currency
-        # сообщение/комментарий (опционально)
         if message is not None:
             self.message = message
 
-        # сброс «принятости»
         self.accepted_by_customer = False
         self.accepted_by_carrier = False
 
-        self.save(update_fields=[
-            "price_value", "price_currency", "message",
-            "accepted_by_customer", "accepted_by_carrier", "updated_at"
-        ])
+        self.save(
+            update_fields=[
+                "price_value",
+                "price_currency",
+                "message",
+                "accepted_by_customer",
+                "accepted_by_carrier",
+                "updated_at",
+            ]
+        )
 
     @property
     def is_handshake(self) -> bool:
         return self.accepted_by_customer and self.accepted_by_carrier
 
-    def _ensure_handshake_effects(self):
+    def _finalize_handshake(self):
         """
-        При взаимном согласии:
-        - помечаем груз как MATCHED,
-        - пробуем создать Shipment (если app 'shipments' установлен).
+        Применяет эффекты взаимного согласия:
+        - cargo.status = MATCHED
+        - cargo.assigned_carrier = self.carrier (если поле существует)
+        - cargo.chosen_offer = self (если поле существует)
+        - все прочие офферы по грузу → is_active=False
+        Предполагается вызов внутри transaction.atomic() и после select_for_update() по Cargo.
         """
-        if not self.is_handshake:
-            return
+        cargo = self.cargo
 
-        # 1) Перевести груз в MATCHED
-        if self.cargo.status != CargoStatus.MATCHED:
-            self.cargo.status = CargoStatus.MATCHED
-            self.cargo.save(update_fields=["status"])
+        cargo.status = CargoStatus.MATCHED
 
-        # 2) Создать Shipment (если приложение подключено)
-        try:
-            Shipment = apps.get_model("api.shipments", "Shipment")  # type: ignore
-        except Exception:
-            Shipment = None
+        # безопасно проставляем связи, если поля присутствуют в модели Cargo
+        if hasattr(cargo, "assigned_carrier_id"):
+            cargo.assigned_carrier_id = self.carrier_id
+        if hasattr(cargo, "chosen_offer_id"):
+            cargo.chosen_offer_id = self.id
 
-        if Shipment:
-            # Создаём только если ещё нет связанной перевозки
-            exists = Shipment.objects.filter(offer=self).exists()
-            if not exists:
-                Shipment.objects.create(
-                    load=self.cargo,               # в твоём проекте груз = Cargo
-                    offer=self,
-                    customer=self.cargo.customer,
-                    carrier=self.carrier,
-                    pickup_city=self.cargo.origin_city,
-                    dropoff_city=self.cargo.destination_city,
-                )
+        update_fields = ["status"]
+        if hasattr(cargo, "assigned_carrier_id"):
+            update_fields.append("assigned_carrier")
+        if hasattr(cargo, "chosen_offer_id"):
+            update_fields.append("chosen_offer")
+        cargo.save(update_fields=update_fields)
+
+        # выключаем остальные офферы по этому грузу
+        Offer.objects.filter(cargo_id=cargo.id).exclude(pk=self.pk).update(is_active=False)
 
     def accept_by(self, user):
         """
         Акцепт со стороны клиента (владельца груза) или перевозчика.
+        Разрешено только участникам и только для активного оффера.
+        При взаимном согласии — атомарно фиксирует сделку (_finalize_handshake).
         """
+        if not self.is_active:
+            raise ValidationError("Нельзя принять неактивный оффер.")
+
         if user.id == self.cargo.customer_id:
             if not self.accepted_by_customer:
                 self.accepted_by_customer = True
-                self.save(update_fields=["accepted_by_customer", "updated_at"])
         elif user.id == self.carrier_id:
             if not self.accepted_by_carrier:
                 self.accepted_by_carrier = True
-                self.save(update_fields=["accepted_by_carrier", "updated_at"])
         else:
-            from django.core.exceptions import PermissionDenied
-            raise PermissionDenied("Нельзя принять чужой оффер")
+            raise PermissionDenied("Нельзя принять оффер: вы не участник сделки.")
 
-        # если handshake — применяем эффекты
-        if self.is_handshake:
-            self._ensure_handshake_effects()
+        with transaction.atomic():
+            # фиксируем оффер
+            self.save(update_fields=["accepted_by_customer", "accepted_by_carrier", "updated_at"])
+
+            # если обе стороны согласны — пытаемся финализировать
+            if self.is_handshake:
+                cargo = (
+                    Cargo.objects.select_for_update()
+                    .only("id", "status", "assigned_carrier", "chosen_offer")
+                    .get(pk=self.cargo_id)
+                )
+
+                # если уже зафиксирован параллельным процессом — выходим
+                if cargo.status == CargoStatus.MATCHED and getattr(cargo, "chosen_offer_id", None):
+                    return
+
+                self._finalize_handshake()
 
     def reject_by(self, user):
         """
         Отклонение со стороны любой из сторон — оффер деактивируется.
+        Разрешено только участникам сделки.
         """
         if user.id not in (self.cargo.customer_id, self.carrier_id):
-            from django.core.exceptions import PermissionDenied
-            raise PermissionDenied("Нельзя отклонить чужой оффер")
+            raise PermissionDenied("Нельзя отклонить оффер: вы не участник сделки.")
 
         if self.is_active:
             self.is_active = False

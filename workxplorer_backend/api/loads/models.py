@@ -13,6 +13,7 @@ class CargoStatus(models.TextChoices):
     MATCHED   = "MATCHED",   "В работе"
     DELIVERED = "DELIVERED", "Доставлено"
     COMPLETED = "COMPLETED", "Завершено"
+    CANCELLED = "CANCELLED", "Отменена"
 
 
 class Cargo(models.Model):
@@ -55,6 +56,19 @@ class Cargo(models.Model):
 
     status = models.CharField(max_length=20, choices=CargoStatus.choices, default=CargoStatus.POSTED)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    assigned_carrier = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="assigned_cargos",
+    )
+    chosen_offer = models.ForeignKey(
+        "offers.Offer",
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="chosen_for",
+    )
 
     objects: DjangoManager["Cargo"] = models.Manager()
 

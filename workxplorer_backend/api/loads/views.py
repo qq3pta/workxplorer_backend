@@ -29,6 +29,20 @@ class RefreshResponseSerializer(drf_serializers.Serializer):
     detail = drf_serializers.CharField()
 
 
+class DistanceGeography(Func):
+    """
+    ST_Distance(a::geography, b::geography) -> расстояние в метрах по сфере Земли.
+    """
+    output_field = FloatField()
+    function = "ST_Distance"
+
+    def as_sql(self, compiler, connection, **extra_context):
+        lhs, lhs_params = compiler.compile(self.source_expressions[0])
+        rhs, rhs_params = compiler.compile(self.source_expressions[1])
+        sql = f"ST_Distance({lhs}::geography, {rhs}::geography)"
+        return sql, lhs_params + rhs_params
+
+
 @extend_schema(tags=["loads"])
 class PublishCargoView(generics.CreateAPIView):
     permission_classes = [IsAuthenticatedAndVerified, IsCustomer]
@@ -83,6 +97,11 @@ class CargoRefreshView(generics.GenericAPIView):
 
 @extend_schema(tags=["loads"])
 class MyCargosView(generics.ListAPIView):
+    """
+    - select_related('customer') для company_name/contact_value
+    - annotate offers_active для has_offers без N+1
+    - annotate path_km для расчёта price_per_km
+    """
     permission_classes = [IsAuthenticatedAndVerified, IsCustomer]
     serializer_class = CargoListSerializer
     queryset = Cargo.objects.all()
@@ -90,15 +109,32 @@ class MyCargosView(generics.ListAPIView):
     def get_queryset(self):
         if _swagger(self):
             return Cargo.objects.none()
-        return (
+
+        qs = (
             Cargo.objects
             .filter(customer=self.request.user)
-            .order_by("-refreshed_at", "-created_at")
+            .annotate(
+                offers_active=Count("offers", filter=Q(offers__is_active=True))
+            )
+        )
+
+        qs = qs.annotate(path_m=DistanceGeography(F("origin_point"), F("dest_point")))
+        qs = qs.annotate(path_km=F("path_m") / 1000.0)
+
+        return (
+            qs.select_related("customer")
+              .order_by("-refreshed_at", "-created_at")
         )
 
 
 @extend_schema(tags=["loads"])
 class MyCargosBoardView(generics.ListAPIView):
+    """
+    Борда моих активных заявок.
+    - select_related('customer')
+    - offers_active для has_offers
+    - path_km для price_per_km
+    """
     permission_classes = [IsAuthenticatedAndVerified, IsCustomer]
     serializer_class = CargoListSerializer
     queryset = Cargo.objects.all()
@@ -126,7 +162,16 @@ class MyCargosBoardView(generics.ListAPIView):
         if p.get("id"):
             qs = qs.filter(id=p["id"])
 
-        return qs.order_by("-refreshed_at", "-created_at")
+        qs = qs.annotate(
+            offers_active=Count("offers", filter=Q(offers__is_active=True))
+        )
+        qs = qs.annotate(path_m=DistanceGeography(F("origin_point"), F("dest_point")))
+        qs = qs.annotate(path_km=F("path_m") / 1000.0)
+
+        return (
+            qs.select_related("customer")
+              .order_by("-refreshed_at", "-created_at")
+        )
 
 
 @extend_schema(tags=["loads"])
@@ -146,15 +191,6 @@ class PublicLoadsView(generics.ListAPIView):
     permission_classes = [IsAuthenticatedAndVerified, IsCarrier]
     serializer_class = CargoListSerializer
     queryset = Cargo.objects.all()
-
-    class DistanceGeography(Func):
-        output_field = FloatField()
-        function = "ST_Distance"
-        def as_sql(self, compiler, connection, **extra_context):
-            lhs, lhs_params = compiler.compile(self.source_expressions[0])
-            rhs, rhs_params = compiler.compile(self.source_expressions[1])
-            sql = f"ST_Distance({lhs}::geography, {rhs}::geography)"
-            return sql, lhs_params + rhs_params
 
     def get_queryset(self):
         qs = (
@@ -204,7 +240,7 @@ class PublicLoadsView(generics.ListAPIView):
         elif has_offers in {"false", "0"}:
             qs = qs.filter(offers_active=0)
 
-        # --- NEW: Радиусные фильтры (PostGIS) ---
+        # --- Радиусные фильтры (PostGIS) ---
         o_lat = p.get("origin_lat")
         o_lng = p.get("origin_lng")
         o_r   = p.get("origin_radius_km")
@@ -224,7 +260,8 @@ class PublicLoadsView(generics.ListAPIView):
             dest_point_for_filter = Point(float(d_lng), float(d_lat), srid=4326)
             qs = qs.filter(dest_point__distance_lte=(dest_point_for_filter, D(km=float(d_r))))
 
-        qs = qs.annotate(path_m=self.DistanceGeography(F("origin_point"), F("dest_point")))
+        # Путь между городами (метры -> км) для price_per_km
+        qs = qs.annotate(path_m=DistanceGeography(F("origin_point"), F("dest_point")))
         qs = qs.annotate(path_km=F("path_m") / 1000.0)
 
         order = p.get("order")
@@ -242,7 +279,7 @@ class PublicLoadsView(generics.ListAPIView):
             else:
                 qs = qs.order_by("-refreshed_at", "-created_at")
 
-        return qs
+        return qs.select_related("customer")
 
 
 @extend_schema(tags=["loads"])

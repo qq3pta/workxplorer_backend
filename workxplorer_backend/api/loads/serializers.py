@@ -136,14 +136,23 @@ class CargoPublishSerializer(serializers.ModelSerializer):
 class CargoListSerializer(serializers.ModelSerializer):
     """
     Листинг/борда. Поля рассчитываются так:
-    - path_km    — приходит из аннотации queryset'а: ST_Distance(origin_point::geography, dest_point::geography) / 1000.0
-    - origin_dist_km — приходит из аннотации (если задан фильтр радиуса origin), иначе будет None
-    - has_offers — вычисляется тут (если есть аннотация offers_active — используем её; иначе exists())
+    - path_km         — приходит из аннотации queryset'а (расстояние в км)
+    - origin_dist_km  — аннотация радиуса (если есть фильтр), иначе None
+    - has_offers      — активные офферы
+    - company_name    — берём из профиля заказчика (customer)
+    - contact_value   — в зависимости от contact_pref (телефон/email/иначе)
+    - weight_t        — вес в тоннах (из weight_kg)
+    - price_per_km    — price_value / path_km
     """
     age_minutes = serializers.IntegerField(read_only=True)
     path_km = serializers.FloatField(read_only=True, required=False)
     origin_dist_km = serializers.FloatField(read_only=True, required=False)
     has_offers = serializers.SerializerMethodField()
+
+    company_name = serializers.SerializerMethodField()
+    contact_value = serializers.SerializerMethodField()
+    weight_t = serializers.SerializerMethodField()
+    price_per_km = serializers.SerializerMethodField()
 
     class Meta:
         model = Cargo
@@ -157,14 +166,19 @@ class CargoListSerializer(serializers.ModelSerializer):
             "load_date", "delivery_date",
             "transport_type",
             "weight_kg",
+            "weight_t",
             "price_value", "price_currency",
-            "contact_pref", "is_hidden",
+            "contact_pref", "contact_value",
+            "is_hidden",
+
+            "company_name",
 
             "moderation_status", "status",
             "age_minutes", "created_at", "refreshed_at",
 
             "has_offers",
             "path_km",
+            "price_per_km",
             "origin_dist_km",
         )
         read_only_fields = fields
@@ -174,3 +188,49 @@ class CargoListSerializer(serializers.ModelSerializer):
         if offers_active is not None:
             return offers_active > 0
         return obj.offers.filter(is_active=True).exists()
+
+    def get_company_name(self, obj) -> str:
+        u = getattr(obj, "customer", None)
+        if not u:
+            return ""
+        return (
+            getattr(u, "company_name", None)
+            or getattr(u, "company", None)
+            or getattr(u, "name", None)
+            or getattr(u, "username", "")
+            or ""
+        )
+
+    def get_contact_value(self, obj) -> str:
+        u = getattr(obj, "customer", None)
+        if not u:
+            return ""
+        pref = (str(obj.contact_pref).lower() if obj.contact_pref is not None else "")
+        phone = getattr(u, "phone", None) or getattr(u, "phone_number", None)
+        email = getattr(u, "email", None)
+
+        if pref == "phone":
+            return phone or ""
+        if pref == "email":
+            return email or ""
+
+        # универсальный фолбэк: сначала телефон, затем email
+        return phone or email or ""
+
+    def get_weight_t(self, obj):
+        if obj.weight_kg is None:
+            return None
+        try:
+            return round(float(obj.weight_kg) / 1000.0, 3)
+        except Exception:
+            return None
+
+    def get_price_per_km(self, obj):
+        price = getattr(obj, "price_value", None)
+        dist = getattr(obj, "path_km", None)
+        try:
+            if price is None or not dist or float(dist) <= 0:
+                return None
+            return round(float(price) / float(dist), 2)
+        except Exception:
+            return None

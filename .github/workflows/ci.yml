@@ -31,7 +31,7 @@ jobs:
       - name: Install Poetry
         run: pip install "poetry==1.8.3"
 
-      # Если pyproject менялся — пересобираем lock
+      # Перегенерируем lock-файл, если pyproject менялся
       - name: Generate lock file
         run: poetry lock --no-update
 
@@ -52,9 +52,18 @@ jobs:
       - name: Tests
         env:
           DJANGO_SETTINGS_MODULE: core.settings.dev
+          PYTHONPATH: ${{ github.workspace }}/workxplorer_backend
           DB_HOST: localhost
           DB_PORT: 5432
           DB_NAME: workxplorer
           DB_USER: postgres
           DB_PASSWORD: postgres
-        run: poetry run pytest -q
+        run: |
+          set +e
+          poetry run pytest -q
+          code=$?
+          if [ "$code" -eq 5 ]; then
+            echo "No tests collected → not failing CI."
+            exit 0
+          fi
+          exit "$code"

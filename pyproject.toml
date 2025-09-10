@@ -15,17 +15,15 @@ django-environ = "^0.11.2"
 django-cors-headers = "^4.3.1"
 django-filter = "^24.2"
 django-redis = "^5.4.0"
-psycopg = {version = "^3.1.18", extras = ["binary"]}
+psycopg = { version = "^3.1.18", extras = ["binary"] }
 gunicorn = "^21.2.0"
 celery = "^5.4.0"
 redis = "^5.0.7"
 djangorestframework-simplejwt = "^5.5.1"
-psycopg2-binary = "^2.9.10"
 pillow = "^11.3.0"
 python-dotenv = "^1.1.1"
 whitenoise = "^6.9.0"
 requests = "^2.32.5"
-postgis = "^1.0.4"
 dj-database-url = "^3.0.1"
 
 [tool.poetry.group.dev.dependencies]
@@ -43,14 +41,20 @@ manage = "django.core.management:execute_from_command_line"
 
 [tool.black]
 line-length = 100
-target-version = ["py311"]
+target-version = ["py312"]
 
 [tool.isort]
 profile = "black"
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+"**/core/settings/*.py" = ["F403", "F405"]  # игнор для import *
 
 [build-system]
 requires = ["poetry-core"]

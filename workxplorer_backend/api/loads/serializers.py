@@ -63,8 +63,8 @@ class CargoPublishSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"origin_city": "Укажите город погрузки"})
         try:
             return geocode_city(country=country, city=city, country_code=None)
-        except GeocodingError as e:
-            raise serializers.ValidationError({"origin_city": str(e)})
+        except GeocodingError:
+            raise serializers.ValidationError({"origin_city": "Не удалось геокодировать город"}) from None
 
     def _geocode_dest(self, attrs) -> Point:
         country = (
@@ -79,8 +79,8 @@ class CargoPublishSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"destination_city": "Укажите город разгрузки"})
         try:
             return geocode_city(country=country, city=city, country_code=None)
-        except GeocodingError as e:
-            raise serializers.ValidationError({"destination_city": str(e)})
+        except GeocodingError:
+            raise serializers.ValidationError({"destination_city": "Не удалось геокодировать город"}) from None
 
     def validate(self, attrs):
         required = [

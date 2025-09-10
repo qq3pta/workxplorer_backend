@@ -52,9 +52,11 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+extend-ignore = ["E501"]
 
 [tool.ruff.lint.per-file-ignores]
-"**/core/settings/*.py" = ["F403", "F405"]  # игнор для import *
+"**/core/settings/*.py" = ["F403", "F405"]
+"**/migrations/*.py" = ["I001", "E501"]
 
 [build-system]
 requires = ["poetry-core"]

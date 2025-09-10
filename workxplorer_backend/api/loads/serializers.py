@@ -1,9 +1,9 @@
-from rest_framework import serializers
+from api.geo.services import GeocodingError, geocode_city
 from django.contrib.gis.geos import Point
+from rest_framework import serializers
 
+from .choices import ContactPref, Currency, ModerationStatus, TransportType
 from .models import Cargo
-from .choices import TransportType, ContactPref, ModerationStatus, Currency
-from api.geo.services import geocode_city, GeocodingError
 
 
 class CargoPublishSerializer(serializers.ModelSerializer):
@@ -12,22 +12,26 @@ class CargoPublishSerializer(serializers.ModelSerializer):
     - Пользователь вводит только страну/город/адрес (координаты не требуются).
     - Сервер сам геокодит и заполняет origin_point/dest_point.
     """
+
     class Meta:
         model = Cargo
         fields = (
-            "product", "description",
-
-            "origin_country", "origin_city",
+            "product",
+            "description",
+            "origin_country",
+            "origin_city",
             "origin_address",
-
-            "destination_country", "destination_city",
+            "destination_country",
+            "destination_city",
             "destination_address",
-
-            "load_date", "delivery_date",
+            "load_date",
+            "delivery_date",
             "transport_type",
             "weight_kg",
-            "price_value", "price_currency",
-            "contact_pref", "is_hidden",
+            "price_value",
+            "price_currency",
+            "contact_pref",
+            "is_hidden",
         )
 
     def _val_or_instance(self, attrs, name):
@@ -43,14 +47,18 @@ class CargoPublishSerializer(serializers.ModelSerializer):
         o_fields = {"origin_country", "origin_city", "origin_address"}
         d_fields = {"destination_country", "destination_city", "destination_address"}
         origin_changed = any(f in attrs for f in o_fields)
-        dest_changed   = any(f in attrs for f in d_fields)
+        dest_changed = any(f in attrs for f in d_fields)
         if self.instance is None:
             return True, True
         return origin_changed, dest_changed
 
     def _geocode_origin(self, attrs) -> Point:
-        country = (attrs.get("origin_country") or self._val_or_instance(attrs, "origin_country") or "").strip()
-        city    = (attrs.get("origin_city")    or self._val_or_instance(attrs, "origin_city")    or "").strip()
+        country = (
+            attrs.get("origin_country") or self._val_or_instance(attrs, "origin_country") or ""
+        ).strip()
+        city = (
+            attrs.get("origin_city") or self._val_or_instance(attrs, "origin_city") or ""
+        ).strip()
         if not city:
             raise serializers.ValidationError({"origin_city": "Укажите город погрузки"})
         try:
@@ -59,8 +67,14 @@ class CargoPublishSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"origin_city": str(e)})
 
     def _geocode_dest(self, attrs) -> Point:
-        country = (attrs.get("destination_country") or self._val_or_instance(attrs, "destination_country") or "").strip()
-        city    = (attrs.get("destination_city")    or self._val_or_instance(attrs, "destination_city")    or "").strip()
+        country = (
+            attrs.get("destination_country")
+            or self._val_or_instance(attrs, "destination_country")
+            or ""
+        ).strip()
+        city = (
+            attrs.get("destination_city") or self._val_or_instance(attrs, "destination_city") or ""
+        ).strip()
         if not city:
             raise serializers.ValidationError({"destination_city": "Укажите город разгрузки"})
         try:
@@ -70,17 +84,22 @@ class CargoPublishSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         required = [
-            "origin_address", "destination_address",
-            "load_date", "transport_type",
-            "weight_kg", "contact_pref",
+            "origin_address",
+            "destination_address",
+            "load_date",
+            "transport_type",
+            "weight_kg",
+            "contact_pref",
         ]
         if self.instance is None:
             missing = [f for f in required if attrs.get(f) in (None, "", [])]
             if missing:
-                raise serializers.ValidationError({f: "Обязательное поле по ТЗ 2.6.13" for f in missing})
+                raise serializers.ValidationError(
+                    {f: "Обязательное поле по ТЗ 2.6.13" for f in missing}
+                )
 
         transport_type = self._val_or_instance(attrs, "transport_type")
-        contact_pref   = self._val_or_instance(attrs, "contact_pref")
+        contact_pref = self._val_or_instance(attrs, "contact_pref")
         price_currency = self._val_or_instance(attrs, "price_currency")
 
         if transport_type is not None and transport_type not in TransportType.values:
@@ -101,14 +120,16 @@ class CargoPublishSerializer(serializers.ModelSerializer):
         ld = self._val_or_instance(attrs, "load_date")
         dd = self._val_or_instance(attrs, "delivery_date")
         if dd and ld and dd < ld:
-            raise serializers.ValidationError({"delivery_date": "Дата доставки не может быть раньше даты загрузки."})
+            raise serializers.ValidationError(
+                {"delivery_date": "Дата доставки не может быть раньше даты загрузки."}
+            )
 
         return attrs
 
     def create(self, validated_data):
         user = self.context["request"].user
         origin_point = self._geocode_origin(validated_data)
-        dest_point   = self._geocode_dest(validated_data)
+        dest_point = self._geocode_dest(validated_data)
 
         return Cargo.objects.create(
             customer=user,
@@ -144,6 +165,7 @@ class CargoListSerializer(serializers.ModelSerializer):
     - weight_t        — вес в тоннах (из weight_kg)
     - price_per_km    — price_value / path_km
     """
+
     age_minutes = serializers.IntegerField(read_only=True)
     path_km = serializers.FloatField(read_only=True, required=False)
     origin_dist_km = serializers.FloatField(read_only=True, required=False)
@@ -158,24 +180,30 @@ class CargoListSerializer(serializers.ModelSerializer):
         model = Cargo
         fields = (
             "id",
-            "product", "description",
-
-            "origin_country", "origin_city", "origin_address",
-            "destination_country", "destination_city", "destination_address",
-
-            "load_date", "delivery_date",
+            "product",
+            "description",
+            "origin_country",
+            "origin_city",
+            "origin_address",
+            "destination_country",
+            "destination_city",
+            "destination_address",
+            "load_date",
+            "delivery_date",
             "transport_type",
             "weight_kg",
             "weight_t",
-            "price_value", "price_currency",
-            "contact_pref", "contact_value",
+            "price_value",
+            "price_currency",
+            "contact_pref",
+            "contact_value",
             "is_hidden",
-
             "company_name",
-
-            "moderation_status", "status",
-            "age_minutes", "created_at", "refreshed_at",
-
+            "moderation_status",
+            "status",
+            "age_minutes",
+            "created_at",
+            "refreshed_at",
             "has_offers",
             "path_km",
             "price_per_km",
@@ -205,7 +233,7 @@ class CargoListSerializer(serializers.ModelSerializer):
         u = getattr(obj, "customer", None)
         if not u:
             return ""
-        pref = (str(obj.contact_pref).lower() if obj.contact_pref is not None else "")
+        pref = str(obj.contact_pref).lower() if obj.contact_pref is not None else ""
         phone = getattr(u, "phone", None) or getattr(u, "phone_number", None)
         email = getattr(u, "email", None)
 

@@ -4,18 +4,21 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('offers', '0001_initial'),
+        ("offers", "0001_initial"),
     ]
 
     operations = [
         migrations.RemoveConstraint(
-            model_name='offer',
-            name='uniq_offer_per_carrier_per_cargo',
+            model_name="offer",
+            name="uniq_offer_per_carrier_per_cargo",
         ),
         migrations.AddConstraint(
-            model_name='offer',
-            constraint=models.UniqueConstraint(condition=models.Q(('is_active', True)), fields=('cargo', 'carrier'), name='uniq_active_offer_per_carrier_per_cargo'),
+            model_name="offer",
+            constraint=models.UniqueConstraint(
+                condition=models.Q(("is_active", True)),
+                fields=("cargo", "carrier"),
+                name="uniq_active_offer_per_carrier_per_cargo",
+            ),
         ),
     ]

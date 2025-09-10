@@ -1,9 +1,11 @@
 from enum import StrEnum
 
+
 class Role(StrEnum):
     LOGISTIC = "LOGISTIC"
     CUSTOMER = "CUSTOMER"
-    CARRIER  = "CARRIER"
+    CARRIER = "CARRIER"
+
 
 class TransportType(StrEnum):
     TENT = "TENT"
@@ -19,12 +21,14 @@ class TransportType(StrEnum):
     TANK = "TANKER"
     MEGA = "MEGA"
 
+
 class Currency(StrEnum):
     UZS = "UZS"
     KZT = "KZT"
     RUB = "RUB"
     USD = "USD"
     EUR = "EUR"
+
 
 class DocumentCategory(StrEnum):
     LICENSE = "LICENSE"

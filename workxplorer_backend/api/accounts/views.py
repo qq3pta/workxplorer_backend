@@ -1,30 +1,29 @@
 from datetime import timedelta
-from django.conf import settings
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
-from rest_framework import generics, status, serializers
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import generics, serializers, status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import (
-    RefreshToken,
-    OutstandingToken,
     BlacklistedToken,
+    OutstandingToken,
+    RefreshToken,
 )
-
-from drf_spectacular.utils import extend_schema, inline_serializer
 
 from .permissions import IsAuthenticatedAndVerified
 from .serializers import (
-    RegisterSerializer,
-    VerifyEmailSerializer,
-    ResendVerifySerializer,
+    ForgotPasswordSerializer,
     LoginSerializer,
     MeSerializer,
-    UpdateMeSerializer,
-    ForgotPasswordSerializer,
+    RegisterSerializer,
+    ResendVerifySerializer,
     ResetPasswordSerializer,
     RoleChangeSerializer,
+    UpdateMeSerializer,
+    VerifyEmailSerializer,
 )
 
 User = get_user_model()
@@ -94,9 +93,7 @@ class VerifyEmailView(APIView):
         s = VerifyEmailSerializer(data=request.data)
         s.is_valid(raise_exception=True)
         user = s.save()
-        return Response(
-            {"detail": "E-mail подтвержден", **issue_tokens(user, remember=False)}
-        )
+        return Response({"detail": "E-mail подтвержден", **issue_tokens(user, remember=False)})
 
 
 @extend_schema(
@@ -142,6 +139,7 @@ class RefreshView(APIView):
     с опциональной ротацией под remember_me.
     Body: {"refresh": "<token>", "remember_me": true|false}
     """
+
     permission_classes = [AllowAny]
 
     def post(self, request):
@@ -182,6 +180,7 @@ class LogoutView(APIView):
     - с телом {"refresh": "<token>"}: выход только с текущего устройства
     - без тела: выход со всех устройств
     """
+
     permission_classes = [IsAuthenticated]
 
     def post(self, request):

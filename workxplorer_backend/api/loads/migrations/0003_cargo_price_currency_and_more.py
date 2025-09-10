@@ -4,7 +4,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("loads", "0002_rename_title_cargo_product_and_more"),
     ]

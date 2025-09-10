@@ -1,8 +1,10 @@
 name: CI
 on: [push, pull_request]
+
 jobs:
   test:
     runs-on: ubuntu-latest
+
     services:
       db:
         image: postgis/postgis:16-3.4
@@ -14,18 +16,42 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U postgres -d workxplorer"
           --health-interval 5s --health-timeout 5s --health-retries 10
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
-        with: { python-version: "3.12" }
+        with:
+          python-version: "3.12"
+
+      # Системные либы для GeoDjango
+      - name: Install system libs (GEOS/GDAL/PROJ)
+        run: sudo apt-get update && sudo apt-get install -y gdal-bin libgdal-dev libgeos-dev libproj-dev
+
       - name: Install Poetry
-        run: pip install poetry==1.8.3
+        run: pip install "poetry==1.8.3"
+
+      # Если pyproject менялся — пересобираем lock
+      - name: Generate lock file
+        run: poetry lock --no-update
+
       - name: Install deps
         run: poetry install --no-interaction --no-ansi
-      - name: Lint
+
+      # ---- Lint & format ----
+      - name: Ruff (fix imports)
+        run: poetry run ruff check . --select I --fix
+
+      - name: Ruff format
+        run: poetry run ruff format .
+
+      - name: Ruff (verify)
         run: poetry run ruff check .
+
+      # ---- Tests ----
       - name: Tests
         env:
+          DJANGO_SETTINGS_MODULE: core.settings.dev
           DB_HOST: localhost
           DB_PORT: 5432
           DB_NAME: workxplorer

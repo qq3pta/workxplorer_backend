@@ -1,10 +1,9 @@
-from django.conf import settings
-from django.db import models, transaction
-from django.db.models import UniqueConstraint, Q
-from django.core.exceptions import PermissionDenied, ValidationError
-
-from api.loads.models import Cargo, CargoStatus
 from api.loads.choices import Currency
+from api.loads.models import Cargo, CargoStatus
+from django.conf import settings
+from django.core.exceptions import PermissionDenied, ValidationError
+from django.db import models, transaction
+from django.db.models import Q, UniqueConstraint
 
 
 class Offer(models.Model):

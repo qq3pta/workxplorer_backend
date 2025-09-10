@@ -5,30 +5,33 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('loads', '0003_cargo_price_currency_and_more'),
+        ("loads", "0003_cargo_price_currency_and_more"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='cargo',
-            name='dest_point',
-            field=django.contrib.gis.db.models.fields.PointField(blank=True, geography=True, null=True, srid=4326),
+            model_name="cargo",
+            name="dest_point",
+            field=django.contrib.gis.db.models.fields.PointField(
+                blank=True, geography=True, null=True, srid=4326
+            ),
         ),
         migrations.AddField(
-            model_name='cargo',
-            name='destination_country',
-            field=models.CharField(blank=True, default='', max_length=100),
+            model_name="cargo",
+            name="destination_country",
+            field=models.CharField(blank=True, default="", max_length=100),
         ),
         migrations.AddField(
-            model_name='cargo',
-            name='origin_country',
-            field=models.CharField(blank=True, default='', max_length=100),
+            model_name="cargo",
+            name="origin_country",
+            field=models.CharField(blank=True, default="", max_length=100),
         ),
         migrations.AddField(
-            model_name='cargo',
-            name='origin_point',
-            field=django.contrib.gis.db.models.fields.PointField(blank=True, geography=True, null=True, srid=4326),
+            model_name="cargo",
+            name="origin_point",
+            field=django.contrib.gis.db.models.fields.PointField(
+                blank=True, geography=True, null=True, srid=4326
+            ),
         ),
     ]

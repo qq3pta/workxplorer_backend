@@ -1,16 +1,16 @@
 from django.conf import settings
+from django.contrib.gis.db import models as gis_models
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models.manager import Manager as DjangoManager
 from django.utils import timezone
-from django.contrib.gis.db import models as gis_models
 
-from .choices import TransportType, ContactPref, ModerationStatus, Currency
+from .choices import ContactPref, Currency, ModerationStatus, TransportType
 
 
 class CargoStatus(models.TextChoices):
-    POSTED    = "POSTED",    "Опубликована"
-    MATCHED   = "MATCHED",   "В работе"
+    POSTED = "POSTED", "Опубликована"
+    MATCHED = "MATCHED", "В работе"
     DELIVERED = "DELIVERED", "Доставлено"
     COMPLETED = "COMPLETED", "Завершено"
     CANCELLED = "CANCELLED", "Отменена"
@@ -35,7 +35,7 @@ class Cargo(models.Model):
     destination_city = models.CharField(max_length=100)
 
     origin_point = gis_models.PointField(geography=True, srid=4326, null=True, blank=True)
-    dest_point   = gis_models.PointField(geography=True, srid=4326, null=True, blank=True)
+    dest_point = gis_models.PointField(geography=True, srid=4326, null=True, blank=True)
 
     load_date = models.DateField()
     delivery_date = models.DateField(null=True, blank=True)
@@ -54,19 +54,23 @@ class Cargo(models.Model):
 
     refreshed_at = models.DateTimeField(auto_now_add=True)
 
-    status = models.CharField(max_length=20, choices=CargoStatus.choices, default=CargoStatus.POSTED)
+    status = models.CharField(
+        max_length=20, choices=CargoStatus.choices, default=CargoStatus.POSTED
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     assigned_carrier = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
-        null=True, blank=True,
+        null=True,
+        blank=True,
         related_name="assigned_cargos",
     )
     chosen_offer = models.ForeignKey(
         "offers.Offer",
         on_delete=models.SET_NULL,
-        null=True, blank=True,
+        null=True,
+        blank=True,
         related_name="chosen_for",
     )
 
@@ -90,7 +94,9 @@ class Cargo(models.Model):
     def clean(self):
         """Базовая бизнес-валидация полей."""
         if self.delivery_date and self.load_date and self.delivery_date < self.load_date:
-            raise ValidationError({"delivery_date": "Дата доставки не может быть раньше даты загрузки."})
+            raise ValidationError(
+                {"delivery_date": "Дата доставки не может быть раньше даты загрузки."}
+            )
 
     @property
     def age_minutes(self) -> int:

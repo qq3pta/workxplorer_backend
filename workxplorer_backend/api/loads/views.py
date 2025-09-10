@@ -1,22 +1,20 @@
-from django.utils import timezone
-from django.shortcuts import get_object_or_404
+from django.contrib.gis.db.models.functions import Distance
+from django.contrib.gis.geos import Point
+from django.contrib.gis.measure import D
 from django.core.exceptions import ValidationError
-from django.db.models import Count, Q, F, FloatField
+from django.db.models import Count, F, FloatField, Q
 from django.db.models.expressions import Func
-
+from django.shortcuts import get_object_or_404
+from django.utils import timezone
+from drf_spectacular.utils import extend_schema
 from rest_framework import generics, status
 from rest_framework import serializers as drf_serializers
 from rest_framework.response import Response
-from drf_spectacular.utils import extend_schema
 
-from django.contrib.gis.geos import Point
-from django.contrib.gis.measure import D
-from django.contrib.gis.db.models.functions import Distance
-
-from .models import Cargo, CargoStatus
+from ..accounts.permissions import IsAuthenticatedAndVerified, IsCarrier, IsCustomer
 from .choices import ModerationStatus
-from .serializers import CargoPublishSerializer, CargoListSerializer
-from ..accounts.permissions import IsAuthenticatedAndVerified, IsCustomer, IsCarrier
+from .models import Cargo, CargoStatus
+from .serializers import CargoListSerializer, CargoPublishSerializer
 
 
 def _swagger(view) -> bool:
@@ -26,6 +24,7 @@ def _swagger(view) -> bool:
 
 class RefreshResponseSerializer(drf_serializers.Serializer):
     """Простой сериализатор для ответа refresh."""
+
     detail = drf_serializers.CharField()
 
 
@@ -33,6 +32,7 @@ class DistanceGeography(Func):
     """
     ST_Distance(a::geography, b::geography) -> расстояние в метрах по сфере Земли.
     """
+
     output_field = FloatField()
     function = "ST_Distance"
 
@@ -102,6 +102,7 @@ class MyCargosView(generics.ListAPIView):
     - annotate offers_active для has_offers без N+1
     - annotate path_km для расчёта price_per_km
     """
+
     permission_classes = [IsAuthenticatedAndVerified, IsCustomer]
     serializer_class = CargoListSerializer
     queryset = Cargo.objects.all()
@@ -110,21 +111,14 @@ class MyCargosView(generics.ListAPIView):
         if _swagger(self):
             return Cargo.objects.none()
 
-        qs = (
-            Cargo.objects
-            .filter(customer=self.request.user)
-            .annotate(
-                offers_active=Count("offers", filter=Q(offers__is_active=True))
-            )
+        qs = Cargo.objects.filter(customer=self.request.user).annotate(
+            offers_active=Count("offers", filter=Q(offers__is_active=True))
         )
 
         qs = qs.annotate(path_m=DistanceGeography(F("origin_point"), F("dest_point")))
         qs = qs.annotate(path_km=F("path_m") / 1000.0)
 
-        return (
-            qs.select_related("customer")
-              .order_by("-refreshed_at", "-created_at")
-        )
+        return qs.select_related("customer").order_by("-refreshed_at", "-created_at")
 
 
 @extend_schema(tags=["loads"])
@@ -135,6 +129,7 @@ class MyCargosBoardView(generics.ListAPIView):
     - offers_active для has_offers
     - path_km для price_per_km
     """
+
     permission_classes = [IsAuthenticatedAndVerified, IsCustomer]
     serializer_class = CargoListSerializer
     queryset = Cargo.objects.all()
@@ -162,16 +157,11 @@ class MyCargosBoardView(generics.ListAPIView):
         if p.get("id"):
             qs = qs.filter(id=p["id"])
 
-        qs = qs.annotate(
-            offers_active=Count("offers", filter=Q(offers__is_active=True))
-        )
+        qs = qs.annotate(offers_active=Count("offers", filter=Q(offers__is_active=True)))
         qs = qs.annotate(path_m=DistanceGeography(F("origin_point"), F("dest_point")))
         qs = qs.annotate(path_km=F("path_m") / 1000.0)
 
-        return (
-            qs.select_related("customer")
-              .order_by("-refreshed_at", "-created_at")
-        )
+        return qs.select_related("customer").order_by("-refreshed_at", "-created_at")
 
 
 @extend_schema(tags=["loads"])
@@ -188,21 +178,17 @@ class PublicLoadsView(generics.ListAPIView):
     - dest_lat,   dest_lng,   dest_radius_km
     - order = path_km|-path_km|origin_dist_km|-origin_dist_km|price_value|-price_value|load_date|-load_date
     """
+
     permission_classes = [IsAuthenticatedAndVerified, IsCarrier]
     serializer_class = CargoListSerializer
     queryset = Cargo.objects.all()
 
     def get_queryset(self):
-        qs = (
-            Cargo.objects.filter(
-                is_hidden=False,
-                moderation_status=ModerationStatus.APPROVED,
-                status=CargoStatus.POSTED,
-            )
-            .annotate(
-                offers_active=Count("offers", filter=Q(offers__is_active=True))
-            )
-        )
+        qs = Cargo.objects.filter(
+            is_hidden=False,
+            moderation_status=ModerationStatus.APPROVED,
+            status=CargoStatus.POSTED,
+        ).annotate(offers_active=Count("offers", filter=Q(offers__is_active=True)))
 
         p = self.request.query_params
 
@@ -243,7 +229,7 @@ class PublicLoadsView(generics.ListAPIView):
         # --- Радиусные фильтры (PostGIS) ---
         o_lat = p.get("origin_lat")
         o_lng = p.get("origin_lng")
-        o_r   = p.get("origin_radius_km")
+        o_r = p.get("origin_radius_km")
         origin_point_for_order = None
         if o_lat and o_lng and o_r:
             origin_point_for_order = Point(float(o_lng), float(o_lat), srid=4326)
@@ -255,7 +241,7 @@ class PublicLoadsView(generics.ListAPIView):
 
         d_lat = p.get("dest_lat")
         d_lng = p.get("dest_lng")
-        d_r   = p.get("dest_radius_km")
+        d_r = p.get("dest_radius_km")
         if d_lat and d_lng and d_r:
             dest_point_for_filter = Point(float(d_lng), float(d_lat), srid=4326)
             qs = qs.filter(dest_point__distance_lte=(dest_point_for_filter, D(km=float(d_r))))
@@ -266,10 +252,14 @@ class PublicLoadsView(generics.ListAPIView):
 
         order = p.get("order")
         allowed = {
-            "path_km", "-path_km",
-            "origin_dist_km", "-origin_dist_km",
-            "price_value", "-price_value",
-            "load_date", "-load_date",
+            "path_km",
+            "-path_km",
+            "origin_dist_km",
+            "-origin_dist_km",
+            "price_value",
+            "-price_value",
+            "load_date",
+            "-load_date",
         }
         if order in allowed:
             qs = qs.order_by(order)
@@ -290,6 +280,7 @@ class CargoCancelView(generics.GenericAPIView):
     - доступна только для статусов: POSTED, MATCHED
     - ставит статус CANCELLED и деактивирует офферы
     """
+
     permission_classes = [IsAuthenticatedAndVerified]
     serializer_class = RefreshResponseSerializer  # простой ответ
     queryset = Cargo.objects.all()

@@ -1,12 +1,13 @@
 from django.urls import path
+
 from .views import (
     CreateOfferView,
-    MyOffersView,
     IncomingOffersView,
-    OfferDetailView,
+    MyOffersView,
     OfferAcceptView,
-    OfferRejectView,
     OfferCounterView,
+    OfferDetailView,
+    OfferRejectView,
 )
 
 app_name = "offers"

@@ -1,13 +1,17 @@
 import time
+
 import requests
 from django.conf import settings
 from django.contrib.gis.geos import Point
+
 from .models import GeoPlace
 
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 
+
 class GeocodingError(Exception):
     pass
+
 
 def geocode_city(country: str, city: str, country_code: str | None = None) -> Point:
     """

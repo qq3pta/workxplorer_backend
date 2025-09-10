@@ -1,5 +1,5 @@
-from django.core.mail import send_mail
 from django.conf import settings
+from django.core.mail import send_mail
 
 
 def send_code_email(to_email: str, code: str, purpose: str):

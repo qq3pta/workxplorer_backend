@@ -1,6 +1,7 @@
-from pathlib import Path
 import os
 from datetime import timedelta
+from pathlib import Path
+
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parents[2]
@@ -22,14 +23,12 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django.contrib.gis",
-
     # 3rd-party
     "rest_framework",
     "django_filters",
     "drf_spectacular",
     "rest_framework_simplejwt.token_blacklist",
     "corsheaders",
-
     # API
     "api.accounts",
     "api.loads",
@@ -73,8 +72,11 @@ WSGI_APPLICATION = "core.wsgi.application"
 # Database
 if os.getenv("DATABASE_URL"):
     import dj_database_url
+
     DATABASES = {
-        "default": dj_database_url.parse(os.getenv("DATABASE_URL"), conn_max_age=600, ssl_require=False)
+        "default": dj_database_url.parse(
+            os.getenv("DATABASE_URL"), conn_max_age=600, ssl_require=False
+        )
     }
     DATABASES["default"]["ENGINE"] = "django.contrib.gis.db.backends.postgis"
 else:
@@ -120,9 +122,7 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ),
-    "DEFAULT_FILTER_BACKENDS": (
-        "django_filters.rest_framework.DjangoFilterBackend",
-    ),
+    "DEFAULT_FILTER_BACKENDS": ("django_filters.rest_framework.DjangoFilterBackend",),
 }
 
 SPECTACULAR_SETTINGS = {
@@ -152,4 +152,6 @@ MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_MB", "20"))
 FILE_UPLOAD_MAX_MEMORY_SIZE = MAX_UPLOAD_MB * 1024 * 1024
 DATA_UPLOAD_MAX_MEMORY_SIZE = MAX_UPLOAD_MB * 1024 * 1024
 
-GEO_NOMINATIM_USER_AGENT = os.getenv("GEO_NOMINATIM_USER_AGENT", "workxplorer/1.0 (+contact@example.com)")
+GEO_NOMINATIM_USER_AGENT = os.getenv(
+    "GEO_NOMINATIM_USER_AGENT", "workxplorer/1.0 (+contact@example.com)"
+)

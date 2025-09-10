@@ -1,13 +1,16 @@
 from datetime import timedelta
-from django.contrib.auth import get_user_model, authenticate, password_validation
+
+from django.contrib.auth import authenticate, get_user_model, password_validation
 from django.db.models import Q
 from django.utils import timezone
 from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
-from .models import EmailOTP, UserRole
+
 from .emails import send_code_email
+from .models import EmailOTP, UserRole
 
 User = get_user_model()
+
 
 class RegisterSerializer(serializers.ModelSerializer):
     phone = serializers.CharField()
@@ -16,7 +19,15 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ("username", "email", "password", "password2", "first_name", "phone", "company_name")
+        fields = (
+            "username",
+            "email",
+            "password",
+            "password2",
+            "first_name",
+            "phone",
+            "company_name",
+        )
 
     def validate(self, attrs):
         if attrs["password"] != attrs.pop("password2"):
@@ -39,10 +50,10 @@ class RegisterSerializer(serializers.ModelSerializer):
     def create(self, validated):
         pwd = validated.pop("password")
         user = User.objects.create(
-            role=UserRole.LOGISTIC,          # по ТЗ дефолт — логист
-            is_active=False,                 # до подтверждения email
+            role=UserRole.LOGISTIC,  # по ТЗ дефолт — логист
+            is_active=False,  # до подтверждения email
             is_email_verified=False,
-            **validated
+            **validated,
         )
         user.set_password(pwd)
         user.save()
@@ -63,8 +74,12 @@ class VerifyEmailSerializer(serializers.Serializer):
         if not user:
             raise serializers.ValidationError({"email": "Пользователь не найден"})
         otp = (
-            EmailOTP.objects
-            .filter(user=user, purpose=EmailOTP.PURPOSE_VERIFY, is_used=False, expires_at__gte=timezone.now())
+            EmailOTP.objects.filter(
+                user=user,
+                purpose=EmailOTP.PURPOSE_VERIFY,
+                is_used=False,
+                expires_at__gte=timezone.now(),
+            )
             .order_by("-created_at")
             .first()
         )
@@ -87,13 +102,14 @@ class ResendVerifySerializer(serializers.Serializer):
         if user and not user.is_email_verified:
             # anti-abuse: не чаще 1 раза в минуту
             last = (
-                EmailOTP.objects
-                .filter(user=user, purpose=EmailOTP.PURPOSE_VERIFY)
+                EmailOTP.objects.filter(user=user, purpose=EmailOTP.PURPOSE_VERIFY)
                 .order_by("-created_at")
                 .first()
             )
             if last and (timezone.now() - last.created_at).total_seconds() < 60:
-                raise serializers.ValidationError({"detail": "Код уже отправлен. Подождите минуту."})
+                raise serializers.ValidationError(
+                    {"detail": "Код уже отправлен. Подождите минуту."}
+                )
 
             otp, raw = EmailOTP.create_otp(user, EmailOTP.PURPOSE_VERIFY, ttl_min=15)
             send_code_email(user.email, raw, purpose="verify")
@@ -131,10 +147,27 @@ class MeSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = (
-            "id", "username", "email", "first_name", "phone", "company_name", "photo",
-            "role", "rating_as_customer", "rating_as_carrier", "is_email_verified",
+            "id",
+            "username",
+            "email",
+            "first_name",
+            "phone",
+            "company_name",
+            "photo",
+            "role",
+            "rating_as_customer",
+            "rating_as_carrier",
+            "is_email_verified",
         )
-        read_only_fields = ("id", "username", "email", "role", "rating_as_customer", "rating_as_carrier", "is_email_verified")
+        read_only_fields = (
+            "id",
+            "username",
+            "email",
+            "role",
+            "rating_as_customer",
+            "rating_as_carrier",
+            "is_email_verified",
+        )
 
 
 class UpdateMeSerializer(serializers.ModelSerializer):

@@ -5,7 +5,6 @@ import django.db.models.functions.text
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("accounts", "0002_alter_emailotp_options_emailotp_attempts_left_and_more"),
     ]

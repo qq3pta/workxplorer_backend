@@ -6,27 +6,48 @@ import django.db.models.deletion
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
-        ('offers', '0002_remove_offer_uniq_offer_per_carrier_per_cargo_and_more'),
-        ('loads', '0004_cargo_dest_point_cargo_destination_country_and_more'),
+        ("offers", "0002_remove_offer_uniq_offer_per_carrier_per_cargo_and_more"),
+        ("loads", "0004_cargo_dest_point_cargo_destination_country_and_more"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='cargo',
-            name='assigned_carrier',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='assigned_cargos', to=settings.AUTH_USER_MODEL),
+            model_name="cargo",
+            name="assigned_carrier",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="assigned_cargos",
+                to=settings.AUTH_USER_MODEL,
+            ),
         ),
         migrations.AddField(
-            model_name='cargo',
-            name='chosen_offer',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='chosen_for', to='offers.offer'),
+            model_name="cargo",
+            name="chosen_offer",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="chosen_for",
+                to="offers.offer",
+            ),
         ),
         migrations.AlterField(
-            model_name='cargo',
-            name='status',
-            field=models.CharField(choices=[('POSTED', 'Опубликована'), ('MATCHED', 'В работе'), ('DELIVERED', 'Доставлено'), ('COMPLETED', 'Завершено'), ('CANCELLED', 'Отменена')], default='POSTED', max_length=20),
+            model_name="cargo",
+            name="status",
+            field=models.CharField(
+                choices=[
+                    ("POSTED", "Опубликована"),
+                    ("MATCHED", "В работе"),
+                    ("DELIVERED", "Доставлено"),
+                    ("COMPLETED", "Завершено"),
+                    ("CANCELLED", "Отменена"),
+                ],
+                default="POSTED",
+                max_length=20,
+            ),
         ),
     ]

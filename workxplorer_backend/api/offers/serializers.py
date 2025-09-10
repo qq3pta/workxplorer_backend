@@ -1,8 +1,9 @@
 from decimal import Decimal
+
+from api.loads.choices import Currency, ModerationStatus
+from api.loads.models import Cargo, CargoStatus
 from rest_framework import serializers
 
-from api.loads.models import Cargo, CargoStatus
-from api.loads.choices import Currency, ModerationStatus
 from .models import Offer
 
 
@@ -23,7 +24,9 @@ class OfferCreateSerializer(serializers.ModelSerializer):
 
         # Запрет self-bid
         if cargo.customer_id == user.id:
-            raise serializers.ValidationError({"cargo": "Нельзя сделать оффер на собственную заявку"})
+            raise serializers.ValidationError(
+                {"cargo": "Нельзя сделать оффер на собственную заявку"}
+            )
 
         # Груз должен быть опубликован и доступен
         if cargo.is_hidden:
@@ -59,10 +62,15 @@ class OfferShortSerializer(serializers.ModelSerializer):
         model = Offer
         fields = (
             "id",
-            "cargo", "cargo_origin", "cargo_destination", "cargo_customer_id",
-            "price_value", "price_currency",
+            "cargo",
+            "cargo_origin",
+            "cargo_destination",
+            "cargo_customer_id",
+            "price_value",
+            "price_currency",
             "message",
-            "accepted_by_customer", "accepted_by_carrier",
+            "accepted_by_customer",
+            "accepted_by_carrier",
             "is_active",
             "created_at",
         )
@@ -77,6 +85,8 @@ class OfferDetailSerializer(serializers.ModelSerializer):
 
 
 class OfferCounterSerializer(serializers.Serializer):
-    price_value = serializers.DecimalField(max_digits=14, decimal_places=2, min_value=Decimal("0.01"))
+    price_value = serializers.DecimalField(
+        max_digits=14, decimal_places=2, min_value=Decimal("0.01")
+    )
     price_currency = serializers.CharField(required=False, allow_blank=True, max_length=3)
     message = serializers.CharField(required=False, allow_blank=True)

@@ -1,25 +1,25 @@
-from django.shortcuts import get_object_or_404
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
-
+from django.shortcuts import get_object_or_404
+from drf_spectacular.utils import extend_schema
 from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from drf_spectacular.utils import extend_schema
 
 from ..accounts.permissions import IsAuthenticatedAndVerified, IsCarrier, IsCustomer
 from .models import Offer
 from .serializers import (
-    OfferCreateSerializer,
-    OfferShortSerializer,
-    OfferDetailSerializer,
     OfferCounterSerializer,
+    OfferCreateSerializer,
+    OfferDetailSerializer,
+    OfferShortSerializer,
 )
 
 
 @extend_schema(tags=["offers"])
 class CreateOfferView(generics.CreateAPIView):
     """Создать оффер (только Перевозчик/Логист)."""
+
     permission_classes = [IsAuthenticatedAndVerified, IsCarrier]
     serializer_class = OfferCreateSerializer
     queryset = Offer.objects.all()
@@ -31,6 +31,7 @@ class CreateOfferView(generics.CreateAPIView):
 @extend_schema(tags=["offers"], responses=OfferShortSerializer)
 class MyOffersView(generics.ListAPIView):
     """Мои офферы (как Перевозчик)."""
+
     permission_classes = [IsAuthenticatedAndVerified, IsCarrier]
     serializer_class = OfferShortSerializer
 
@@ -41,17 +42,21 @@ class MyOffersView(generics.ListAPIView):
 @extend_schema(tags=["offers"], responses=OfferShortSerializer)
 class IncomingOffersView(generics.ListAPIView):
     """Входящие офферы на мои грузы (как Заказчик/Логист)."""
+
     permission_classes = [IsAuthenticatedAndVerified, IsCustomer]
     serializer_class = OfferShortSerializer
 
     def get_queryset(self):
         # все офферы на заявки текущего пользователя
-        return Offer.objects.filter(cargo__customer=self.request.user, is_active=True).order_by("-created_at")
+        return Offer.objects.filter(cargo__customer=self.request.user, is_active=True).order_by(
+            "-created_at"
+        )
 
 
 @extend_schema(tags=["offers"], responses=OfferDetailSerializer)
 class OfferDetailView(generics.RetrieveAPIView):
     """Детали оффера (видит перевозчик – автор; или владелец груза/логист)."""
+
     permission_classes = [IsAuthenticatedAndVerified]
     serializer_class = OfferDetailSerializer
     queryset = Offer.objects.select_related("cargo", "carrier")
@@ -59,7 +64,9 @@ class OfferDetailView(generics.RetrieveAPIView):
     def get_object(self):
         obj = super().get_object()
         u = self.request.user
-        if u.id not in (obj.carrier_id, obj.cargo.customer_id) and not getattr(u, "is_logistic", False):
+        if u.id not in (obj.carrier_id, obj.cargo.customer_id) and not getattr(
+            u, "is_logistic", False
+        ):
             raise PermissionDenied("Нет доступа к офферу")
         return obj
 
@@ -67,6 +74,7 @@ class OfferDetailView(generics.RetrieveAPIView):
 @extend_schema(tags=["offers"])
 class OfferAcceptView(APIView):
     """Акцепт оффера стороной (перевозчик/заказчик). При взаимном акцепте создаётся Shipment."""
+
     permission_classes = [IsAuthenticatedAndVerified]
 
     def post(self, request, pk: int):
@@ -88,6 +96,7 @@ class OfferAcceptView(APIView):
 @extend_schema(tags=["offers"])
 class OfferRejectView(APIView):
     """Отклонить/снять оффер любой из сторон (становится неактивным)."""
+
     permission_classes = [IsAuthenticatedAndVerified]
 
     def post(self, request, pk: int):
@@ -105,13 +114,16 @@ class OfferCounterView(APIView):
     Контр-предложение по офферу.
     Разрешено владельцу груза (customer оффера.cargo) ИЛИ перевозчику этого оффера (carrier).
     """
+
     permission_classes = [IsAuthenticatedAndVerified]
 
     def post(self, request, pk: int):
         offer = get_object_or_404(Offer.objects.select_related("cargo"), pk=pk, is_active=True)
 
         u = request.user
-        if u.id not in (offer.cargo.customer_id, offer.carrier_id) and not getattr(u, "is_staff", False):
+        if u.id not in (offer.cargo.customer_id, offer.carrier_id) and not getattr(
+            u, "is_staff", False
+        ):
             return Response({"detail": "Forbidden"}, status=status.HTTP_403_FORBIDDEN)
 
         serializer = OfferCounterSerializer(data=request.data)

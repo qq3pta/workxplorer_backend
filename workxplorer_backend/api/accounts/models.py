@@ -1,16 +1,17 @@
+import secrets
+from datetime import timedelta
+
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.db.models import UniqueConstraint
 from django.db.models.functions import Lower
 from django.utils import timezone
-from datetime import timedelta
-import secrets
 
 
 class UserRole(models.TextChoices):
     LOGISTIC = "LOGISTIC", "Логист"
     CUSTOMER = "CUSTOMER", "Заказчик"
-    CARRIER  = "CARRIER",  "Перевозчик"
+    CARRIER = "CARRIER", "Перевозчик"
 
 
 class User(AbstractUser):
@@ -22,7 +23,7 @@ class User(AbstractUser):
     role = models.CharField(max_length=16, choices=UserRole.choices, default=UserRole.LOGISTIC)
 
     rating_as_customer = models.FloatField(default=0)
-    rating_as_carrier  = models.FloatField(default=0)
+    rating_as_carrier = models.FloatField(default=0)
 
     is_email_verified = models.BooleanField(default=False)
 
@@ -63,7 +64,7 @@ class User(AbstractUser):
 
 class EmailOTP(models.Model):
     PURPOSE_VERIFY = "verify"
-    PURPOSE_RESET  = "reset"
+    PURPOSE_RESET = "reset"
     PURPOSES = [(PURPOSE_VERIFY, "verify"), (PURPOSE_RESET, "reset")]
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="otps")
@@ -98,7 +99,7 @@ class EmailOTP(models.Model):
     def check_and_consume(self, raw_code: str) -> bool:
         if self.is_used or self.expires_at < timezone.now() or self.attempts_left == 0:
             return False
-        ok = (self.code == raw_code)
+        ok = self.code == raw_code
         if ok:
             self.is_used = True
             self.save(update_fields=["is_used"])

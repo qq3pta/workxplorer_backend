@@ -1,14 +1,14 @@
-from rest_framework import generics, permissions
-from django_filters.rest_framework import DjangoFilterBackend
-from drf_spectacular.utils import extend_schema
+from api.geo.services import geocode_city
+from django.contrib.gis.measure import D
 from django.db.models import F, FloatField
 from django.db.models.expressions import Func
+from django_filters.rest_framework import DjangoFilterBackend
+from drf_spectacular.utils import extend_schema
+from rest_framework import generics, permissions
 
 from ..accounts.permissions import IsCarrier
 from ..loads.models import Cargo, CargoStatus
 from ..loads.serializers import CargoListSerializer
-from api.geo.services import geocode_city
-from django.contrib.gis.measure import D
 
 
 class DistanceGeography(Func):
@@ -16,6 +16,7 @@ class DistanceGeography(Func):
     Корректный расчёт расстояния в метрах по WGS84:
     ST_Distance(a::geography, b::geography)
     """
+
     output_field = FloatField()
     function = "ST_Distance"
 

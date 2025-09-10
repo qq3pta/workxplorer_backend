@@ -2,7 +2,7 @@
 name = "workxplorer"
 version = "0.1.0"
 description = "MVP биржи грузоперевозок (backend)"
-authors = ["alex.tawila@gmail.com"]
+authors = ["Alexandr Chatyev <alex.tawila@gmail.com>"]
 readme = "README.md"
 packages = [{ include = "workxplorer_backend" }]
 

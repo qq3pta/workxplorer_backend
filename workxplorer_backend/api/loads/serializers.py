@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from decimal import Decimal, ROUND_HALF_UP
-from typing import Any, Optional, Tuple
-
-from django.contrib.gis.geos import Point
-from rest_framework import serializers
-from drf_spectacular.utils import extend_schema_field
+from decimal import ROUND_HALF_UP, Decimal
+from typing import Any
 
 from api.geo.services import GeocodingError, geocode_city
+from django.contrib.gis.geos import Point
+from drf_spectacular.utils import extend_schema_field
+from rest_framework import serializers
+
 from .choices import ContactPref, Currency, ModerationStatus, TransportType
 from .models import Cargo
 
@@ -48,7 +48,7 @@ class CargoPublishSerializer(serializers.ModelSerializer):
             return getattr(self.instance, name, None)
         return None
 
-    def _need_regeocode(self, attrs: dict[str, Any]) -> Tuple[bool, bool]:
+    def _need_regeocode(self, attrs: dict[str, Any]) -> tuple[bool, bool]:
         """Нужно ли пересчитать origin_point и/или dest_point."""
         o_fields = {"origin_country", "origin_city", "origin_address"}
         d_fields = {"destination_country", "destination_city", "destination_address"}
@@ -250,7 +250,7 @@ class CargoListSerializer(serializers.ModelSerializer):
         return phone or email or ""
 
     @extend_schema_field(float)
-    def get_weight_t(self, obj: Cargo) -> Optional[float]:
+    def get_weight_t(self, obj: Cargo) -> float | None:
         if obj.weight_kg is None:
             return None
         try:
@@ -259,7 +259,7 @@ class CargoListSerializer(serializers.ModelSerializer):
             return None
 
     @extend_schema_field(Decimal)
-    def get_price_per_km(self, obj: Cargo) -> Optional[Decimal]:
+    def get_price_per_km(self, obj: Cargo) -> Decimal | None:
         """
         Возвращаем Decimal(2 знака) для денежного значения.
         Если path_km отсутствует или <= 0 — None.

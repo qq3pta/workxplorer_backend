@@ -1,10 +1,9 @@
 from decimal import Decimal
-from typing import Any, Dict
+from typing import Any
 
-from rest_framework import serializers
-
-from api.loads.models import Cargo, CargoStatus
 from api.loads.choices import Currency, ModerationStatus
+from api.loads.models import Cargo, CargoStatus
+from rest_framework import serializers
 
 from .models import Offer
 
@@ -20,7 +19,7 @@ class OfferCreateSerializer(serializers.ModelSerializer):
             "message": {"required": False, "allow_blank": True},
         }
 
-    def validate(self, attrs: Dict[str, Any]) -> Dict[str, Any]:
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
         user = self.context["request"].user
         cargo: Cargo = attrs["cargo"]
 
@@ -46,7 +45,7 @@ class OfferCreateSerializer(serializers.ModelSerializer):
 
         return attrs
 
-    def create(self, validated_data: Dict[str, Any]) -> Offer:
+    def create(self, validated_data: dict[str, Any]) -> Offer:
         user = self.context["request"].user
         offer = Offer.objects.create(carrier=user, **validated_data)
         return offer

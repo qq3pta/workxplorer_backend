@@ -1,28 +1,26 @@
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.db.models import Q
-
-from rest_framework import status, serializers
-from rest_framework.response import Response
-from rest_framework.viewsets import ModelViewSet
-from rest_framework.decorators import action
-
 from drf_spectacular.utils import (
+    OpenApiParameter,
+    OpenApiResponse,
     extend_schema,
     extend_schema_view,
-    OpenApiResponse,
-    OpenApiParameter,
 )
+from rest_framework import serializers, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework.viewsets import ModelViewSet
 
 from ..accounts.permissions import IsAuthenticatedAndVerified, IsCarrier, IsCustomer
 from .models import Offer
 from .serializers import (
+    OfferAcceptResponseSerializer,
+    OfferCounterSerializer,
     OfferCreateSerializer,
     OfferDetailSerializer,
-    OfferShortSerializer,
-    OfferCounterSerializer,
-    OfferAcceptResponseSerializer,
     OfferRejectResponseSerializer,
+    OfferShortSerializer,
 )
 
 

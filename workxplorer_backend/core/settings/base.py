@@ -1,18 +1,28 @@
-import os
+from os import getenv
 from datetime import timedelta
 from pathlib import Path
 
 from dotenv import load_dotenv
 
+# Paths & env
 BASE_DIR = Path(__file__).resolve().parents[2]
 load_dotenv(BASE_DIR / ".env")
 
-SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "dev-secret")
-DEBUG = os.getenv("DJANGO_DEBUG", "True").lower() == "true"
-ALLOWED_HOSTS = [h.strip() for h in os.getenv("DJANGO_ALLOWED_HOSTS", "*").split(",") if h.strip()]
+def _csv(name: str, default: str = "") -> list[str]:
+    raw = getenv(name, default)
+    return [x.strip() for x in raw.split(",") if x.strip()]
 
-_CSRF = os.getenv("CSRF_TRUSTED_ORIGINS", "")
-CSRF_TRUSTED_ORIGINS = [o.strip() for o in _CSRF.split(",") if o.strip()]
+# Core
+SECRET_KEY = getenv("DJANGO_SECRET_KEY", "dev-secret")
+DEBUG = getenv("DJANGO_DEBUG", "True").lower() == "true"
+
+ALLOWED_HOSTS = (
+    _csv("ALLOWED_HOSTS")
+    or _csv("DJANGO_ALLOWED_HOSTS", "*" if DEBUG else "")
+    or (["*"] if DEBUG else [])
+)
+
+CSRF_TRUSTED_ORIGINS = _csv("CSRF_TRUSTED_ORIGINS")
 
 INSTALLED_APPS = [
     # Django
@@ -69,29 +79,30 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "core.wsgi.application"
 
-# Database
-if os.getenv("DATABASE_URL"):
+# Database (PostGIS)
+if getenv("DATABASE_URL"):
     import dj_database_url
-
     DATABASES = {
         "default": dj_database_url.parse(
-            os.getenv("DATABASE_URL"), conn_max_age=600, ssl_require=False
+            getenv("DATABASE_URL"),
+            conn_max_age=600,
+            ssl_require=False,
         )
     }
     DATABASES["default"]["ENGINE"] = "django.contrib.gis.db.backends.postgis"
 else:
     DATABASES = {
         "default": {
-            "ENGINE": "django.contrib.gis.db.backends.postgis",  # NEW: PostGIS
-            "NAME": os.getenv("DB_NAME", "postgres"),
-            "USER": os.getenv("DB_USER", "postgres"),
-            "PASSWORD": os.getenv("DB_PASSWORD", "postgres"),
-            "HOST": os.getenv("DB_HOST", "localhost"),
-            "PORT": os.getenv("DB_PORT", "5432"),
+            "ENGINE": "django.contrib.gis.db.backends.postgis",
+            "NAME": getenv("DB_NAME", "postgres"),
+            "USER": getenv("DB_USER", "postgres"),
+            "PASSWORD": getenv("DB_PASSWORD", "postgres"),
+            "HOST": getenv("DB_HOST", "localhost"),
+            "PORT": getenv("DB_PORT", "5432"),
         }
     }
 
-# Password validation
+# Passwords / i18n / tz
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
@@ -104,17 +115,21 @@ TIME_ZONE = "Asia/Tashkent"
 USE_I18N = True
 USE_TZ = True
 
-# Static/Media
+# Static / Media
 STATIC_URL = "/static/"
-STATIC_ROOT = BASE_DIR / "staticfiles"
+STATIC_ROOT = BASE_DIR / "static"
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
-STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+# STORAGES
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
+}
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# DRF
+# DRF / Schema
 REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 10,
@@ -123,6 +138,14 @@ REST_FRAMEWORK = {
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ),
     "DEFAULT_FILTER_BACKENDS": ("django_filters.rest_framework.DjangoFilterBackend",),
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.UserRateThrottle",
+        "rest_framework.throttling.AnonRateThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        "user": "5000/day",
+        "anon": "1000/day",
+    },
 }
 
 SPECTACULAR_SETTINGS = {
@@ -133,25 +156,42 @@ SPECTACULAR_SETTINGS = {
 
 # JWT
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=int(os.getenv("JWT_ACCESS_MIN", "30"))),
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=int(os.getenv("JWT_REFRESH_DAYS", "7"))),
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=int(getenv("JWT_ACCESS_MIN", "30"))),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=int(getenv("JWT_REFRESH_DAYS", "7"))),
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
     "AUTH_HEADER_TYPES": ("Bearer",),
 }
 
 # CORS
-CORS_ALLOW_ALL_ORIGINS = os.getenv("CORS_ALLOW_ALL_ORIGINS", "True").lower() == "true"
-CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_ALL_ORIGINS = getenv("CORS_ALLOW_ALL_ORIGINS", "False").lower() == "true"
+CORS_ALLOWED_ORIGINS = _csv("CORS_ALLOWED_ORIGINS")
 
+# Auth user / Email
 AUTH_USER_MODEL = "accounts.User"
-EMAIL_BACKEND = os.getenv("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
-DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "noreply@example.com")
+EMAIL_BACKEND = getenv("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
+DEFAULT_FROM_EMAIL = getenv("DEFAULT_FROM_EMAIL", "noreply@example.com")
 
-MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_MB", "20"))
+# Upload limits
+MAX_UPLOAD_MB = int(getenv("MAX_UPLOAD_MB", "20"))
 FILE_UPLOAD_MAX_MEMORY_SIZE = MAX_UPLOAD_MB * 1024 * 1024
 DATA_UPLOAD_MAX_MEMORY_SIZE = MAX_UPLOAD_MB * 1024 * 1024
 
-GEO_NOMINATIM_USER_AGENT = os.getenv(
-    "GEO_NOMINATIM_USER_AGENT", "workxplorer/1.0 (+contact@example.com)"
+# Geo / Nominatim
+GEO_NOMINATIM_USER_AGENT = getenv(
+    "GEO_NOMINATIM_USER_AGENT",
+    "workxplorer/1.0 (+contact@example.com)",
 )
+
+# Cache (Redis)
+if getenv("REDIS_URL"):
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": getenv("REDIS_URL"),
+        }
+    }
+else:
+    CACHES = {
+        "default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}
+    }

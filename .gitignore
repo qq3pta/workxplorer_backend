@@ -12,3 +12,4 @@ media/
 *.bak
 .env
 *.sqlite3
+.ruff_cache/

@@ -13,3 +13,4 @@ media/
 .env
 *.sqlite3
 .ruff_cache/
+statiс/

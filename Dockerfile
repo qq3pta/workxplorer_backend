@@ -1,29 +1,32 @@
-# ===== base =====
 FROM python:3.12-slim AS base
-ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=on \
+    PIP_NO_CACHE_DIR=off \
+    POETRY_VERSION=1.8.3
+
+# GeoDjango системные зависимости
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential libpq-dev gdal-bin libgdal-dev libproj-dev libgeos-dev binutils \
- && rm -rf /var/lib/apt/lists/*
+    gdal-bin libgdal-dev libgeos-dev libproj-dev \
+    build-essential curl && \
+    rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
-# ===== builder =====
-FROM base AS builder
-ARG POETRY_VERSION=1.8.3
-ENV POETRY_VIRTUALENVS_IN_PROJECT=true
-RUN pip install --no-cache-dir "poetry==${POETRY_VERSION}"
-COPY pyproject.toml poetry.lock ./
-RUN poetry install --only main --no-interaction --no-ansi
+# Poetry
+RUN pip install "poetry==${POETRY_VERSION}"
 
-# (опционально) прогреть компиляцию зависимостей
-COPY workxplorer_backend ./workxplorer_backend
+COPY pyproject.toml poetry.lock* /app/
 
-# ===== runtime =====
-FROM base AS runtime
-RUN useradd -m appuser
-USER appuser
-COPY --from=builder /app/.venv /app/.venv
-ENV PATH="/app/.venv/bin:$PATH"
-COPY . .
-ENV DJANGO_SETTINGS_MODULE=core.settings.prod
+RUN poetry config virtualenvs.create false && \
+    poetry install --only main --no-interaction --no-ansi
+
+COPY workxplorer_backend /app/workxplorer_backend
+
+RUN python -c "print('Docker build sanity ✓')"
+
 EXPOSE 8000
-CMD ["gunicorn", "core.wsgi:application", "--chdir", "workxplorer_backend", "--bind", "0.0.0.0:8000", "--workers", "3", "--timeout", "120"]
+
+# Gunicorn
+CMD ["gunicorn", "core.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3", "--timeout", "120"]

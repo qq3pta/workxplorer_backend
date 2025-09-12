@@ -1,8 +1,10 @@
 from decimal import Decimal
+from typing import Any, Dict
 
-from api.loads.choices import Currency, ModerationStatus
-from api.loads.models import Cargo, CargoStatus
 from rest_framework import serializers
+
+from api.loads.models import Cargo, CargoStatus
+from api.loads.choices import Currency, ModerationStatus
 
 from .models import Offer
 
@@ -18,36 +20,33 @@ class OfferCreateSerializer(serializers.ModelSerializer):
             "message": {"required": False, "allow_blank": True},
         }
 
-    def validate(self, attrs):
+    def validate(self, attrs: Dict[str, Any]) -> Dict[str, Any]:
         user = self.context["request"].user
         cargo: Cargo = attrs["cargo"]
 
-        # Запрет self-bid
         if cargo.customer_id == user.id:
             raise serializers.ValidationError(
                 {"cargo": "Нельзя сделать оффер на собственную заявку"}
             )
 
         # Груз должен быть опубликован и доступен
-        if cargo.is_hidden:
+        if getattr(cargo, "is_hidden", False):
             raise serializers.ValidationError({"cargo": "Заявка скрыта"})
         if cargo.moderation_status != ModerationStatus.APPROVED:
             raise serializers.ValidationError({"cargo": "Заявка не прошла модерацию"})
         if cargo.status != CargoStatus.POSTED:
             raise serializers.ValidationError({"cargo": "Заявка уже не активна"})
 
-        # Уникальность оффера на уровне приложения (помимо DB constraints)
         if Offer.objects.filter(cargo=cargo, carrier=user).exists():
             raise serializers.ValidationError({"cargo": "Вы уже отправили оффер на эту заявку"})
 
-        # Доп. валидации значений
         price = attrs.get("price_value")
         if price is not None and price < 0:
             raise serializers.ValidationError({"price_value": "Цена не может быть отрицательной"})
 
         return attrs
 
-    def create(self, validated_data):
+    def create(self, validated_data: Dict[str, Any]) -> Offer:
         user = self.context["request"].user
         offer = Offer.objects.create(carrier=user, **validated_data)
         return offer
@@ -86,7 +85,19 @@ class OfferDetailSerializer(serializers.ModelSerializer):
 
 class OfferCounterSerializer(serializers.Serializer):
     price_value = serializers.DecimalField(
-        max_digits=14, decimal_places=2, min_value=Decimal("0.01")
+        max_digits=14,
+        decimal_places=2,
+        min_value=Decimal("0.01"),
     )
     price_currency = serializers.CharField(required=False, allow_blank=True, max_length=3)
     message = serializers.CharField(required=False, allow_blank=True)
+
+
+class OfferAcceptResponseSerializer(serializers.Serializer):
+    detail = serializers.CharField()
+    accepted_by_customer = serializers.BooleanField()
+    accepted_by_carrier = serializers.BooleanField()
+
+
+class OfferRejectResponseSerializer(serializers.Serializer):
+    detail = serializers.CharField()

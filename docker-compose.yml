@@ -2,39 +2,70 @@ services:
   db:
     image: postgis/postgis:16-3.4
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-workxplorer}
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-    ports: ["5432:5432"]
-    volumes: [pgdata:/var/lib/postgresql/data]
+      POSTGRES_DB: workxplorer
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      TZ: Asia/Tashkent
+    volumes:
+      - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\""]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d workxplorer"]
       interval: 5s
       timeout: 5s
       retries: 10
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   web:
     build:
       context: .
       dockerfile: Dockerfile
-    env_file: [.env]
-    environment:
-      DJANGO_SETTINGS_MODULE: core.settings.dev
-      # Можно так, либо через DB_* из .env
-      # DATABASE_URL: postgis://postgres:postgres@db:5432/workxplorer
+    working_dir: /app/workxplorer_backend
+    volumes:
+      - ./workxplorer_backend:/app/workxplorer_backend
     depends_on:
       db:
         condition: service_healthy
-    ports: ["8000:8000"]
-    working_dir: /app/workxplorer_backend
-    volumes:
-      - ./workxplorer_backend:/app/workxplorer_backend:delegated
+    env_file:
+      - .env
+    environment:
+      DJANGO_SETTINGS_MODULE: core.settings.prod
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: workxplorer
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      TZ: Asia/Tashkent
     command: >
       sh -c "
-        python manage.py collectstatic --noinput &&
-        python manage.py migrate &&
-        gunicorn core.wsgi:application -b 0.0.0.0:8000 -w 3 --timeout 120
+        python -m django collectstatic --noinput &&
+        python -m django migrate --noinput &&
+        gunicorn core.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 120
       "
+    ports:
+      - "8000:8000"
+    init: true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/health/ || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # redis:
+  #   image: redis:7-alpine
+  #   ports:
+  #     - "6379:6379"
+  #   restart: unless-stopped
 
 volumes:
   pgdata:

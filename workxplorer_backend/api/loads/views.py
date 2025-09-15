@@ -24,7 +24,6 @@ def _swagger(view) -> bool:
 
 class RefreshResponseSerializer(drf_serializers.Serializer):
     """Простой сериализатор для ответа refresh."""
-
     detail = drf_serializers.CharField()
 
 
@@ -32,7 +31,6 @@ class DistanceGeography(Func):
     """
     ST_Distance(a::geography, b::geography) -> расстояние в метрах по сфере Земли.
     """
-
     output_field = FloatField()
     function = "ST_Distance"
 
@@ -50,14 +48,21 @@ class PublishCargoView(generics.CreateAPIView):
     queryset = Cargo.objects.all()
 
     def create(self, request, *args, **kwargs):
+        """
+        Создаём груз, геокодим точки, сразу считаем маршрут по трассе (через сериалайзер)
+        и возвращаем километраж в ответе.
+        """
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        cargo = serializer.save()
-        return Response(
-            {"message": "Заявка успешно опубликована и отправлена на модерацию", "id": cargo.id},
-            status=status.HTTP_201_CREATED,
-            headers=self.get_success_headers(serializer.data),
-        )
+        cargo = serializer.save()  # внутри create() уже вызывается update_route_cache(save=True)
+        # пересериализуем созданный объект, чтобы получить route_kм из миксина
+        data = self.get_serializer(cargo).data
+        payload = {
+            "message": "Заявка успешно опубликована и отправлена на модерацию",
+            "id": cargo.id,
+            "route_km": data.get("route_km"),
+        }
+        return Response(payload, status=status.HTTP_201_CREATED, headers=self.get_success_headers(data))
 
 
 @extend_schema(tags=["loads"])
@@ -72,7 +77,7 @@ class CargoDetailView(generics.RetrieveUpdateAPIView):
         return Cargo.objects.filter(customer=self.request.user)
 
     def perform_update(self, serializer):
-        obj = serializer.save()
+        obj = serializer.save()  # сериалайзер сам пересчитает route_km при смене точек
         obj.refreshed_at = timezone.now()
         obj.save(update_fields=["refreshed_at"])
 
@@ -100,9 +105,8 @@ class MyCargosView(generics.ListAPIView):
     """
     - select_related('customer') для company_name/contact_value
     - annotate offers_active для has_offers без N+1
-    - annotate path_km для расчёта price_per_km
+    - annotate path_km для расчёта price_per_km (фолбэк)
     """
-
     permission_classes = [IsAuthenticatedAndVerified, IsCustomer]
     serializer_class = CargoListSerializer
     queryset = Cargo.objects.all()
@@ -127,9 +131,8 @@ class MyCargosBoardView(generics.ListAPIView):
     Борда моих активных заявок.
     - select_related('customer')
     - offers_active для has_offers
-    - path_km для price_per_km
+    - path_km для price_per_km (фолбэк)
     """
-
     permission_classes = [IsAuthenticatedAndVerified, IsCustomer]
     serializer_class = CargoListSerializer
     queryset = Cargo.objects.all()
@@ -178,7 +181,6 @@ class PublicLoadsView(generics.ListAPIView):
     - dest_lat,   dest_lng,   dest_radius_km
     - order = path_km|-path_km|origin_dist_km|-origin_dist_km|price_value|-price_value|load_date|-load_date
     """
-
     permission_classes = [IsAuthenticatedAndVerified, IsCarrier]
     serializer_class = CargoListSerializer
     queryset = Cargo.objects.all()
@@ -246,7 +248,7 @@ class PublicLoadsView(generics.ListAPIView):
             dest_point_for_filter = Point(float(d_lng), float(d_lat), srid=4326)
             qs = qs.filter(dest_point__distance_lte=(dest_point_for_filter, D(km=float(d_r))))
 
-        # Путь между городами (метры -> км) для price_per_km
+        # Путь между городами (метры -> км) для price_per_km (фолбэк)
         qs = qs.annotate(path_m=DistanceGeography(F("origin_point"), F("dest_point")))
         qs = qs.annotate(path_km=F("path_m") / 1000.0)
 
@@ -280,7 +282,6 @@ class CargoCancelView(generics.GenericAPIView):
     - доступна только для статусов: POSTED, MATCHED
     - ставит статус CANCELLED и деактивирует офферы
     """
-
     permission_classes = [IsAuthenticatedAndVerified]
     serializer_class = RefreshResponseSerializer  # простой ответ
     queryset = Cargo.objects.all()

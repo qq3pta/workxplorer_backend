@@ -198,7 +198,7 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
         cargo.update_route_cache(save=True)
         # подложим значение для немедленного возврата route_km без доп. запроса
         if cargo.route_km_cached is not None:
-            setattr(cargo, "route_km", cargo.route_km_cached)
+            cargo.route_km = cargo.route_km_cached
 
         return cargo
 
@@ -219,7 +219,7 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
         if need_origin or need_dest:
             instance.update_route_cache(save=True)
             if instance.route_km_cached is not None:
-                setattr(instance, "route_km", instance.route_km_cached)
+                instance.route_km = instance.route_km_cached
 
         return instance
 

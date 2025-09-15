@@ -12,11 +12,59 @@ from .choices import ContactPref, Currency, ModerationStatus, TransportType
 from .models import Cargo
 
 
-class CargoPublishSerializer(serializers.ModelSerializer):
+# ---------- Миксин для добавления route_km ----------
+class RouteKmMixin(serializers.Serializer):
+    """
+    Достаёт километраж по трассе в таком порядке:
+    1) подложенное значение obj.route_km (если вью это сделал),
+    2) снимок из БД: route_km_cached,
+    3) live-калькуляция через провайдера (Mapbox/ORS/OSRM) и кэш,
+    4) фолбэк: прямая дистанция path_km (если аннотирована в queryset).
+    """
+    route_km = serializers.SerializerMethodField()
+
+    def get_route_km(self, obj: Cargo) -> float | None:
+        # 1) уже подложили на объект (например, в perform_create)
+        val = getattr(obj, "route_km", None)
+        if val is not None:
+            try:
+                return round(float(val), 1)
+            except Exception:
+                pass
+
+        # 2) снимок, сохранённый в модели
+        cached = getattr(obj, "route_km_cached", None)
+        if cached is not None:
+            try:
+                return round(float(cached), 1)
+            except Exception:
+                pass
+
+        # 3) live-калькуляция через провайдера (и прогрев кэша)
+        try:
+            if getattr(obj, "origin_point", None) and getattr(obj, "dest_point", None):
+                from api.routing.services import get_route
+                rc = get_route(obj.origin_point, obj.dest_point)
+                if rc:
+                    return round(float(rc.distance_km), 1)
+        except Exception:
+            pass
+
+        # 4) фолбэк — прямая линия, если прислано аннотацией
+        pk = getattr(obj, "path_km", None)
+        try:
+            return round(float(pk), 1) if pk is not None else None
+        except Exception:
+            return None
+# ----------------------------------------------------
+
+
+class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
     """
     Создание/обновление заявки.
     - Пользователь вводит только страну/город/адрес (координаты не требуются).
     - Сервер сам геокодит и заполняет origin_point/dest_point.
+    - В ответе отдаём route_km (по трассе), если удалось посчитать/закэшировать.
     """
 
     class Meta:
@@ -38,7 +86,10 @@ class CargoPublishSerializer(serializers.ModelSerializer):
             "price_currency",
             "contact_pref",
             "is_hidden",
+            # read-only
+            "route_km",
         )
+        read_only_fields = ("route_km",)
 
     def _val_or_instance(self, attrs: dict[str, Any], name: str) -> Any:
         """Берём значение из attrs, а если апдейт и поля нет — из instance."""
@@ -135,13 +186,21 @@ class CargoPublishSerializer(serializers.ModelSerializer):
         origin_point = self._geocode_origin(validated_data)
         dest_point = self._geocode_dest(validated_data)
 
-        return Cargo.objects.create(
+        cargo = Cargo.objects.create(
             customer=user,
             origin_point=origin_point,
             dest_point=dest_point,
             moderation_status=ModerationStatus.PENDING,
             **validated_data,
         )
+
+        # сразу считаем маршрут и сохраняем снимок (если провайдер доступен)
+        cargo.update_route_cache(save=True)
+        # подложим значение для немедленного возврата route_km без доп. запроса
+        if cargo.route_km_cached is not None:
+            setattr(cargo, "route_km", cargo.route_km_cached)
+
+        return cargo
 
     def update(self, instance: Cargo, validated_data: dict[str, Any]) -> Cargo:
         need_origin, need_dest = self._need_regeocode(validated_data)
@@ -155,19 +214,27 @@ class CargoPublishSerializer(serializers.ModelSerializer):
             setattr(instance, field, value)
 
         instance.save()
+
+        # если поменялись точки — пересчитаем маршрут и снимок
+        if need_origin or need_dest:
+            instance.update_route_cache(save=True)
+            if instance.route_km_cached is not None:
+                setattr(instance, "route_km", instance.route_km_cached)
+
         return instance
 
 
-class CargoListSerializer(serializers.ModelSerializer):
+class CargoListSerializer(RouteKmMixin, serializers.ModelSerializer):
     """
     Листинг/борда. Поля рассчитываются так:
-    - path_km         — приходит из аннотации queryset'а (расстояние в км)
-    - origin_dist_km  — аннотация радиуса (если есть фильтр), иначе None
-    - has_offers      — активные офферы
-    - company_name    — берём из профиля заказчика (customer)
-    - contact_value   — в зависимости от contact_pref (телефон/email/иначе)
-    - weight_t        — вес в тоннах (из weight_kg)
-    - price_per_km    — price_value / path_km
+    - route_km       — по трассе (кэш/провайдер), фолбэк на path_km
+    - path_km        — приходит из аннотации queryset'а (прямая дистанция в км)
+    - origin_dist_km — аннотация радиуса (если есть фильтр), иначе None
+    - has_offers     — активные офферы
+    - company_name   — берём из профиля заказчика (customer)
+    - contact_value  — в зависимости от contact_pref (телефон/email/иначе)
+    - weight_t       — вес в тоннах (из weight_kg)
+    - price_per_km   — price_value / (route_km или path_km)
     """
 
     age_minutes = serializers.IntegerField(read_only=True)
@@ -210,6 +277,7 @@ class CargoListSerializer(serializers.ModelSerializer):
             "refreshed_at",
             "has_offers",
             "path_km",
+            "route_km",
             "price_per_km",
             "origin_dist_km",
         )
@@ -262,10 +330,17 @@ class CargoListSerializer(serializers.ModelSerializer):
     def get_price_per_km(self, obj: Cargo) -> Decimal | None:
         """
         Возвращаем Decimal(2 знака) для денежного значения.
-        Если path_km отсутствует или <= 0 — None.
+        Если дистанция отсутствует или <= 0 — None.
+        Для дистанции используем приоритет: route_km -> path_km.
         """
         price = getattr(obj, "price_value", None)
-        dist = getattr(obj, "path_km", None)
+
+        # приоритет: маршрутизированная дистанция, затем прямая
+        dist = getattr(obj, "route_km", None)
+        if dist is None:
+            dist = getattr(obj, "route_km_cached", None)
+        if dist is None:
+            dist = getattr(obj, "path_km", None)
 
         try:
             if price is None or dist is None:

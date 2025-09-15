@@ -74,6 +74,12 @@ class Cargo(models.Model):
         related_name="chosen_for",
     )
 
+    # --- Новые поля для моментального возврата километража по трассе ---
+    # Кэш маршрута на момент создания/изменения (необязательные поля)
+    route_km_cached = models.FloatField(null=True, blank=True)
+    route_duration_min_cached = models.FloatField(null=True, blank=True)
+    # --------------------------------------------------------------------
+
     objects: DjangoManager["Cargo"] = models.Manager()
 
     class Meta:
@@ -91,6 +97,7 @@ class Cargo(models.Model):
     def __str__(self):
         return f"{self.product} ({self.origin_city} → {self.destination_city})"
 
+    # ---------------- Бизнес-валидация ----------------
     def clean(self):
         """Базовая бизнес-валидация полей."""
         if self.delivery_date and self.load_date and self.delivery_date < self.load_date:
@@ -98,6 +105,7 @@ class Cargo(models.Model):
                 {"delivery_date": "Дата доставки не может быть раньше даты загрузки."}
             )
 
+    # ---------------- Вспомогательные свойства ----------------
     @property
     def age_minutes(self) -> int:
         base = self.refreshed_at or self.created_at
@@ -116,3 +124,29 @@ class Cargo(models.Model):
             raise ValidationError("Можно обновлять не чаще, чем раз в 15 минут.")
         self.refreshed_at = timezone.now()
         self.save(update_fields=["refreshed_at"])
+
+    # ---------------- Маршрут/километраж по трассе ----------------
+    def update_route_cache(self, save: bool = True) -> float | None:
+        """
+        Считает маршрут «по трассе» через провайдера (Mapbox/ORS/OSRM),
+        сохраняет snapshot в route_km_cached / route_duration_min_cached
+        и возвращает расстояние в км. Если провайдер недоступен — вернёт None.
+
+        Используется сразу после создания заявки, чтобы отдать клиенту километраж.
+        """
+        try:
+            if self.origin_point and self.dest_point:
+                from api.routing.services import get_route
+                rc = get_route(self.origin_point, self.dest_point)
+                if rc:
+                    self.route_km_cached = float(rc.distance_km)
+                    self.route_duration_min_cached = (
+                        float(rc.duration_min) if rc.duration_min is not None else None
+                    )
+                    if save:
+                        self.save(update_fields=["route_km_cached", "route_duration_min_cached"])
+                    return self.route_km_cached
+        except Exception:
+            # Тихо игнорируем ошибку провайдера: UI сможет показать прямую или пусто
+            return None
+        return None

@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     "api.offers",
     "api.search",
     "api.geo",
+    "api.routing",
 ]
 
 MIDDLEWARE = [

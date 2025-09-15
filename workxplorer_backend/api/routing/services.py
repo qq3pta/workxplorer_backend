@@ -3,12 +3,11 @@ from __future__ import annotations
 import hashlib
 import os
 from datetime import timedelta
-from typing import Optional, Tuple
 
 import requests
 from django.contrib.gis.geos import Point
-from django.utils.timezone import now
 from django.db.utils import OperationalError, ProgrammingError
+from django.utils.timezone import now
 
 from .models import RouteCache
 
@@ -44,7 +43,7 @@ def _cache_key(p1: Point, p2: Point, nd: int = 3) -> str:
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()
 
 
-def _parse_ors(data: dict) -> Tuple[float, float]:
+def _parse_ors(data: dict) -> tuple[float, float]:
     # Ожидаем GeoJSON с features[].properties.summary.{distance,duration}
     if not isinstance(data, dict) or "features" not in data:
         raise RoutingUnavailable(f"ORS unexpected response: {data}")
@@ -59,7 +58,7 @@ def _parse_ors(data: dict) -> Tuple[float, float]:
     return dist_m / 1000.0, dur_s / 60.0
 
 
-def _route_ors(p1: Point, p2: Point) -> Tuple[float, float, dict, str]:
+def _route_ors(p1: Point, p2: Point) -> tuple[float, float, dict, str]:
     if not ORS_API_KEY:
         raise RoutingUnavailable("ORS key missing")
 
@@ -129,10 +128,10 @@ def _route_ors(p1: Point, p2: Point) -> Tuple[float, float, dict, str]:
 
 
 def get_route(
-    p1: Optional[Point],
-    p2: Optional[Point],
+    p1: Point | None,
+    p2: Point | None,
     ttl_hours: int = CACHE_TTL_HOURS_DEFAULT,
-) -> Optional[RouteCache]:
+) -> RouteCache | None:
     if not (p1 and p2):
         return None
 

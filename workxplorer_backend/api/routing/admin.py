@@ -1,5 +1,7 @@
 from django.contrib import admin
+
 from .models import RouteCache
+
 
 @admin.register(RouteCache)
 class RouteCacheAdmin(admin.ModelAdmin):

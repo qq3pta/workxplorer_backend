@@ -1,6 +1,7 @@
 from django.contrib.gis.db import models as gis_models
 from django.db import models
 
+
 class RouteCache(models.Model):
     """
     Кэш маршрутов «точка А → точка Б», независимо от провайдера (Mapbox/ORS/OSRM).

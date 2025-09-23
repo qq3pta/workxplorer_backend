@@ -11,11 +11,27 @@ from .models import EmailOTP, UserRole
 
 User = get_user_model()
 
+RESEND_COOLDOWN_SEC = 60
+
+
+def _normalize_phone(p: str) -> str:
+    """Оставляем только цифры и ведущий '+', чтобы унифицировать хранение/поиск."""
+    if not p:
+        return p
+    raw = "".join(ch for ch in str(p) if ch.isdigit() or ch == "+")
+    # если внутри несколько '+', оставим только первый в начале
+    if raw.count("+") > 1:
+        raw = raw.replace("+", "")
+    if raw and raw[0] != "+" and raw.count("+") > 0:
+        raw = raw.replace("+", "")
+    return raw
+
 
 class RegisterSerializer(serializers.ModelSerializer):
     phone = serializers.CharField()
     password = serializers.CharField(write_only=True)
     password2 = serializers.CharField(write_only=True)
+    role = serializers.ChoiceField(choices=UserRole.choices, required=False)
 
     class Meta:
         model = User
@@ -27,15 +43,18 @@ class RegisterSerializer(serializers.ModelSerializer):
             "first_name",
             "phone",
             "company_name",
+            "role",
         )
 
     def validate(self, attrs):
         if attrs["password"] != attrs.pop("password2"):
             raise serializers.ValidationError({"password": "Пароли не совпадают"})
 
+        # нормализуем телефон до единого вида
         phone = attrs.get("phone")
         if not phone or not str(phone).strip():
             raise serializers.ValidationError({"phone": "Укажите номер телефона"})
+        attrs["phone"] = _normalize_phone(phone)
 
         if User.objects.filter(email__iexact=attrs["email"]).exists():
             raise serializers.ValidationError({"email": "Этот e-mail уже зарегистрирован"})
@@ -49,9 +68,10 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     def create(self, validated):
         pwd = validated.pop("password")
+        role = validated.pop("role", UserRole.LOGISTIC)
         user = User.objects.create(
-            role=UserRole.LOGISTIC,  # по ТЗ дефолт — логист
-            is_active=False,  # до подтверждения email
+            role=role,                 # по умолчанию логист, но можно передать CUSTOMER/CARRIER
+            is_active=False,           # до подтверждения email
             is_email_verified=False,
             **validated,
         )
@@ -106,14 +126,19 @@ class ResendVerifySerializer(serializers.Serializer):
                 .order_by("-created_at")
                 .first()
             )
-            if last and (timezone.now() - last.created_at).total_seconds() < 60:
-                raise serializers.ValidationError(
-                    {"detail": "Код уже отправлен. Подождите минуту."}
-                )
+            if last:
+                diff = (timezone.now() - last.created_at).total_seconds()
+                left = max(0, RESEND_COOLDOWN_SEC - int(diff))
+                if left > 0:
+                    raise serializers.ValidationError(
+                        {"detail": "Код уже отправлен. Подождите.", "seconds_left": left}
+                    )
 
             otp, raw = EmailOTP.create_otp(user, EmailOTP.PURPOSE_VERIFY, ttl_min=15)
             send_code_email(user.email, raw, purpose="verify")
-        return {"detail": "Если e-mail существует — код отправлен"}
+
+        # Ответ одинаковый (не раскрываем, есть ли такой email)
+        return {"detail": "Если e-mail существует — код отправлен", "seconds_left": RESEND_COOLDOWN_SEC}
 
 
 class LoginSerializer(serializers.Serializer):
@@ -136,7 +161,7 @@ class LoginSerializer(serializers.Serializer):
         access = refresh.access_token
         if attrs.get("remember_me"):
             refresh.set_exp(lifetime=timedelta(days=30))
-            access.set_exp(lifetime=timedelta(hours=12))  # можно скорректировать под продукт
+            access.set_exp(lifetime=timedelta(hours=12))
 
         attrs["tokens"] = {"access": str(access), "refresh": str(refresh)}
         attrs["user"] = user
@@ -173,13 +198,13 @@ class MeSerializer(serializers.ModelSerializer):
 class UpdateMeSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        # Роль исключена — меняется отдельной ручкой (ChangeRoleView)
         fields = ("first_name", "phone", "company_name", "photo")
 
     def validate_phone(self, value):
-        if value and User.objects.filter(phone=value).exclude(pk=self.instance.pk).exists():
+        norm = _normalize_phone(value) if value else value
+        if norm and User.objects.filter(phone=norm).exclude(pk=self.instance.pk).exists():
             raise serializers.ValidationError("Этот телефон уже зарегистрирован")
-        return value
+        return norm
 
 
 class ForgotPasswordSerializer(serializers.Serializer):
@@ -189,9 +214,22 @@ class ForgotPasswordSerializer(serializers.Serializer):
         email = self.validated_data["email"]
         user = User.objects.filter(email__iexact=email).first()
         if user:
+            # троттлинг как в resend-verify
+            last = (
+                EmailOTP.objects.filter(user=user, purpose=EmailOTP.PURPOSE_RESET)
+                .order_by("-created_at")
+                .first()
+            )
+            if last:
+                diff = (timezone.now() - last.created_at).total_seconds()
+                left = max(0, RESEND_COOLDOWN_SEC - int(diff))
+                if left > 0:
+                    raise serializers.ValidationError(
+                        {"detail": "Код уже отправлен. Подождите.", "seconds_left": left}
+                    )
             otp, raw = EmailOTP.create_otp(user, EmailOTP.PURPOSE_RESET, ttl_min=15)
             send_code_email(user.email, raw, purpose="reset")
-        return {"detail": "Если e-mail существует — код отправлен"}
+        return {"detail": "Если e-mail существует — код отправлен", "seconds_left": RESEND_COOLDOWN_SEC}
 
 
 class ResetPasswordSerializer(serializers.Serializer):
@@ -232,7 +270,6 @@ class ResetPasswordSerializer(serializers.Serializer):
         return {"detail": "Пароль обновлен"}
 
 
-# --- Отдельный сериализатор для смены роли (по ТЗ) ---
 class RoleChangeSerializer(serializers.Serializer):
     role = serializers.ChoiceField(choices=UserRole.choices)
 

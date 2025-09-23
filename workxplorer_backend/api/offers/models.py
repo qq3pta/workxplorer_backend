@@ -7,6 +7,10 @@ from django.db.models import Q, UniqueConstraint
 
 
 class Offer(models.Model):
+    class Initiator(models.TextChoices):
+        CUSTOMER = "CUSTOMER", "Заказчик"
+        CARRIER = "CARRIER", "Перевозчик"
+
     cargo = models.ForeignKey(
         Cargo,
         on_delete=models.CASCADE,
@@ -26,7 +30,13 @@ class Offer(models.Model):
     accepted_by_customer = models.BooleanField(default=False)
     accepted_by_carrier = models.BooleanField(default=False)
 
-    # техническое
+    # кто создал предложение (для разделения «я предложил» / «предложили мне»)
+    initiator = models.CharField(
+        max_length=16,
+        choices=Initiator.choices,
+        default=Initiator.CARRIER,
+    )
+
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -35,7 +45,7 @@ class Offer(models.Model):
         ordering = ["-created_at"]
         constraints = [
             # Разрешаем сколько угодно НЕактивных офферов,
-            # но только ОДИН активный от перевозчика на конкретный груз
+            # но только ОДИН активный на пару (cargo, carrier)
             UniqueConstraint(
                 fields=["cargo", "carrier"],
                 condition=Q(is_active=True),
@@ -45,10 +55,11 @@ class Offer(models.Model):
         indexes = [
             models.Index(fields=["cargo", "is_active"]),
             models.Index(fields=["carrier", "is_active"]),
+            models.Index(fields=["initiator", "is_active"]),
         ]
 
     def __str__(self):
-        return f"Offer#{self.pk} cargo={self.cargo_id} carrier={self.carrier_id}"
+        return f"Offer#{self.pk} cargo={self.cargo_id} carrier={self.carrier_id} by={self.initiator}"
 
     # ---------------- Бизнес-логика ----------------
 
@@ -97,7 +108,6 @@ class Offer(models.Model):
 
         cargo.status = CargoStatus.MATCHED
 
-        # безопасно проставляем связи, если поля присутствуют в модели Cargo
         if hasattr(cargo, "assigned_carrier_id"):
             cargo.assigned_carrier_id = self.carrier_id
         if hasattr(cargo, "chosen_offer_id"):
@@ -110,7 +120,6 @@ class Offer(models.Model):
             update_fields.append("chosen_offer")
         cargo.save(update_fields=update_fields)
 
-        # выключаем остальные офферы по этому грузу
         Offer.objects.filter(cargo_id=cargo.id).exclude(pk=self.pk).update(is_active=False)
 
     def accept_by(self, user):
@@ -132,10 +141,8 @@ class Offer(models.Model):
             raise PermissionDenied("Нельзя принять оффер: вы не участник сделки.")
 
         with transaction.atomic():
-            # фиксируем оффер
             self.save(update_fields=["accepted_by_customer", "accepted_by_carrier", "updated_at"])
 
-            # если обе стороны согласны — пытаемся финализировать
             if self.is_handshake:
                 cargo = (
                     Cargo.objects.select_for_update()
@@ -143,7 +150,6 @@ class Offer(models.Model):
                     .get(pk=self.cargo_id)
                 )
 
-                # если уже зафиксирован параллельным процессом — выходим
                 if cargo.status == CargoStatus.MATCHED and getattr(cargo, "chosen_offer_id", None):
                     return
 

@@ -21,6 +21,7 @@ from .serializers import (
     OfferDetailSerializer,
     OfferRejectResponseSerializer,
     OfferShortSerializer,
+    OfferInviteSerializer,
 )
 
 
@@ -37,7 +38,8 @@ class EmptySerializer(serializers.Serializer):
             "Возвращает офферы, доступные текущему пользователю. "
             "Можно уточнить выборку параметром `scope`.\n\n"
             "**scope=mine** — как Перевозчик (carrier);\n"
-            "**scope=incoming** — входящие как Заказчик/Логист;\n"
+            "**scope=incoming** — входящие: для Заказчика/Логиста — офферы от перевозчиков; "
+            "для Перевозчика — инвайты от заказчиков (initiator=CUSTOMER);\n"
             "**scope=all** — все (только для staff)."
         ),
         parameters=[
@@ -71,18 +73,18 @@ class OfferViewSet(ModelViewSet):
       POST   /api/offers/                  — создать (Перевозчик/Логист)
       GET    /api/offers/                  — список, видимый текущему пользователю (scope=…)
       GET    /api/offers/my/               — мои офферы как Перевозчик (alias)
-      GET    /api/offers/incoming/         — входящие как Заказчик/Логист (alias)
+      GET    /api/offers/incoming/         — входящие (alias): заказчик/логист — офферы от перевозчиков; перевозчик — инвайты
       GET    /api/offers/{id}/             — детали
       POST   /api/offers/{id}/accept/      — принять
       POST   /api/offers/{id}/reject/      — отклонить
       POST   /api/offers/{id}/counter/     — контр-предложение
+      POST   /api/offers/invite/           — инвайт (Заказчик → Перевозчик)
     """
 
     queryset = Offer.objects.select_related("cargo", "carrier")
     permission_classes = [IsAuthenticatedAndVerified]
-    serializer_class = OfferDetailSerializer  # по умолчанию для retrieve
+    serializer_class = OfferDetailSerializer
 
-    # Сериалайзеры по action
     def get_serializer_class(self):
         return {
             "list":     OfferShortSerializer,
@@ -92,6 +94,7 @@ class OfferViewSet(ModelViewSet):
             "counter":  OfferCounterSerializer,
             "accept":   EmptySerializer,
             "reject":   EmptySerializer,
+            "invite":   OfferInviteSerializer,  # NEW
         }.get(self.action, OfferDetailSerializer)
 
     # Права по action
@@ -99,18 +102,19 @@ class OfferViewSet(ModelViewSet):
         if self.action in {"create", "my"}:
             classes = [IsAuthenticatedAndVerified, IsCarrier]
         elif self.action == "incoming":
+            # входящие теперь доступны и Перевозчику (для инвайтов), и Заказчику/Логисту
+            classes = [IsAuthenticatedAndVerified]
+        elif self.action == "invite":
             classes = [IsAuthenticatedAndVerified, IsCustomer]
         else:
             classes = [IsAuthenticatedAndVerified]
         return [cls() for cls in classes]
 
-    # Безопасный queryset при генерации схемы
     def get_queryset(self):
         if getattr(self, "swagger_fake_view", False):
             return Offer.objects.none()
         return super().get_queryset()
 
-    # --------- list: видимые текущему пользователю ---------
     def list(self, request, *args, **kwargs):
         u = request.user
         scope = request.query_params.get("scope")
@@ -119,16 +123,21 @@ class OfferViewSet(ModelViewSet):
         if scope == "mine":
             qs = qs.filter(carrier=u)
         elif scope == "incoming":
-            qs = qs.filter(cargo__customer=u)
+            # Заказчик/Логист видят входящие офферы от перевозчиков,
+            # Перевозчик — инвайты от заказчика (initiator=CUSTOMER)
+            if getattr(u, "is_carrier", False) or getattr(u, "role", None) == "CARRIER":
+                qs = qs.filter(carrier=u, initiator=Offer.Initiator.CUSTOMER)
+            else:
+                qs = qs.filter(cargo__customer=u)
         elif scope == "all":
             if not getattr(u, "is_staff", False):
                 return Response({"detail": "Forbidden"}, status=status.HTTP_403_FORBIDDEN)
             # staff видит все активные
         else:
             # умолчания по ролям
-            if getattr(u, "is_carrier", False):
+            if getattr(u, "is_carrier", False) or getattr(u, "role", None) == "CARRIER":
                 qs = qs.filter(carrier=u)
-            elif getattr(u, "is_customer", False):
+            elif getattr(u, "is_customer", False) or getattr(u, "role", None) == "CUSTOMER":
                 qs = qs.filter(cargo__customer=u)
             elif getattr(u, "is_logistic", False):
                 qs = qs.filter(Q(cargo__customer=u) | Q(carrier=u))
@@ -140,7 +149,6 @@ class OfferViewSet(ModelViewSet):
         ser = OfferShortSerializer(page or qs, many=True)
         return self.get_paginated_response(ser.data) if page is not None else Response(ser.data)
 
-    # --------- alias-списки ---------
     @extend_schema(
         tags=["offers"],
         summary="Мои офферы (Перевозчик)",
@@ -156,18 +164,26 @@ class OfferViewSet(ModelViewSet):
 
     @extend_schema(
         tags=["offers"],
-        summary="Входящие офферы (Заказчик/Логист)",
-        description="Alias к `GET /api/offers/?scope=incoming`.",
+        summary="Входящие офферы / инвайты",
+        description=(
+            "Alias к `GET /api/offers/?scope=incoming`.\n"
+            "Заказчик/Логист — видят офферы от перевозчиков на их заявки.\n"
+            "Перевозчик — видит инвайты от заказчиков (initiator=CUSTOMER)."
+        ),
         responses=OfferShortSerializer(many=True),
     )
     @action(detail=False, methods=["get"])
     def incoming(self, request):
-        qs = self.get_queryset().filter(cargo__customer=request.user, is_active=True).order_by("-created_at")
+        u = request.user
+        if getattr(u, "is_carrier", False) or getattr(u, "role", None) == "CARRIER":
+            qs = self.get_queryset().filter(carrier=u, is_active=True, initiator=Offer.Initiator.CUSTOMER)
+        else:
+            qs = self.get_queryset().filter(cargo__customer=u, is_active=True)
+        qs = qs.order_by("-created_at")
         page = self.paginate_queryset(qs)
         ser = self.get_serializer(page or qs, many=True)
         return self.get_paginated_response(ser.data) if page is not None else Response(ser.data)
 
-    # --------- retrieve с проверкой доступа ---------
     @extend_schema(responses=OfferDetailSerializer)
     def retrieve(self, request, *args, **kwargs):
         obj = self.get_object()
@@ -249,3 +265,20 @@ class OfferViewSet(ModelViewSet):
             )
 
         return Response(OfferDetailSerializer(offer).data, status=status.HTTP_200_OK)
+
+    # --------- инвайт ---------
+    @extend_schema(
+        tags=["offers"],
+        summary="Инвайт перевозчику (Заказчик)",
+        description="Заказчик отправляет персональное предложение перевозчику на свой груз.",
+        request=OfferInviteSerializer,
+        responses=OfferDetailSerializer,
+    )
+    @action(detail=False, methods=["post"])
+    def invite(self, request):
+        # Права уже проверяются в get_permissions: IsAuthenticatedAndVerified + IsCustomer
+        ser = self.get_serializer(data=request.data, context={"request": request})
+        ser.is_valid(raise_exception=True)
+        with transaction.atomic():
+            offer = ser.save()
+        return Response(OfferDetailSerializer(offer).data, status=status.HTTP_201_CREATED)

@@ -21,6 +21,7 @@ class RouteKmMixin(serializers.Serializer):
     3) live-калькуляция через провайдера (Mapbox/ORS/OSRM) и кэш,
     4) фолбэк: прямая дистанция path_km (если аннотирована в queryset).
     """
+
     route_km = serializers.SerializerMethodField()
 
     def get_route_km(self, obj: Cargo) -> float | None:
@@ -44,6 +45,7 @@ class RouteKmMixin(serializers.Serializer):
         try:
             if getattr(obj, "origin_point", None) and getattr(obj, "dest_point", None):
                 from api.routing.services import get_route
+
                 rc = get_route(obj.origin_point, obj.dest_point)
                 if rc:
                     return round(float(rc.distance_km), 1)
@@ -56,6 +58,8 @@ class RouteKmMixin(serializers.Serializer):
             return round(float(pk), 1) if pk is not None else None
         except Exception:
             return None
+
+
 # ----------------------------------------------------
 
 
@@ -113,13 +117,17 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
         country = (
             attrs.get("origin_country") or self._val_or_instance(attrs, "origin_country") or ""
         ).strip()
-        city = (attrs.get("origin_city") or self._val_or_instance(attrs, "origin_city") or "").strip()
+        city = (
+            attrs.get("origin_city") or self._val_or_instance(attrs, "origin_city") or ""
+        ).strip()
         if not city:
             raise serializers.ValidationError({"origin_city": "Укажите город погрузки"})
         try:
             return geocode_city(country=country, city=city, country_code=None)
         except GeocodingError:
-            raise serializers.ValidationError({"origin_city": "Не удалось геокодировать город"}) from None
+            raise serializers.ValidationError(
+                {"origin_city": "Не удалось геокодировать город"}
+            ) from None
 
     def _geocode_dest(self, attrs: dict[str, Any]) -> Point:
         country = (
@@ -135,7 +143,9 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
         try:
             return geocode_city(country=country, city=city, country_code=None)
         except GeocodingError:
-            raise serializers.ValidationError({"destination_city": "Не удалось геокодировать город"}) from None
+            raise serializers.ValidationError(
+                {"destination_city": "Не удалось геокодировать город"}
+            ) from None
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
         required = [

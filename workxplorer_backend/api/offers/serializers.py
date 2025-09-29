@@ -1,11 +1,11 @@
 from decimal import Decimal
 from typing import Any
 
+from api.loads.choices import Currency, ModerationStatus
+from api.loads.models import Cargo, CargoStatus
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
-from api.loads.choices import Currency, ModerationStatus
-from api.loads.models import Cargo, CargoStatus
 from .models import Offer
 
 User = get_user_model()
@@ -15,6 +15,7 @@ class OfferCreateSerializer(serializers.ModelSerializer):
     """
     Создание оффера ПЕРЕВОЗЧИКОМ на чужую заявку.
     """
+
     cargo = serializers.PrimaryKeyRelatedField(queryset=Cargo.objects.all())
 
     class Meta:
@@ -44,7 +45,9 @@ class OfferCreateSerializer(serializers.ModelSerializer):
 
         # Проверяем только активные офферы на пару cargo-carrier
         if Offer.objects.filter(cargo=cargo, carrier=user, is_active=True).exists():
-            raise serializers.ValidationError({"cargo": "Вы уже отправили активный оффер на эту заявку"})
+            raise serializers.ValidationError(
+                {"cargo": "Вы уже отправили активный оффер на эту заявку"}
+            )
 
         price = attrs.get("price_value")
         if price is not None and price < 0:
@@ -66,9 +69,12 @@ class OfferInviteSerializer(serializers.Serializer):
     """
     Создание оффера-ИНВАЙТА ЗАКАЗЧИКОМ конкретному перевозчику.
     """
+
     cargo = serializers.PrimaryKeyRelatedField(queryset=Cargo.objects.all())
     carrier_id = serializers.PrimaryKeyRelatedField(source="carrier", queryset=User.objects.all())
-    price_value = serializers.DecimalField(max_digits=14, decimal_places=2, required=False, allow_null=True)
+    price_value = serializers.DecimalField(
+        max_digits=14, decimal_places=2, required=False, allow_null=True
+    )
     price_currency = serializers.ChoiceField(choices=Currency.choices, default=Currency.UZS)
     message = serializers.CharField(allow_blank=True, required=False)
 
@@ -94,7 +100,9 @@ class OfferInviteSerializer(serializers.Serializer):
 
         # Один активный оффер на пару cargo-carrier
         if Offer.objects.filter(cargo=cargo, carrier=carrier, is_active=True).exists():
-            raise serializers.ValidationError({"carrier_id": "Этому перевозчику уже отправлено активное предложение"})
+            raise serializers.ValidationError(
+                {"carrier_id": "Этому перевозчику уже отправлено активное предложение"}
+            )
 
         price = attrs.get("price_value")
         if price is not None and price < 0:

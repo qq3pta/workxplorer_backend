@@ -24,6 +24,7 @@ def _swagger(view) -> bool:
 
 class RefreshResponseSerializer(drf_serializers.Serializer):
     """Простой сериализатор для ответа refresh."""
+
     detail = drf_serializers.CharField()
 
 
@@ -31,6 +32,7 @@ class DistanceGeography(Func):
     """
     ST_Distance(a::geography, b::geography) -> расстояние в метрах по сфере Земли.
     """
+
     output_field = FloatField()
     function = "ST_Distance"
 
@@ -62,7 +64,9 @@ class PublishCargoView(generics.CreateAPIView):
             "id": cargo.id,
             "route_km": data.get("route_km"),
         }
-        return Response(payload, status=status.HTTP_201_CREATED, headers=self.get_success_headers(data))
+        return Response(
+            payload, status=status.HTTP_201_CREATED, headers=self.get_success_headers(data)
+        )
 
 
 @extend_schema(tags=["loads"])
@@ -107,6 +111,7 @@ class MyCargosView(generics.ListAPIView):
     - annotate offers_active для has_offers без N+1
     - annotate path_km для расчёта price_per_km (фолбэк)
     """
+
     permission_classes = [IsAuthenticatedAndVerified, IsCustomer]
     serializer_class = CargoListSerializer
     queryset = Cargo.objects.all()
@@ -133,6 +138,7 @@ class MyCargosBoardView(generics.ListAPIView):
     - offers_active для has_offers
     - path_km для price_per_km (фолбэк)
     """
+
     permission_classes = [IsAuthenticatedAndVerified, IsCustomer]
     serializer_class = CargoListSerializer
     queryset = Cargo.objects.all()
@@ -181,6 +187,7 @@ class PublicLoadsView(generics.ListAPIView):
     - dest_lat,   dest_lng,   dest_radius_km
     - order = path_km|-path_km|origin_dist_km|-origin_dist_km|price_value|-price_value|load_date|-load_date
     """
+
     permission_classes = [IsAuthenticatedAndVerified, IsCarrier]
     serializer_class = CargoListSerializer
     queryset = Cargo.objects.all()
@@ -282,6 +289,7 @@ class CargoCancelView(generics.GenericAPIView):
     - доступна только для статусов: POSTED, MATCHED
     - ставит статус CANCELLED и деактивирует офферы
     """
+
     permission_classes = [IsAuthenticatedAndVerified]
     serializer_class = RefreshResponseSerializer  # простой ответ
     queryset = Cargo.objects.all()

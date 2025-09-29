@@ -8,9 +8,11 @@ from dotenv import load_dotenv
 BASE_DIR = Path(__file__).resolve().parents[2]
 load_dotenv(BASE_DIR / ".env")
 
+
 def _csv(name: str, default: str = "") -> list[str]:
     raw = getenv(name, default)
     return [x.strip() for x in raw.split(",") if x.strip()]
+
 
 # Core
 SECRET_KEY = getenv("DJANGO_SECRET_KEY", "dev-secret")
@@ -83,6 +85,7 @@ WSGI_APPLICATION = "core.wsgi.application"
 # Database (PostGIS)
 if getenv("DATABASE_URL"):
     import dj_database_url
+
     DATABASES = {
         "default": dj_database_url.parse(
             getenv("DATABASE_URL"),
@@ -193,6 +196,4 @@ if getenv("REDIS_URL"):
         }
     }
 else:
-    CACHES = {
-        "default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}
-    }
+    CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}

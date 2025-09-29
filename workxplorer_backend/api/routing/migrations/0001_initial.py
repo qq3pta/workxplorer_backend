@@ -5,30 +5,39 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
-    dependencies = [
-    ]
+    dependencies = []
 
     operations = [
         migrations.CreateModel(
-            name='RouteCache',
+            name="RouteCache",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('key', models.CharField(max_length=128, unique=True)),
-                ('origin_point', django.contrib.gis.db.models.fields.PointField(geography=True, srid=4326)),
-                ('dest_point', django.contrib.gis.db.models.fields.PointField(geography=True, srid=4326)),
-                ('provider', models.CharField(default='osrm', max_length=32)),
-                ('distance_km', models.FloatField()),
-                ('duration_min', models.FloatField(blank=True, null=True)),
-                ('raw', models.JSONField(blank=True, null=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                    ),
+                ),
+                ("key", models.CharField(max_length=128, unique=True)),
+                (
+                    "origin_point",
+                    django.contrib.gis.db.models.fields.PointField(geography=True, srid=4326),
+                ),
+                (
+                    "dest_point",
+                    django.contrib.gis.db.models.fields.PointField(geography=True, srid=4326),
+                ),
+                ("provider", models.CharField(default="osrm", max_length=32)),
+                ("distance_km", models.FloatField()),
+                ("duration_min", models.FloatField(blank=True, null=True)),
+                ("raw", models.JSONField(blank=True, null=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
             ],
             options={
-                'verbose_name': 'Кэш маршрута',
-                'verbose_name_plural': 'Кэш маршрутов',
-                'indexes': [models.Index(fields=['provider', 'key'], name='routing_pro_key_idx')],
+                "verbose_name": "Кэш маршрута",
+                "verbose_name_plural": "Кэш маршрутов",
+                "indexes": [models.Index(fields=["provider", "key"], name="routing_pro_key_idx")],
             },
         ),
     ]

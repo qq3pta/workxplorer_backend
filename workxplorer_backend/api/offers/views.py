@@ -19,14 +19,15 @@ from .serializers import (
     OfferCounterSerializer,
     OfferCreateSerializer,
     OfferDetailSerializer,
+    OfferInviteSerializer,
     OfferRejectResponseSerializer,
     OfferShortSerializer,
-    OfferInviteSerializer,
 )
 
 
 class EmptySerializer(serializers.Serializer):
     """Пустое тело запроса (для POST без body)."""
+
     pass
 
 
@@ -87,14 +88,14 @@ class OfferViewSet(ModelViewSet):
 
     def get_serializer_class(self):
         return {
-            "list":     OfferShortSerializer,
-            "create":   OfferCreateSerializer,
-            "my":       OfferShortSerializer,
+            "list": OfferShortSerializer,
+            "create": OfferCreateSerializer,
+            "my": OfferShortSerializer,
             "incoming": OfferShortSerializer,
-            "counter":  OfferCounterSerializer,
-            "accept":   EmptySerializer,
-            "reject":   EmptySerializer,
-            "invite":   OfferInviteSerializer,  # NEW
+            "counter": OfferCounterSerializer,
+            "accept": EmptySerializer,
+            "reject": EmptySerializer,
+            "invite": OfferInviteSerializer,  # NEW
         }.get(self.action, OfferDetailSerializer)
 
     # Права по action
@@ -176,7 +177,9 @@ class OfferViewSet(ModelViewSet):
     def incoming(self, request):
         u = request.user
         if getattr(u, "is_carrier", False) or getattr(u, "role", None) == "CARRIER":
-            qs = self.get_queryset().filter(carrier=u, is_active=True, initiator=Offer.Initiator.CUSTOMER)
+            qs = self.get_queryset().filter(
+                carrier=u, is_active=True, initiator=Offer.Initiator.CUSTOMER
+            )
         else:
             qs = self.get_queryset().filter(cargo__customer=u, is_active=True)
         qs = qs.order_by("-created_at")
@@ -188,7 +191,9 @@ class OfferViewSet(ModelViewSet):
     def retrieve(self, request, *args, **kwargs):
         obj = self.get_object()
         u = request.user
-        if u.id not in (obj.carrier_id, obj.cargo.customer_id) and not getattr(u, "is_logistic", False):
+        if u.id not in (obj.carrier_id, obj.cargo.customer_id) and not getattr(
+            u, "is_logistic", False
+        ):
             raise PermissionDenied("Нет доступа к офферу")
         return Response(self.get_serializer(obj).data)
 
@@ -251,7 +256,9 @@ class OfferViewSet(ModelViewSet):
     def counter(self, request, pk=None):
         offer = self.get_object()
         u = request.user
-        if u.id not in (offer.cargo.customer_id, offer.carrier_id) and not getattr(u, "is_staff", False):
+        if u.id not in (offer.cargo.customer_id, offer.carrier_id) and not getattr(
+            u, "is_staff", False
+        ):
             return Response({"detail": "Forbidden"}, status=status.HTTP_403_FORBIDDEN)
 
         ser = self.get_serializer(data=request.data)

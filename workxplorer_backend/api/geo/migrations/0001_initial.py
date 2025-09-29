@@ -6,28 +6,41 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
-    dependencies = [
-    ]
+    dependencies = []
 
     operations = [
         migrations.CreateModel(
-            name='GeoPlace',
+            name="GeoPlace",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('name', models.CharField(max_length=128)),
-                ('country', models.CharField(max_length=128)),
-                ('country_code', models.CharField(max_length=2)),
-                ('point', django.contrib.gis.db.models.fields.PointField(geography=True, srid=4326)),
-                ('provider', models.CharField(default='nominatim', max_length=32)),
-                ('raw', models.JSONField(blank=True, null=True)),
-                ('last_verified_at', models.DateTimeField(auto_now=True)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                    ),
+                ),
+                ("name", models.CharField(max_length=128)),
+                ("country", models.CharField(max_length=128)),
+                ("country_code", models.CharField(max_length=2)),
+                (
+                    "point",
+                    django.contrib.gis.db.models.fields.PointField(geography=True, srid=4326),
+                ),
+                ("provider", models.CharField(default="nominatim", max_length=32)),
+                ("raw", models.JSONField(blank=True, null=True)),
+                ("last_verified_at", models.DateTimeField(auto_now=True)),
             ],
             options={
-                'indexes': [django.contrib.postgres.indexes.GistIndex(fields=['point'], name='geoplace_point_gix'), models.Index(fields=['country_code', 'name'], name='geo_geoplac_country_b0a8e7_idx')],
-                'unique_together': {('name', 'country_code')},
+                "indexes": [
+                    django.contrib.postgres.indexes.GistIndex(
+                        fields=["point"], name="geoplace_point_gix"
+                    ),
+                    models.Index(
+                        fields=["country_code", "name"], name="geo_geoplac_country_b0a8e7_idx"
+                    ),
+                ],
+                "unique_together": {("name", "country_code")},
             },
         ),
     ]

@@ -6,6 +6,7 @@ class RouteCache(models.Model):
     """
     Кэш маршрутов «точка А → точка Б», независимо от провайдера (Mapbox/ORS/OSRM).
     """
+
     key = models.CharField(max_length=128, unique=True)
     origin_point = gis_models.PointField(geography=True, srid=4326)
     dest_point = gis_models.PointField(geography=True, srid=4326)

@@ -8,8 +8,10 @@ def env_bool(name: str, default: bool = False) -> bool:
         return default
     return v.strip().lower() in {"1", "true", "t", "yes", "y", "on"}
 
+
 def _csv(name: str) -> list[str]:
     return [x.strip() for x in getenv(name, "").split(",") if x.strip()]
+
 
 # --- базовое ---
 DEBUG = env_bool("DJANGO_DEBUG", False)
@@ -36,13 +38,15 @@ X_FRAME_OPTIONS = "DENY"
 
 # --- доступ к Swagger/Schema ---
 OPEN_API_PUBLIC = env_bool("OPEN_API_PUBLIC", False)
-SPECTACULAR_SETTINGS.update({  # noqa: F405
-    "SERVE_PERMISSIONS": (
-        ["rest_framework.permissions.AllowAny"]
-        if OPEN_API_PUBLIC
-        else ["rest_framework.permissions.IsAdminUser"]
-    ),
-})
+SPECTACULAR_SETTINGS.update(
+    {  # noqa: F405
+        "SERVE_PERMISSIONS": (
+            ["rest_framework.permissions.AllowAny"]
+            if OPEN_API_PUBLIC
+            else ["rest_framework.permissions.IsAdminUser"]
+        ),
+    }
+)
 
 # --- логирование в stdout/stderr (для контейнеров) ---
 LOGGING = {

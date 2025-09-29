@@ -4,20 +4,19 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('loads', '0005_cargo_assigned_carrier_cargo_chosen_offer_and_more'),
+        ("loads", "0005_cargo_assigned_carrier_cargo_chosen_offer_and_more"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='cargo',
-            name='route_duration_min_cached',
+            model_name="cargo",
+            name="route_duration_min_cached",
             field=models.FloatField(blank=True, null=True),
         ),
         migrations.AddField(
-            model_name='cargo',
-            name='route_km_cached',
+            model_name="cargo",
+            name="route_km_cached",
             field=models.FloatField(blank=True, null=True),
         ),
     ]

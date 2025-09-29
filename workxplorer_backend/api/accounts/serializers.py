@@ -70,8 +70,8 @@ class RegisterSerializer(serializers.ModelSerializer):
         pwd = validated.pop("password")
         role = validated.pop("role", UserRole.LOGISTIC)
         user = User.objects.create(
-            role=role,                 # по умолчанию логист, но можно передать CUSTOMER/CARRIER
-            is_active=False,           # до подтверждения email
+            role=role,  # по умолчанию логист, но можно передать CUSTOMER/CARRIER
+            is_active=False,  # до подтверждения email
             is_email_verified=False,
             **validated,
         )
@@ -138,7 +138,10 @@ class ResendVerifySerializer(serializers.Serializer):
             send_code_email(user.email, raw, purpose="verify")
 
         # Ответ одинаковый (не раскрываем, есть ли такой email)
-        return {"detail": "Если e-mail существует — код отправлен", "seconds_left": RESEND_COOLDOWN_SEC}
+        return {
+            "detail": "Если e-mail существует — код отправлен",
+            "seconds_left": RESEND_COOLDOWN_SEC,
+        }
 
 
 class LoginSerializer(serializers.Serializer):
@@ -229,7 +232,10 @@ class ForgotPasswordSerializer(serializers.Serializer):
                     )
             otp, raw = EmailOTP.create_otp(user, EmailOTP.PURPOSE_RESET, ttl_min=15)
             send_code_email(user.email, raw, purpose="reset")
-        return {"detail": "Если e-mail существует — код отправлен", "seconds_left": RESEND_COOLDOWN_SEC}
+        return {
+            "detail": "Если e-mail существует — код отправлен",
+            "seconds_left": RESEND_COOLDOWN_SEC,
+        }
 
 
 class ResetPasswordSerializer(serializers.Serializer):

@@ -23,9 +23,9 @@ ENV:
   ROUTING_DEBUG=1
 """
 
-ORS_API_KEY   = (os.getenv("ORS_API_KEY") or "").strip()
-ORS_BASE      = (os.getenv("ORS_BASE_URL") or "https://api.openrouteservice.org").strip()
-HTTP_TIMEOUT  = float(os.getenv("ROUTING_HTTP_TIMEOUT", "15"))
+ORS_API_KEY = (os.getenv("ORS_API_KEY") or "").strip()
+ORS_BASE = (os.getenv("ORS_BASE_URL") or "https://api.openrouteservice.org").strip()
+HTTP_TIMEOUT = float(os.getenv("ROUTING_HTTP_TIMEOUT", "15"))
 CACHE_TTL_HOURS_DEFAULT = int(os.getenv("ROUTING_CACHE_TTL_HOURS", str(24 * 30)))
 ROUTING_DEBUG = os.getenv("ROUTING_DEBUG") == "1"
 
@@ -52,7 +52,7 @@ def _parse_ors(data: dict) -> tuple[float, float]:
         raise RoutingUnavailable("ORS returned no features")
     summ = (feats[0].get("properties") or {}).get("summary") or {}
     dist_m = summ.get("distance") or 0
-    dur_s  = summ.get("duration") or 0
+    dur_s = summ.get("duration") or 0
     if not dist_m:
         raise RoutingUnavailable(f"ORS no distance in summary: {feats[0].get('properties')}")
     return dist_m / 1000.0, dur_s / 60.0
@@ -109,9 +109,13 @@ def _route_ors(p1: Point, p2: Point) -> tuple[float, float, dict, str]:
     # 3) POST ?api_key=...
     try:
         payload = {"coordinates": [[p1.x, p1.y], [p2.x, p2.y]], "instructions": False}
-        r = requests.post(url_post, params={"api_key": ORS_API_KEY},
-                          json=payload, headers={"Content-Type": "application/json"},
-                          timeout=HTTP_TIMEOUT)
+        r = requests.post(
+            url_post,
+            params={"api_key": ORS_API_KEY},
+            json=payload,
+            headers={"Content-Type": "application/json"},
+            timeout=HTTP_TIMEOUT,
+        )
         if ROUTING_DEBUG:
             ct = r.headers.get("content-type", "")
             body = r.text if "json" not in ct.lower() else r.json()
@@ -157,7 +161,9 @@ def get_route(
             rc.raw = raw
             rc.provider = provider
             try:
-                rc.save(update_fields=["distance_km", "duration_min", "raw", "provider", "updated_at"])
+                rc.save(
+                    update_fields=["distance_km", "duration_min", "raw", "provider", "updated_at"]
+                )
             except (OperationalError, ProgrammingError) as e:
                 if ROUTING_DEBUG:
                     print(f"[routing] cache update failed: {repr(e)}")

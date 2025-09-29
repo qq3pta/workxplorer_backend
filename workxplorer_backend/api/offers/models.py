@@ -59,7 +59,9 @@ class Offer(models.Model):
         ]
 
     def __str__(self):
-        return f"Offer#{self.pk} cargo={self.cargo_id} carrier={self.carrier_id} by={self.initiator}"
+        return (
+            f"Offer#{self.pk} cargo={self.cargo_id} carrier={self.carrier_id} by={self.initiator}"
+        )
 
     # ---------------- Бизнес-логика ----------------
 

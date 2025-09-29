@@ -10,6 +10,7 @@ class GeoDistance(Func):
     ST_Distance(a::geography, b::geography) -> расстояние в метрах.
     Работает нативно с PointField(geography=True).
     """
+
     function = "ST_Distance"
     output_field = FloatField()
 

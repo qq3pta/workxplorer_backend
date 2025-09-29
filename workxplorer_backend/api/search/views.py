@@ -17,6 +17,7 @@ class DistanceGeography(Func):
     Корректный расчёт расстояния в метрах по WGS84:
     ST_Distance(a::geography, b::geography)
     """
+
     output_field = FloatField()
     function = "ST_Distance"
 
@@ -73,7 +74,9 @@ class CargoSearchView(generics.ListAPIView):
                 radius_km2 = float(r2)
                 qs = qs.filter(dest_point__dwithin=(center, D(km=radius_km2)))
             except ValueError as err:
-                raise ValidationError({"destination_radius_km": "Должен быть числом (км)."}) from err
+                raise ValidationError(
+                    {"destination_radius_km": "Должен быть числом (км)."}
+                ) from err
             except Exception:
                 pass
 
@@ -85,7 +88,9 @@ class CargoSearchView(generics.ListAPIView):
                 allowed = [c[0] for c in (tt_field.choices or [])]
                 if allowed and tt not in allowed:
                     raise ValidationError(
-                        {"transport_type": f"Недопустимое значение. Допустимые: {', '.join(allowed)}."}
+                        {
+                            "transport_type": f"Недопустимое значение. Допустимые: {', '.join(allowed)}."
+                        }
                     )
             except ValidationError:
                 raise

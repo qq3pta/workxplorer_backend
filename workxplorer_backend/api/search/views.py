@@ -5,6 +5,7 @@ from django.db.models.expressions import Func
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema
 from rest_framework import generics, permissions
+from rest_framework.exceptions import ValidationError
 
 from ..accounts.permissions import IsCarrier
 from ..loads.models import Cargo, CargoStatus
@@ -16,7 +17,6 @@ class DistanceGeography(Func):
     Корректный расчёт расстояния в метрах по WGS84:
     ST_Distance(a::geography, b::geography)
     """
-
     output_field = FloatField()
     function = "ST_Distance"
 
@@ -38,6 +38,8 @@ class CargoSearchView(generics.ListAPIView):
         qs = Cargo.objects.filter(status=CargoStatus.POSTED)
 
         qp = self.request.query_params
+
+        # Фильтры по весу
         min_w = qp.get("min_weight")
         max_w = qp.get("max_weight")
         if min_w:
@@ -45,27 +47,50 @@ class CargoSearchView(generics.ListAPIView):
         if max_w:
             qs = qs.filter(weight_kg__lte=max_w)
 
-        # Радиус "откуда"
+        # Фильтр "Откуда" по радиусу
         oc = qp.get("origin_city")
         occ = qp.get("origin_country") or ""
         r1 = qp.get("origin_radius_km")
         if oc and r1:
             try:
                 center = geocode_city(occ, oc)
-                qs = qs.filter(origin_point__dwithin=(center, D(km=float(r1))))
+                radius_km = float(r1)
+                qs = qs.filter(origin_point__dwithin=(center, D(km=radius_km)))
+            except ValueError:
+                # Радиус введён не числом
+                raise ValidationError({"origin_radius_km": "Должен быть числом (км)."})
             except Exception:
+                # Геокод не удался — фильтр не применяем
                 pass
 
-        # Радиус "куда"
+        # Фильтр "Куда" по радиусу
         dc = qp.get("destination_city")
         dcc = qp.get("destination_country") or ""
         r2 = qp.get("destination_radius_km")
         if dc and r2:
             try:
                 center = geocode_city(dcc, dc)
-                qs = qs.filter(dest_point__dwithin=(center, D(km=float(r2))))
+                radius_km2 = float(r2)
+                qs = qs.filter(dest_point__dwithin=(center, D(km=radius_km2)))
+            except ValueError:
+                raise ValidationError({"destination_radius_km": "Должен быть числом (км)."})
             except Exception:
                 pass
+
+        # Фильтр по типу транспорта (если передан — валидируем по enum и применяем)
+        tt = qp.get("transport_type")
+        if tt:
+            try:
+                tt_field = Cargo._meta.get_field("transport_type")
+                allowed = [c[0] for c in (tt_field.choices or [])]
+                if allowed and tt not in allowed:
+                    raise ValidationError({"transport_type": f"Недопустимое значение. Допустимые: {', '.join(allowed)}."})
+            except ValidationError:
+                raise
+            except Exception:
+                # если поле без choices — просто применим фильтр
+                pass
+            qs = qs.filter(transport_type=tt)
 
         # Расстояние (метры → км)
         qs = qs.annotate(path_m=DistanceGeography(F("origin_point"), F("dest_point")))

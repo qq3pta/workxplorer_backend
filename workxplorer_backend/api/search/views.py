@@ -56,9 +56,9 @@ class CargoSearchView(generics.ListAPIView):
                 center = geocode_city(occ, oc)
                 radius_km = float(r1)
                 qs = qs.filter(origin_point__dwithin=(center, D(km=radius_km)))
-            except ValueError:
+            except ValueError as err:
                 # Радиус введён не числом
-                raise ValidationError({"origin_radius_km": "Должен быть числом (км)."})
+                raise ValidationError({"origin_radius_km": "Должен быть числом (км)."}) from err
             except Exception:
                 # Геокод не удался — фильтр не применяем
                 pass
@@ -72,8 +72,8 @@ class CargoSearchView(generics.ListAPIView):
                 center = geocode_city(dcc, dc)
                 radius_km2 = float(r2)
                 qs = qs.filter(dest_point__dwithin=(center, D(km=radius_km2)))
-            except ValueError:
-                raise ValidationError({"destination_radius_km": "Должен быть числом (км)."})
+            except ValueError as err:
+                raise ValidationError({"destination_radius_km": "Должен быть числом (км)."}) from err
             except Exception:
                 pass
 
@@ -84,7 +84,9 @@ class CargoSearchView(generics.ListAPIView):
                 tt_field = Cargo._meta.get_field("transport_type")
                 allowed = [c[0] for c in (tt_field.choices or [])]
                 if allowed and tt not in allowed:
-                    raise ValidationError({"transport_type": f"Недопустимое значение. Допустимые: {', '.join(allowed)}."})
+                    raise ValidationError(
+                        {"transport_type": f"Недопустимое значение. Допустимые: {', '.join(allowed)}."}
+                    )
             except ValidationError:
                 raise
             except Exception:

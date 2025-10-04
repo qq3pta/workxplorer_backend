@@ -101,7 +101,7 @@ class CitySuggestView(APIView):
     throttle_classes = [SuggestThrottle]
 
     @extend_schema(
-        summary="Подсказки по городам (Nominatim)",
+        summary="Подсказки по городам",
         parameters=[
             OpenApiParameter(
                 name="q",

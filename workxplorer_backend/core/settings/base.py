@@ -158,11 +158,13 @@ SPECTACULAR_SETTINGS = {
     "TITLE": "Workxplorer Backend API",
     "DESCRIPTION": "API docs",
     "VERSION": "1.0.0",
+
     "ENUM_NAME_OVERRIDES": {
-        "api.orders.models.Order.Status": "OrderStatus",
+        "api.orders.models.Order.OrderStatus": "OrderStatus",
         "api.loads.models.CargoStatus": "CargoStatus",
         "api.loads.choices.Currency": "CurrencyCode",
     },
+
     "ENUM_GENERATE_UNIQUE_NAME": False,
 }
 

@@ -6,80 +6,109 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('orders', '0001_initial'),
+        ("orders", "0001_initial"),
     ]
 
     operations = [
         migrations.AlterModelOptions(
-            name='order',
-            options={'ordering': ['-created_at'], 'verbose_name': 'Заказ', 'verbose_name_plural': 'Заказы'},
+            name="order",
+            options={
+                "ordering": ["-created_at"],
+                "verbose_name": "Заказ",
+                "verbose_name_plural": "Заказы",
+            },
         ),
         migrations.AlterModelOptions(
-            name='orderdocument',
-            options={'ordering': ['-created_at'], 'verbose_name': 'Документ заказа', 'verbose_name_plural': 'Документы заказа'},
+            name="orderdocument",
+            options={
+                "ordering": ["-created_at"],
+                "verbose_name": "Документ заказа",
+                "verbose_name_plural": "Документы заказа",
+            },
         ),
         migrations.RenameIndex(
-            model_name='order',
-            new_name='order_cargo_status_idx',
-            old_name='orders_orde_cargo_i_4a6871_idx',
+            model_name="order",
+            new_name="order_cargo_status_idx",
+            old_name="orders_orde_cargo_i_4a6871_idx",
         ),
         migrations.RenameIndex(
-            model_name='order',
-            new_name='order_customer_status_idx',
-            old_name='orders_orde_custome_c9b64a_idx',
+            model_name="order",
+            new_name="order_customer_status_idx",
+            old_name="orders_orde_custome_c9b64a_idx",
         ),
         migrations.RenameIndex(
-            model_name='order',
-            new_name='order_carrier_status_idx',
-            old_name='orders_orde_carrier_2ca518_idx',
+            model_name="order",
+            new_name="order_carrier_status_idx",
+            old_name="orders_orde_carrier_2ca518_idx",
         ),
         migrations.AlterField(
-            model_name='order',
-            name='price_total',
-            field=models.DecimalField(decimal_places=2, default=0, max_digits=14, validators=[django.core.validators.MinValueValidator(0)]),
+            model_name="order",
+            name="price_total",
+            field=models.DecimalField(
+                decimal_places=2,
+                default=0,
+                max_digits=14,
+                validators=[django.core.validators.MinValueValidator(0)],
+            ),
         ),
         migrations.AlterField(
-            model_name='order',
-            name='route_distance_km',
-            field=models.DecimalField(decimal_places=2, default=0, max_digits=10, validators=[django.core.validators.MinValueValidator(0)]),
+            model_name="order",
+            name="route_distance_km",
+            field=models.DecimalField(
+                decimal_places=2,
+                default=0,
+                max_digits=10,
+                validators=[django.core.validators.MinValueValidator(0)],
+            ),
         ),
         migrations.AlterField(
-            model_name='orderdocument',
-            name='file',
-            field=models.FileField(upload_to=api.orders.models.order_upload_to, validators=[django.core.validators.FileExtensionValidator(allowed_extensions=['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx']), api.orders.models.validate_file_size]),
+            model_name="orderdocument",
+            name="file",
+            field=models.FileField(
+                upload_to=api.orders.models.order_upload_to,
+                validators=[
+                    django.core.validators.FileExtensionValidator(
+                        allowed_extensions=["pdf", "jpg", "jpeg", "png", "doc", "docx"]
+                    ),
+                    api.orders.models.validate_file_size,
+                ],
+            ),
         ),
         migrations.AddIndex(
-            model_name='order',
-            index=models.Index(fields=['created_at'], name='order_created_idx'),
+            model_name="order",
+            index=models.Index(fields=["created_at"], name="order_created_idx"),
         ),
         migrations.AddIndex(
-            model_name='order',
-            index=models.Index(fields=['status'], name='order_status_idx'),
+            model_name="order",
+            index=models.Index(fields=["status"], name="order_status_idx"),
         ),
         migrations.AddIndex(
-            model_name='orderdocument',
-            index=models.Index(fields=['order'], name='orderdoc_order_idx'),
+            model_name="orderdocument",
+            index=models.Index(fields=["order"], name="orderdoc_order_idx"),
         ),
         migrations.AddIndex(
-            model_name='orderdocument',
-            index=models.Index(fields=['created_at'], name='orderdoc_created_idx'),
+            model_name="orderdocument",
+            index=models.Index(fields=["created_at"], name="orderdoc_created_idx"),
         ),
         migrations.AddIndex(
-            model_name='orderdocument',
-            index=models.Index(fields=['uploaded_by'], name='orderdoc_uploader_idx'),
+            model_name="orderdocument",
+            index=models.Index(fields=["uploaded_by"], name="orderdoc_uploader_idx"),
         ),
         migrations.AddConstraint(
-            model_name='order',
-            constraint=models.UniqueConstraint(fields=('cargo',), name='uniq_order_per_cargo'),
+            model_name="order",
+            constraint=models.UniqueConstraint(fields=("cargo",), name="uniq_order_per_cargo"),
         ),
         migrations.AddConstraint(
-            model_name='order',
-            constraint=models.CheckConstraint(check=models.Q(('price_total__gte', 0)), name='order_price_total_gte_0'),
+            model_name="order",
+            constraint=models.CheckConstraint(
+                check=models.Q(("price_total__gte", 0)), name="order_price_total_gte_0"
+            ),
         ),
         migrations.AddConstraint(
-            model_name='order',
-            constraint=models.CheckConstraint(check=models.Q(('route_distance_km__gte', 0)), name='order_route_km_gte_0'),
+            model_name="order",
+            constraint=models.CheckConstraint(
+                check=models.Q(("route_distance_km__gte", 0)), name="order_route_km_gte_0"
+            ),
         ),
     ]

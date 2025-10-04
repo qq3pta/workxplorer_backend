@@ -1,15 +1,15 @@
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework.permissions import AllowAny
-from rest_framework.throttling import AnonRateThrottle
-from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes
-
 import os
+
 import requests
+from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
+from rest_framework.throttling import AnonRateThrottle
+from rest_framework.views import APIView
 
 from .serializers import (
-    CountrySuggestResponseSerializer,
     CitySuggestResponseSerializer,
+    CountrySuggestResponseSerializer,
 )
 
 ISO_COUNTRIES = [
@@ -50,6 +50,7 @@ class CountrySuggestView(APIView):
     """
     Подсказки по странам из предзаданного списка ISO_COUNTRIES.
     """
+
     permission_classes = [AllowAny]
     throttle_classes = [SuggestThrottle]
 
@@ -85,10 +86,9 @@ class CountrySuggestView(APIView):
         if not q:
             data = ISO_COUNTRIES[:limit]
         else:
-            data = [
-                c for c in ISO_COUNTRIES
-                if q in c["name"].lower() or q in c["code"].lower()
-            ][:limit]
+            data = [c for c in ISO_COUNTRIES if q in c["name"].lower() or q in c["code"].lower()][
+                :limit
+            ]
         return Response({"results": data})
 
 
@@ -96,6 +96,7 @@ class CitySuggestView(APIView):
     """
     Подсказки по городам через Nominatim (OpenStreetMap), ограниченные списком ALLOWED_COUNTRY_CODES.
     """
+
     permission_classes = [AllowAny]
     throttle_classes = [SuggestThrottle]
 
@@ -112,7 +113,7 @@ class CitySuggestView(APIView):
             OpenApiParameter(
                 name="country",
                 description="ISO-2 код страны для фильтра (необязательно). Допустимые: "
-                            + ", ".join(sorted(ALLOWED_COUNTRY_CODES)),
+                + ", ".join(sorted(ALLOWED_COUNTRY_CODES)),
                 required=False,
                 type=OpenApiTypes.STR,
                 location=OpenApiParameter.QUERY,
@@ -146,7 +147,8 @@ class CitySuggestView(APIView):
         try:
             params = {"q": q, "format": "json", "addressdetails": 1, "limit": limit}
             params["countrycodes"] = (
-                country.lower() if country
+                country.lower()
+                if country
                 else ",".join(code.lower() for code in ALLOWED_COUNTRY_CODES)
             )
 

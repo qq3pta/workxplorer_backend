@@ -1,20 +1,21 @@
 from django.db.models import Q
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework import viewsets, status as http_status
+from rest_framework import status as http_status
+from rest_framework import viewsets
 from rest_framework.decorators import action
-from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from .filters import OrderFilter
 from .models import Order
+from .permissions import IsOrderParticipant
 from .serializers import (
-    OrderListSerializer,
     OrderDetailSerializer,
     OrderDocumentSerializer,
+    OrderListSerializer,
     OrderStatusUpdateSerializer,
 )
-from .permissions import IsOrderParticipant
-from .filters import OrderFilter
 
 
 class OrdersViewSet(viewsets.ModelViewSet):
@@ -66,7 +67,9 @@ class OrdersViewSet(viewsets.ModelViewSet):
 
         if request.method == "GET":
             qs = order.documents.all()
-            data = OrderDocumentSerializer(qs, many=True, context=self.get_serializer_context()).data
+            data = OrderDocumentSerializer(
+                qs, many=True, context=self.get_serializer_context()
+            ).data
             return Response(data, status=http_status.HTTP_200_OK)
 
         ser = self.get_serializer(data=request.data, context=self.get_serializer_context())

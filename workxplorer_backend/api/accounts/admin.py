@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import EmailOTP, User, Profile
+from .models import EmailOTP, Profile, User
 
 
 class ProfileInline(admin.StackedInline):
@@ -27,14 +27,23 @@ class UserAdmin(admin.ModelAdmin):
         "profile_city",
     )
     list_filter = ("role", "is_email_verified")
-    search_fields = ("username", "email", "phone", "company_name", "profile__city", "profile__country")
+    search_fields = (
+        "username",
+        "email",
+        "phone",
+        "company_name",
+        "profile__city",
+        "profile__country",
+    )
 
     def profile_country(self, obj):
         return getattr(obj.profile, "country", "")
+
     profile_country.short_description = "Country"
 
     def profile_city(self, obj):
         return getattr(obj.profile, "city", "")
+
     profile_city.short_description = "City"
 
 

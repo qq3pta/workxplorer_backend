@@ -1,5 +1,7 @@
 import django_filters
+
 from .models import Order
+
 
 class OrderFilter(django_filters.FilterSet):
     role = django_filters.CharFilter(method="filter_role")
@@ -7,7 +9,7 @@ class OrderFilter(django_filters.FilterSet):
     cargo = django_filters.NumberFilter(field_name="cargo_id")
     load = django_filters.NumberFilter(method="filter_load")
     date_from = django_filters.DateFilter(field_name="created_at", lookup_expr="date__gte")
-    date_to   = django_filters.DateFilter(field_name="created_at", lookup_expr="date__lte")
+    date_to = django_filters.DateFilter(field_name="created_at", lookup_expr="date__lte")
 
     class Meta:
         model = Order

@@ -1,5 +1,6 @@
 from django.urls import path
-from .views import CountrySuggestView, CitySuggestView
+
+from .views import CitySuggestView, CountrySuggestView
 
 urlpatterns = [
     path("suggest/countries/", CountrySuggestView.as_view(), name="geo-suggest-countries"),

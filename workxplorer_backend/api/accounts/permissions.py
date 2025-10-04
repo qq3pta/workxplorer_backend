@@ -1,5 +1,5 @@
+from common.permissions import IsCarrier, IsCustomer, IsLogistic
 from rest_framework.permissions import BasePermission
-from common.permissions import IsLogistic, IsCustomer, IsCarrier
 
 __all__ = [
     "IsLogistic",

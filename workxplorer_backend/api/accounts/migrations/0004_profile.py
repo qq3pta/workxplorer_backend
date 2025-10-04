@@ -6,26 +6,43 @@ import django.db.models.deletion
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('accounts', '0003_alter_user_options_user_accounts_us_role_1fa9a5_idx_and_more'),
+        ("accounts", "0003_alter_user_options_user_accounts_us_role_1fa9a5_idx_and_more"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='Profile',
+            name="Profile",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('country', models.CharField(blank=True, max_length=64, verbose_name='Страна')),
-                ('country_code', models.CharField(blank=True, max_length=2, verbose_name='Код страны (ISO-2)')),
-                ('region', models.CharField(blank=True, max_length=128, verbose_name='Регион/область')),
-                ('city', models.CharField(blank=True, max_length=128, verbose_name='Город')),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('user', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='profile', to=settings.AUTH_USER_MODEL)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                    ),
+                ),
+                ("country", models.CharField(blank=True, max_length=64, verbose_name="Страна")),
+                (
+                    "country_code",
+                    models.CharField(blank=True, max_length=2, verbose_name="Код страны (ISO-2)"),
+                ),
+                (
+                    "region",
+                    models.CharField(blank=True, max_length=128, verbose_name="Регион/область"),
+                ),
+                ("city", models.CharField(blank=True, max_length=128, verbose_name="Город")),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "user",
+                    models.OneToOneField(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="profile",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
             ],
             options={
-                'verbose_name': 'Профиль',
-                'verbose_name_plural': 'Профили',
+                "verbose_name": "Профиль",
+                "verbose_name_plural": "Профили",
             },
         ),
     ]

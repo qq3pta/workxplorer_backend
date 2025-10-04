@@ -25,6 +25,7 @@ from .serializers import (
     UpdateMeSerializer,
     VerifyEmailSerializer,
 )
+from .models import Profile
 
 User = get_user_model()
 
@@ -93,6 +94,7 @@ class VerifyEmailView(APIView):
         s = VerifyEmailSerializer(data=request.data)
         s.is_valid(raise_exception=True)
         user = s.save()
+        Profile.objects.get_or_create(user=user)
         return Response({"detail": "E-mail подтвержден", **issue_tokens(user, remember=False)})
 
 
@@ -116,6 +118,7 @@ class LoginView(APIView):
         s.is_valid(raise_exception=True)
         user = s.validated_data["user"]
         remember = s.validated_data["remember_me"]
+        Profile.objects.get_or_create(user=user)
         return Response({"user": MeSerializer(user).data, **issue_tokens(user, remember)})
 
 
@@ -202,6 +205,7 @@ class MeView(generics.RetrieveAPIView):
     serializer_class = MeSerializer
 
     def get_object(self):
+        Profile.objects.get_or_create(user=self.request.user)
         return self.request.user
 
 
@@ -216,6 +220,19 @@ class UpdateMeView(generics.UpdateAPIView):
 
     def get_object(self):
         return self.request.user
+
+    def update(self, request, *args, **kwargs):
+        """
+        Возвращаем MeSerializer после успешного обновления,
+        чтобы фронт сразу получил вложенный profile.
+        """
+        partial = kwargs.pop("partial", True)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        Profile.objects.get_or_create(user=instance)
+        return Response(MeSerializer(instance).data)
 
 
 @extend_schema(

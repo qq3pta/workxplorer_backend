@@ -1,7 +1,10 @@
+from typing import Optional
+
 from api.loads.choices import Currency
 from api.loads.models import Cargo, CargoStatus
+from django.apps import apps
 from django.conf import settings
-from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.exceptions import AppRegistryNotReady, PermissionDenied, ValidationError
 from django.db import models, transaction
 from django.db.models import Q, UniqueConstraint
 
@@ -25,12 +28,8 @@ class Offer(models.Model):
     price_value = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
     price_currency = models.CharField(max_length=3, choices=Currency.choices, default=Currency.UZS)
     message = models.TextField(blank=True)
-
-    # согласия сторон
     accepted_by_customer = models.BooleanField(default=False)
     accepted_by_carrier = models.BooleanField(default=False)
-
-    # кто создал предложение (для разделения «я предложил» / «предложили мне»)
     initiator = models.CharField(
         max_length=16,
         choices=Initiator.choices,
@@ -44,8 +43,6 @@ class Offer(models.Model):
     class Meta:
         ordering = ["-created_at"]
         constraints = [
-            # Разрешаем сколько угодно НЕактивных офферов,
-            # но только ОДИН активный на пару (cargo, carrier)
             UniqueConstraint(
                 fields=["cargo", "carrier"],
                 condition=Q(is_active=True),
@@ -59,9 +56,7 @@ class Offer(models.Model):
         ]
 
     def __str__(self):
-        return (
-            f"Offer#{self.pk} cargo={self.cargo_id} carrier={self.carrier_id} by={self.initiator}"
-        )
+        return f"Offer#{self.pk} cargo={self.cargo_id} carrier={self.carrier_id} by={self.initiator}"
 
     # ---------------- Бизнес-логика ----------------
 
@@ -97,16 +92,12 @@ class Offer(models.Model):
     def is_handshake(self) -> bool:
         return self.accepted_by_customer and self.accepted_by_carrier
 
-    def _finalize_handshake(self):
+    def _finalize_handshake(self, cargo_locked: Optional[Cargo] = None) -> None:
         """
-        Применяет эффекты взаимного согласия:
-        - cargo.status = MATCHED
-        - cargo.assigned_carrier = self.carrier (если поле существует)
-        - cargo.chosen_offer = self (если поле существует)
-        - все прочие офферы по грузу → is_active=False
-        Предполагается вызов внутри transaction.atomic() и после select_for_update() по Cargo.
+        Эффекты взаимного согласия (выполнять ТОЛЬКО внутри transaction.atomic).
+        Если передан cargo_locked — считаем, что он взят под select_for_update().
         """
-        cargo = self.cargo
+        cargo = cargo_locked or self.cargo
 
         cargo.status = CargoStatus.MATCHED
 
@@ -121,8 +112,30 @@ class Offer(models.Model):
         if hasattr(cargo, "chosen_offer_id"):
             update_fields.append("chosen_offer")
         cargo.save(update_fields=update_fields)
+        Offer.objects.filter(cargo_id=cargo.id, is_active=True).exclude(pk=self.pk).update(is_active=False)
+        try:
+            Order = apps.get_model("orders", "Order")
+        except (LookupError, AppRegistryNotReady):
+            return
 
-        Offer.objects.filter(cargo_id=cargo.id).exclude(pk=self.pk).update(is_active=False)
+        Order.objects.get_or_create(
+            cargo=cargo,
+            defaults={
+                "customer_id": cargo.customer_id,
+                "carrier_id": self.carrier_id,
+                "currency": (
+                    self.price_currency
+                    or getattr(cargo, "price_currency", None)
+                    or Currency.UZS
+                ),
+                "price_total": self.price_value or 0,
+                "route_distance_km": (
+                    getattr(cargo, "route_distance_km", None)
+                    or getattr(cargo, "route_km", None)
+                    or getattr(cargo, "distance_km", 0)
+                ),
+            },
+        )
 
     def accept_by(self, user):
         """
@@ -146,16 +159,16 @@ class Offer(models.Model):
             self.save(update_fields=["accepted_by_customer", "accepted_by_carrier", "updated_at"])
 
             if self.is_handshake:
-                cargo = (
+                cargo_locked = (
                     Cargo.objects.select_for_update()
                     .only("id", "status", "assigned_carrier", "chosen_offer")
                     .get(pk=self.cargo_id)
                 )
 
-                if cargo.status == CargoStatus.MATCHED and getattr(cargo, "chosen_offer_id", None):
+                if cargo_locked.status == CargoStatus.MATCHED and getattr(cargo_locked, "chosen_offer_id", None):
                     return
 
-                self._finalize_handshake()
+                self._finalize_handshake(cargo_locked=cargo_locked)
 
     def reject_by(self, user):
         """

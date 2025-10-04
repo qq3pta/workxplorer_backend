@@ -48,14 +48,15 @@ INSTALLED_APPS = [
     "api.search",
     "api.geo",
     "api.routing",
+    "api.orders",
 ]
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
-    "whitenoise.middleware.WhiteNoiseMiddleware",
     "corsheaders.middleware.CorsMiddleware",
-    "django.contrib.sessions.middleware.SessionMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.middleware.common.CommonMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
@@ -156,6 +157,13 @@ SPECTACULAR_SETTINGS = {
     "TITLE": "Workxplorer Backend API",
     "DESCRIPTION": "API docs",
     "VERSION": "1.0.0",
+
+    "ENUM_NAME_OVERRIDES": {
+        "api.orders.models.Order.Status": "OrderStatus",
+        "api.loads.models.CargoStatus": "CargoStatus",
+        "api.loads.choices.Currency": "CurrencyCode",
+    },
+    "ENUM_GENERATE_UNIQUE_NAME": False,
 }
 
 # JWT
@@ -168,8 +176,25 @@ SIMPLE_JWT = {
 }
 
 # CORS
-CORS_ALLOW_ALL_ORIGINS = getenv("CORS_ALLOW_ALL_ORIGINS", "False").lower() == "true"
-CORS_ALLOWED_ORIGINS = _csv("CORS_ALLOWED_ORIGINS")
+CORS_ALLOW_ALL_ORIGINS = False
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://95.182.119.148:3000",
+    "http://95.182.119.148",
+]
+CORS_ALLOW_CREDENTIALS = True
+CORS_PREFLIGHT_MAX_AGE = 86400
+
+from corsheaders.defaults import default_headers
+CORS_ALLOW_HEADERS = list(default_headers) + ["authorization"]
+
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://95.182.119.148:3000",   # ← тоже с портом
+    "http://95.182.119.148",
+]
 
 # Auth user / Email
 AUTH_USER_MODEL = "accounts.User"

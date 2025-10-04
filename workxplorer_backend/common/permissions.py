@@ -1,5 +1,5 @@
-from rest_framework.permissions import BasePermission
 from api.accounts.models import UserRole
+from rest_framework.permissions import BasePermission
 
 
 class IsLogistic(BasePermission):

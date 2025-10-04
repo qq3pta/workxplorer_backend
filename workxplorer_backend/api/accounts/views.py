@@ -13,6 +13,7 @@ from rest_framework_simplejwt.tokens import (
     RefreshToken,
 )
 
+from .models import Profile
 from .permissions import IsAuthenticatedAndVerified
 from .serializers import (
     ForgotPasswordSerializer,
@@ -25,7 +26,6 @@ from .serializers import (
     UpdateMeSerializer,
     VerifyEmailSerializer,
 )
-from .models import Profile
 
 User = get_user_model()
 

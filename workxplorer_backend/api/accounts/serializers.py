@@ -7,7 +7,7 @@ from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from .emails import send_code_email
-from .models import EmailOTP, UserRole, Profile
+from .models import EmailOTP, Profile, UserRole
 
 User = get_user_model()
 
@@ -33,11 +33,14 @@ class ProfileSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         if attrs.get("country") and not attrs.get("country_code"):
-            raise serializers.ValidationError({"country_code": "Укажи ISO-2 код страны (например, UZ)."})
+            raise serializers.ValidationError(
+                {"country_code": "Укажи ISO-2 код страны (например, UZ)."}
+            )
         return attrs
 
 
 # ---------------- Регистрация ----------------
+
 
 class RegisterSerializer(serializers.ModelSerializer):
     phone = serializers.CharField()
@@ -60,7 +63,10 @@ class RegisterSerializer(serializers.ModelSerializer):
             "phone",
             "company_name",
             "role",
-            "country", "country_code", "region", "city",
+            "country",
+            "country_code",
+            "region",
+            "city",
         )
 
     def validate(self, attrs):
@@ -79,7 +85,9 @@ class RegisterSerializer(serializers.ModelSerializer):
         if User.objects.filter(phone=attrs["phone"]).exists():
             raise serializers.ValidationError({"phone": "Этот телефон уже зарегистрирован"})
         if attrs.get("country") and not attrs.get("country_code"):
-            raise serializers.ValidationError({"country_code": "Укажи ISO-2 код страны (например, UZ)."})
+            raise serializers.ValidationError(
+                {"country_code": "Укажи ISO-2 код страны (например, UZ)."}
+            )
 
         password_validation.validate_password(attrs["password"])
         return attrs
@@ -100,8 +108,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         user.save()
 
         Profile.objects.update_or_create(
-            user=user,
-            defaults={k: v for k, v in profile_data.items() if v is not None}
+            user=user, defaults={k: v for k, v in profile_data.items() if v is not None}
         )
 
         otp, raw = EmailOTP.create_otp(user, EmailOTP.PURPOSE_VERIFY, ttl_min=15)
@@ -110,6 +117,7 @@ class RegisterSerializer(serializers.ModelSerializer):
 
 
 # ---------------- Верификация / ресенд ----------------
+
 
 class VerifyEmailSerializer(serializers.Serializer):
     email = serializers.EmailField()
@@ -164,10 +172,14 @@ class ResendVerifySerializer(serializers.Serializer):
             otp, raw = EmailOTP.create_otp(user, EmailOTP.PURPOSE_VERIFY, ttl_min=15)
             send_code_email(user.email, raw, purpose="verify")
 
-        return {"detail": "Если e-mail существует — код отправлен", "seconds_left": RESEND_COOLDOWN_SEC}
+        return {
+            "detail": "Если e-mail существует — код отправлен",
+            "seconds_left": RESEND_COOLDOWN_SEC,
+        }
 
 
 # ---------------- Логин ----------------
+
 
 class LoginSerializer(serializers.Serializer):
     login = serializers.CharField()
@@ -194,6 +206,7 @@ class LoginSerializer(serializers.Serializer):
         attrs["tokens"] = {"access": str(access), "refresh": str(refresh)}
         attrs["user"] = user
         return attrs
+
 
 class MeSerializer(serializers.ModelSerializer):
     profile = ProfileSerializer(read_only=True)
@@ -256,6 +269,7 @@ class UpdateMeSerializer(serializers.ModelSerializer):
 
 # ---------------- Сброс пароля ----------------
 
+
 class ForgotPasswordSerializer(serializers.Serializer):
     email = serializers.EmailField()
 
@@ -277,7 +291,10 @@ class ForgotPasswordSerializer(serializers.Serializer):
                     )
             otp, raw = EmailOTP.create_otp(user, EmailOTP.PURPOSE_RESET, ttl_min=15)
             send_code_email(user.email, raw, purpose="reset")
-        return {"detail": "Если e-mail существует — код отправлен", "seconds_left": RESEND_COOLDOWN_SEC}
+        return {
+            "detail": "Если e-mail существует — код отправлен",
+            "seconds_left": RESEND_COOLDOWN_SEC,
+        }
 
 
 class ResetPasswordSerializer(serializers.Serializer):
@@ -319,6 +336,7 @@ class ResetPasswordSerializer(serializers.Serializer):
 
 
 # ---------------- Смена роли ----------------
+
 
 class RoleChangeSerializer(serializers.Serializer):
     role = serializers.ChoiceField(choices=UserRole.choices)

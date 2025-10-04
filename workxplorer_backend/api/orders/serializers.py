@@ -1,26 +1,26 @@
 import os
-from typing import Optional, Iterable, Tuple
+from collections.abc import Iterable
 
+from api.loads.choices import Currency
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from .models import Order, OrderDocument
-from api.loads.choices import Currency
 
 
-def _field_choices(model, field_name: str) -> Iterable[Tuple[str, str]]:
+def _field_choices(model, field_name: str) -> Iterable[tuple[str, str]]:
     """Возвращает choices у поля модели."""
     return model._meta.get_field(field_name).choices
 
 
-def _order_status_choices() -> Iterable[Tuple[str, str]]:
+def _order_status_choices() -> Iterable[tuple[str, str]]:
     Status = getattr(Order, "Status", None)
     if Status is not None and hasattr(Status, "choices"):
         return Status.choices
     return _field_choices(Order, "status")
 
 
-def _currency_choices() -> Iterable[Tuple[str, str]]:
+def _currency_choices() -> Iterable[tuple[str, str]]:
     if hasattr(Currency, "choices"):
         return Currency.choices
     return _field_choices(Order, "currency")
@@ -44,7 +44,7 @@ class OrderDocumentSerializer(serializers.ModelSerializer):
         )
 
     @extend_schema_field(serializers.CharField(allow_null=True, allow_blank=True))
-    def get_file_name(self, obj) -> Optional[str]:
+    def get_file_name(self, obj) -> str | None:
         try:
             name = getattr(obj.file, "name", None)
             return os.path.basename(name) if name else None
@@ -52,7 +52,7 @@ class OrderDocumentSerializer(serializers.ModelSerializer):
             return None
 
     @extend_schema_field(serializers.IntegerField(allow_null=True, min_value=0))
-    def get_file_size(self, obj) -> Optional[int]:
+    def get_file_size(self, obj) -> int | None:
         try:
             size = getattr(obj.file, "size", None)
             return int(size) if size is not None else None

@@ -6,7 +6,7 @@ from django.db import models
 from django.db.models import UniqueConstraint
 from django.db.models.functions import Lower
 from django.utils import timezone
-
+from django.conf import settings
 
 class UserRole(models.TextChoices):
     LOGISTIC = "LOGISTIC", "Логист"
@@ -107,3 +107,22 @@ class EmailOTP(models.Model):
         self.attempts_left = max(0, self.attempts_left - 1)
         self.save(update_fields=["attempts_left"])
         return False
+
+class Profile(models.Model):
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="profile",
+    )
+    country = models.CharField("Страна", max_length=64, blank=True)
+    country_code = models.CharField("Код страны (ISO-2)", max_length=2, blank=True)
+    region = models.CharField("Регион/область", max_length=128, blank=True)
+    city = models.CharField("Город", max_length=128, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Профиль"
+        verbose_name_plural = "Профили"
+
+    def __str__(self):
+        return f"Profile<{self.user_id}> {self.country}/{self.city}"

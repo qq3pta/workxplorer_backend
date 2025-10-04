@@ -7,7 +7,7 @@ from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from .emails import send_code_email
-from .models import EmailOTP, UserRole
+from .models import EmailOTP, UserRole, Profile
 
 User = get_user_model()
 
@@ -19,7 +19,6 @@ def _normalize_phone(p: str) -> str:
     if not p:
         return p
     raw = "".join(ch for ch in str(p) if ch.isdigit() or ch == "+")
-    # если внутри несколько '+', оставим только первый в начале
     if raw.count("+") > 1:
         raw = raw.replace("+", "")
     if raw and raw[0] != "+" and raw.count("+") > 0:
@@ -27,11 +26,28 @@ def _normalize_phone(p: str) -> str:
     return raw
 
 
+class ProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Profile
+        fields = ("country", "country_code", "region", "city")
+
+    def validate(self, attrs):
+        if attrs.get("country") and not attrs.get("country_code"):
+            raise serializers.ValidationError({"country_code": "Укажи ISO-2 код страны (например, UZ)."})
+        return attrs
+
+
+# ---------------- Регистрация ----------------
+
 class RegisterSerializer(serializers.ModelSerializer):
     phone = serializers.CharField()
     password = serializers.CharField(write_only=True)
     password2 = serializers.CharField(write_only=True)
     role = serializers.ChoiceField(choices=UserRole.choices, required=False)
+    country = serializers.CharField(required=False, allow_blank=True)
+    country_code = serializers.CharField(required=False, allow_blank=True, max_length=2)
+    region = serializers.CharField(required=False, allow_blank=True)
+    city = serializers.CharField(required=False, allow_blank=True)
 
     class Meta:
         model = User
@@ -44,13 +60,13 @@ class RegisterSerializer(serializers.ModelSerializer):
             "phone",
             "company_name",
             "role",
+            "country", "country_code", "region", "city",
         )
 
     def validate(self, attrs):
         if attrs["password"] != attrs.pop("password2"):
             raise serializers.ValidationError({"password": "Пароли не совпадают"})
 
-        # нормализуем телефон до единого вида
         phone = attrs.get("phone")
         if not phone or not str(phone).strip():
             raise serializers.ValidationError({"phone": "Укажите номер телефона"})
@@ -62,26 +78,38 @@ class RegisterSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"username": "Этот логин уже занят"})
         if User.objects.filter(phone=attrs["phone"]).exists():
             raise serializers.ValidationError({"phone": "Этот телефон уже зарегистрирован"})
+        if attrs.get("country") and not attrs.get("country_code"):
+            raise serializers.ValidationError({"country_code": "Укажи ISO-2 код страны (например, UZ)."})
 
         password_validation.validate_password(attrs["password"])
         return attrs
 
     def create(self, validated):
+        profile_fields = ("country", "country_code", "region", "city")
+        profile_data = {k: validated.pop(k, None) for k in list(profile_fields)}
+
         pwd = validated.pop("password")
         role = validated.pop("role", UserRole.LOGISTIC)
         user = User.objects.create(
-            role=role,  # по умолчанию логист, но можно передать CUSTOMER/CARRIER
-            is_active=False,  # до подтверждения email
+            role=role,
+            is_active=False,
             is_email_verified=False,
             **validated,
         )
         user.set_password(pwd)
         user.save()
 
+        Profile.objects.update_or_create(
+            user=user,
+            defaults={k: v for k, v in profile_data.items() if v is not None}
+        )
+
         otp, raw = EmailOTP.create_otp(user, EmailOTP.PURPOSE_VERIFY, ttl_min=15)
         send_code_email(user.email, raw, purpose="verify")
         return user
 
+
+# ---------------- Верификация / ресенд ----------------
 
 class VerifyEmailSerializer(serializers.Serializer):
     email = serializers.EmailField()
@@ -120,7 +148,6 @@ class ResendVerifySerializer(serializers.Serializer):
         email = self.validated_data["email"]
         user = User.objects.filter(email__iexact=email).first()
         if user and not user.is_email_verified:
-            # anti-abuse: не чаще 1 раза в минуту
             last = (
                 EmailOTP.objects.filter(user=user, purpose=EmailOTP.PURPOSE_VERIFY)
                 .order_by("-created_at")
@@ -137,12 +164,10 @@ class ResendVerifySerializer(serializers.Serializer):
             otp, raw = EmailOTP.create_otp(user, EmailOTP.PURPOSE_VERIFY, ttl_min=15)
             send_code_email(user.email, raw, purpose="verify")
 
-        # Ответ одинаковый (не раскрываем, есть ли такой email)
-        return {
-            "detail": "Если e-mail существует — код отправлен",
-            "seconds_left": RESEND_COOLDOWN_SEC,
-        }
+        return {"detail": "Если e-mail существует — код отправлен", "seconds_left": RESEND_COOLDOWN_SEC}
 
+
+# ---------------- Логин ----------------
 
 class LoginSerializer(serializers.Serializer):
     login = serializers.CharField()
@@ -170,8 +195,9 @@ class LoginSerializer(serializers.Serializer):
         attrs["user"] = user
         return attrs
 
-
 class MeSerializer(serializers.ModelSerializer):
+    profile = ProfileSerializer(read_only=True)
+
     class Meta:
         model = User
         fields = (
@@ -186,6 +212,7 @@ class MeSerializer(serializers.ModelSerializer):
             "rating_as_customer",
             "rating_as_carrier",
             "is_email_verified",
+            "profile",
         )
         read_only_fields = (
             "id",
@@ -195,13 +222,16 @@ class MeSerializer(serializers.ModelSerializer):
             "rating_as_customer",
             "rating_as_carrier",
             "is_email_verified",
+            "profile",
         )
 
 
 class UpdateMeSerializer(serializers.ModelSerializer):
+    profile = ProfileSerializer(required=False)
+
     class Meta:
         model = User
-        fields = ("first_name", "phone", "company_name", "photo")
+        fields = ("first_name", "phone", "company_name", "photo", "profile")
 
     def validate_phone(self, value):
         norm = _normalize_phone(value) if value else value
@@ -209,6 +239,22 @@ class UpdateMeSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Этот телефон уже зарегистрирован")
         return norm
 
+    def update(self, instance, validated_data):
+        profile_data = validated_data.pop("profile", None)
+        if "phone" in validated_data:
+            validated_data["phone"] = self.validate_phone(validated_data["phone"])
+        user = super().update(instance, validated_data)
+
+        if profile_data is not None:
+            prof, _ = Profile.objects.get_or_create(user=user)
+            for k, v in profile_data.items():
+                setattr(prof, k, v)
+            prof.save()
+
+        return user
+
+
+# ---------------- Сброс пароля ----------------
 
 class ForgotPasswordSerializer(serializers.Serializer):
     email = serializers.EmailField()
@@ -217,7 +263,6 @@ class ForgotPasswordSerializer(serializers.Serializer):
         email = self.validated_data["email"]
         user = User.objects.filter(email__iexact=email).first()
         if user:
-            # троттлинг как в resend-verify
             last = (
                 EmailOTP.objects.filter(user=user, purpose=EmailOTP.PURPOSE_RESET)
                 .order_by("-created_at")
@@ -232,10 +277,7 @@ class ForgotPasswordSerializer(serializers.Serializer):
                     )
             otp, raw = EmailOTP.create_otp(user, EmailOTP.PURPOSE_RESET, ttl_min=15)
             send_code_email(user.email, raw, purpose="reset")
-        return {
-            "detail": "Если e-mail существует — код отправлен",
-            "seconds_left": RESEND_COOLDOWN_SEC,
-        }
+        return {"detail": "Если e-mail существует — код отправлен", "seconds_left": RESEND_COOLDOWN_SEC}
 
 
 class ResetPasswordSerializer(serializers.Serializer):
@@ -275,6 +317,8 @@ class ResetPasswordSerializer(serializers.Serializer):
         user.save(update_fields=["password"])
         return {"detail": "Пароль обновлен"}
 
+
+# ---------------- Смена роли ----------------
 
 class RoleChangeSerializer(serializers.Serializer):
     role = serializers.ChoiceField(choices=UserRole.choices)

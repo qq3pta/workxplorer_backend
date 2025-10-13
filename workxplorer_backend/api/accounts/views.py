@@ -23,9 +23,9 @@ from .serializers import (
     ResendVerifySerializer,
     ResetPasswordSerializer,
     RoleChangeSerializer,
+    SendPhoneOTPSerializer,
     UpdateMeSerializer,
     VerifyEmailSerializer,
-    SendPhoneOTPSerializer,
     VerifyPhoneOTPSerializer,
 )
 
@@ -47,6 +47,7 @@ def issue_tokens(user, remember: bool):
 
 
 # ===================== WhatsApp-OTP (телефон) =====================
+
 
 @extend_schema(
     tags=["auth"],
@@ -83,6 +84,7 @@ class VerifyPhoneOTPView(APIView):
 
 
 # ===================== Регистрация / E-mail совместимость =====================
+
 
 @extend_schema(
     tags=["auth"],
@@ -139,6 +141,7 @@ class VerifyEmailView(APIView):
 
 
 # ===================== Логин / Токены / Выход =====================
+
 
 @extend_schema(
     tags=["auth"],
@@ -243,6 +246,7 @@ class LogoutView(APIView):
 
 # ===================== Профиль =====================
 
+
 @extend_schema(tags=["auth"], responses=MeSerializer)
 class MeView(generics.RetrieveAPIView):
     permission_classes = [IsAuthenticatedAndVerified]
@@ -281,6 +285,7 @@ class UpdateMeView(generics.UpdateAPIView):
 
 # ===================== Роли =====================
 
+
 @extend_schema(
     tags=["auth"],
     request=RoleChangeSerializer,
@@ -299,6 +304,7 @@ class ChangeRoleView(APIView):
 
 
 # ===================== Сброс пароля по e-mail (оставили как было) =====================
+
 
 @extend_schema(
     tags=["auth"],

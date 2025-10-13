@@ -1,7 +1,10 @@
-import logging, requests
+import logging
+
+import requests
 from django.conf import settings
 
 log = logging.getLogger(__name__)
+
 
 def send_whatsapp_otp(e164_phone: str, code: str) -> bool:
     if settings.DEV_FAKE_WHATSAPP:
@@ -16,7 +19,7 @@ def send_whatsapp_otp(e164_phone: str, code: str) -> bool:
     headers = {"Authorization": f"Bearer {settings.WHATSAPP_TOKEN}"}
     payload = {
         "messaging_product": "whatsapp",
-        "to": e164_phone.replace("+",""),
+        "to": e164_phone.replace("+", ""),
         "type": "template",
         "template": {
             "name": settings.WHATSAPP_TEMPLATE,

@@ -113,6 +113,7 @@ class PhoneOTP(models.Model):
     """
     OTP по телефону (для WhatsApp/SMS). Используется для подтверждения номера и сброса пароля.
     """
+
     PURPOSE_VERIFY = "verify"
     PURPOSE_RESET = "reset"
     PURPOSES = [(PURPOSE_VERIFY, "verify"), (PURPOSE_RESET, "reset")]

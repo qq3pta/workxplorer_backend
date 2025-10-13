@@ -41,5 +41,8 @@ class IsCarrierOrLogistic(BasePermission):
     Разрешает доступ, если пользователь — Перевозчик ИЛИ Логист.
     Делегируем проверку существующим классам из common.permissions.
     """
+
     def has_permission(self, request, view) -> bool:
-        return IsCarrier().has_permission(request, view) or IsLogistic().has_permission(request, view)
+        return IsCarrier().has_permission(request, view) or IsLogistic().has_permission(
+            request, view
+        )

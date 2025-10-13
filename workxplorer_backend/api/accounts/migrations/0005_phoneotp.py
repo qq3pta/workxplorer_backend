@@ -4,27 +4,43 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('accounts', '0004_profile'),
+        ("accounts", "0004_profile"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='PhoneOTP',
+            name="PhoneOTP",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('phone', models.CharField(db_index=True, max_length=20)),
-                ('code', models.CharField(max_length=6)),
-                ('purpose', models.CharField(choices=[('verify', 'verify'), ('reset', 'reset')], default='verify', max_length=10)),
-                ('is_used', models.BooleanField(default=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('expires_at', models.DateTimeField()),
-                ('attempts_left', models.PositiveSmallIntegerField(default=5)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                    ),
+                ),
+                ("phone", models.CharField(db_index=True, max_length=20)),
+                ("code", models.CharField(max_length=6)),
+                (
+                    "purpose",
+                    models.CharField(
+                        choices=[("verify", "verify"), ("reset", "reset")],
+                        default="verify",
+                        max_length=10,
+                    ),
+                ),
+                ("is_used", models.BooleanField(default=False)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("expires_at", models.DateTimeField()),
+                ("attempts_left", models.PositiveSmallIntegerField(default=5)),
             ],
             options={
-                'ordering': ['-created_at'],
-                'indexes': [models.Index(fields=['phone', 'purpose', '-created_at'], name='accounts_ph_phone_540ab7_idx')],
+                "ordering": ["-created_at"],
+                "indexes": [
+                    models.Index(
+                        fields=["phone", "purpose", "-created_at"],
+                        name="accounts_ph_phone_540ab7_idx",
+                    )
+                ],
             },
         ),
     ]

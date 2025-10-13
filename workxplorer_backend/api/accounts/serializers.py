@@ -8,7 +8,7 @@ from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from .emails import send_code_email
-from .models import EmailOTP, Profile, UserRole, PhoneOTP
+from .models import EmailOTP, PhoneOTP, Profile, UserRole
 from .utils.whatsapp import send_whatsapp_otp
 
 User = get_user_model()
@@ -46,7 +46,9 @@ class ProfileSerializer(serializers.ModelSerializer):
 
 class SendPhoneOTPSerializer(serializers.Serializer):
     phone = serializers.CharField()
-    purpose = serializers.ChoiceField(choices=[("verify", "verify"), ("reset", "reset")], default="verify")
+    purpose = serializers.ChoiceField(
+        choices=[("verify", "verify"), ("reset", "reset")], default="verify"
+    )
 
     def validate(self, attrs):
         phone = attrs.get("phone")
@@ -59,11 +61,7 @@ class SendPhoneOTPSerializer(serializers.Serializer):
         phone = self.validated_data["phone"]
         purpose = self.validated_data["purpose"]
 
-        last = (
-            PhoneOTP.objects.filter(phone=phone, purpose=purpose)
-            .order_by("-created_at")
-            .first()
-        )
+        last = PhoneOTP.objects.filter(phone=phone, purpose=purpose).order_by("-created_at").first()
         if last:
             diff = (timezone.now() - last.created_at).total_seconds()
             left = max(0, RESEND_COOLDOWN_SEC - int(diff))
@@ -85,7 +83,9 @@ class SendPhoneOTPSerializer(serializers.Serializer):
 class VerifyPhoneOTPSerializer(serializers.Serializer):
     phone = serializers.CharField()
     code = serializers.CharField(max_length=6)
-    purpose = serializers.ChoiceField(choices=[("verify", "verify"), ("reset", "reset")], default="verify")
+    purpose = serializers.ChoiceField(
+        choices=[("verify", "verify"), ("reset", "reset")], default="verify"
+    )
 
     def validate(self, attrs):
         phone = attrs.get("phone")
@@ -351,7 +351,9 @@ class UpdateMeSerializer(serializers.ModelSerializer):
 
         return user
 
+
 # ---------------- Сброс пароля (по e-mail — оставляем как есть) ----------------
+
 
 class ForgotPasswordSerializer(serializers.Serializer):
     email = serializers.EmailField()
@@ -417,7 +419,9 @@ class ResetPasswordSerializer(serializers.Serializer):
         user.save(update_fields=["password"])
         return {"detail": "Пароль обновлен"}
 
+
 # ---------------- Смена роли ----------------
+
 
 class RoleChangeSerializer(serializers.Serializer):
     role = serializers.ChoiceField(choices=UserRole.choices)

@@ -11,7 +11,11 @@ from rest_framework import generics, status
 from rest_framework import serializers as drf_serializers
 from rest_framework.response import Response
 
-from ..accounts.permissions import IsAuthenticatedAndVerified, IsCarrier, IsCustomer, IsCarrierOrLogistic
+from ..accounts.permissions import (
+    IsAuthenticatedAndVerified,
+    IsCarrierOrLogistic,
+    IsCustomer,
+)
 from .choices import ModerationStatus
 from .models import Cargo, CargoStatus
 from .serializers import CargoListSerializer, CargoPublishSerializer

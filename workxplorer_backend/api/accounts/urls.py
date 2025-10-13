@@ -12,9 +12,16 @@ from .views import (
     ResetPasswordView,
     UpdateMeView,
     VerifyEmailView,
+    SendPhoneOTPView,
+    VerifyPhoneOTPView,
 )
 
 urlpatterns = [
+    # WhatsApp-OTP (телефон)
+    path("send-otp/phone/", SendPhoneOTPView.as_view()),
+    path("verify-otp/phone/", VerifyPhoneOTPView.as_view()),
+
+    # Остальные auth-ручки
     path("register/", RegisterView.as_view()),
     path("resend-verify/", ResendVerifyView.as_view()),
     path("verify-email/", VerifyEmailView.as_view()),

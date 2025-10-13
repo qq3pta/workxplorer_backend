@@ -6,17 +6,11 @@ __all__ = [
     "IsCustomer",
     "IsCarrier",
     "IsAuthenticatedAndVerified",
+    "IsCarrierOrLogistic",
 ]
 
 
 def _is_user_verified(user) -> bool:
-    """
-    Универсальная проверка «верифицирован ли пользователь».
-    Смотрим пару самых типичных флагов. Если хотя бы один явно True — ок.
-    Если хотя бы один явно False — не ок.
-    Если флагов нет вовсе — мягкий режим: считаем верифицированным,
-    чтобы не ломать проект (можно сделать строгим — см. комментарий ниже).
-    """
     candidate_flags = (
         "is_verified",
         "email_verified",
@@ -24,7 +18,6 @@ def _is_user_verified(user) -> bool:
         "phone_verified",
         "is_phone_verified",
     )
-
     saw_any_flag = False
     for name in candidate_flags:
         val = getattr(user, name, None)
@@ -32,7 +25,6 @@ def _is_user_verified(user) -> bool:
             return True
         if val is False:
             saw_any_flag = True
-
     return False if saw_any_flag else True
 
 
@@ -42,3 +34,12 @@ class IsAuthenticatedAndVerified(BasePermission):
     def has_permission(self, request, view) -> bool:
         user = getattr(request, "user", None)
         return bool(user and user.is_authenticated and _is_user_verified(user))
+
+
+class IsCarrierOrLogistic(BasePermission):
+    """
+    Разрешает доступ, если пользователь — Перевозчик ИЛИ Логист.
+    Делегируем проверку существующим классам из common.permissions.
+    """
+    def has_permission(self, request, view) -> bool:
+        return IsCarrier().has_permission(request, view) or IsLogistic().has_permission(request, view)

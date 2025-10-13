@@ -11,7 +11,7 @@ from rest_framework import generics, status
 from rest_framework import serializers as drf_serializers
 from rest_framework.response import Response
 
-from ..accounts.permissions import IsAuthenticatedAndVerified, IsCarrier, IsCustomer
+from ..accounts.permissions import IsAuthenticatedAndVerified, IsCarrier, IsCustomer, IsCarrierOrLogistic
 from .choices import ModerationStatus
 from .models import Cargo, CargoStatus
 from .serializers import CargoListSerializer, CargoPublishSerializer
@@ -188,7 +188,7 @@ class PublicLoadsView(generics.ListAPIView):
     - order = path_km|-path_km|origin_dist_km|-origin_dist_km|price_value|-price_value|load_date|-load_date
     """
 
-    permission_classes = [IsAuthenticatedAndVerified, IsCarrier]
+    permission_classes = [IsAuthenticatedAndVerified, IsCarrierOrLogistic]
     serializer_class = CargoListSerializer
     queryset = Cargo.objects.all()
 

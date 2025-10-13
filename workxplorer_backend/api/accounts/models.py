@@ -25,7 +25,6 @@ class User(AbstractUser):
 
     rating_as_customer = models.FloatField(default=0)
     rating_as_carrier = models.FloatField(default=0)
-
     is_email_verified = models.BooleanField(default=False)
 
     REQUIRED_FIELDS = ["email"]
@@ -98,6 +97,63 @@ class EmailOTP(models.Model):
         return obj, raw
 
     def check_and_consume(self, raw_code: str) -> bool:
+        if self.is_used or self.expires_at < timezone.now() or self.attempts_left == 0:
+            return False
+        ok = self.code == raw_code
+        if ok:
+            self.is_used = True
+            self.save(update_fields=["is_used"])
+            return True
+        self.attempts_left = max(0, self.attempts_left - 1)
+        self.save(update_fields=["attempts_left"])
+        return False
+
+
+class PhoneOTP(models.Model):
+    """
+    OTP по телефону (для WhatsApp/SMS). Используется для подтверждения номера и сброса пароля.
+    """
+    PURPOSE_VERIFY = "verify"
+    PURPOSE_RESET = "reset"
+    PURPOSES = [(PURPOSE_VERIFY, "verify"), (PURPOSE_RESET, "reset")]
+
+    phone = models.CharField(max_length=20, db_index=True)
+    code = models.CharField(max_length=6)
+    purpose = models.CharField(max_length=10, choices=PURPOSES, default=PURPOSE_VERIFY)
+    is_used = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    attempts_left = models.PositiveSmallIntegerField(default=5)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["phone", "purpose", "-created_at"]),
+        ]
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.phone}:{self.purpose}:{self.code}"
+
+    @staticmethod
+    def create_otp(phone: str, purpose: str, ttl_min: int = 5):
+        """
+        Создаёт запись и возвращает (obj, raw_code).
+        По умолчанию код живёт 5 минут (меняется настройкой в serializer через settings.OTP_TTL_SECONDS при необходимости).
+        """
+        raw = f"{secrets.randbelow(10**6):06d}"
+        obj = PhoneOTP.objects.create(
+            phone=phone,
+            code=raw,
+            purpose=purpose,
+            expires_at=timezone.now() + timedelta(minutes=ttl_min),
+        )
+        return obj, raw
+
+    def check_and_consume(self, raw_code: str) -> bool:
+        """
+        Проверяет код и помечает как использованный при успехе.
+        Уменьшает attempts_left при неуспехе.
+        """
         if self.is_used or self.expires_at < timezone.now() or self.attempts_left == 0:
             return False
         ok = self.code == raw_code

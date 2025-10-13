@@ -25,7 +25,13 @@ ALLOWED_HOSTS = (
     or (["*"] if DEBUG else [])
 )
 
-CSRF_TRUSTED_ORIGINS = _csv("CSRF_TRUSTED_ORIGINS")
+# CSRF
+CSRF_TRUSTED_ORIGINS = _csv("CSRF_TRUSTED_ORIGINS") or [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://95.182.119.148:3000",
+    "http://95.182.119.148",
+]
 
 INSTALLED_APPS = [
     # Django
@@ -84,7 +90,7 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "core.wsgi.application"
 
-# Database (PostGIS)
+# Database
 if getenv("DATABASE_URL"):
     import dj_database_url
 
@@ -187,13 +193,6 @@ CORS_ALLOW_CREDENTIALS = True
 CORS_PREFLIGHT_MAX_AGE = 86400
 CORS_ALLOW_HEADERS = list(default_headers) + ["authorization"]
 
-CSRF_TRUSTED_ORIGINS = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "http://95.182.119.148:3000",  # ← тоже с портом
-    "http://95.182.119.148",
-]
-
 # Auth user / Email
 AUTH_USER_MODEL = "accounts.User"
 EMAIL_BACKEND = getenv("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
@@ -220,3 +219,17 @@ if getenv("REDIS_URL"):
     }
 else:
     CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
+
+# --- WhatsApp / Phone OTP ---
+WHATSAPP_ENABLED = getenv("WHATSAPP_ENABLED", "true").lower() == "true"
+WHATSAPP_PHONE_ID = getenv("WHATSAPP_PHONE_ID")
+WHATSAPP_TOKEN = getenv("WHATSAPP_TOKEN")
+WHATSAPP_TEMPLATE = getenv("WHATSAPP_TEMPLATE", "otp_code")
+WHATSAPP_LANG = getenv("WHATSAPP_LANG", "ru")
+
+# Параметры OTP
+OTP_TTL_SECONDS = int(getenv("OTP_TTL_SECONDS", "300"))
+OTP_MAX_ATTEMPTS = int(getenv("OTP_MAX_ATTEMPTS", "5"))
+OTP_RECENT_MINUTES = int(getenv("OTP_RECENT_MINUTES", "10"))
+
+DEV_FAKE_WHATSAPP = getenv("DEV_FAKE_WHATSAPP", "false").lower() == "true"

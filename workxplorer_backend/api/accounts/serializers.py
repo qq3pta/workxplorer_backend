@@ -1,5 +1,6 @@
 from datetime import timedelta
 
+from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model, password_validation
 from django.db.models import Q
 from django.utils import timezone
@@ -7,7 +8,8 @@ from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from .emails import send_code_email
-from .models import EmailOTP, Profile, UserRole
+from .models import EmailOTP, Profile, UserRole, PhoneOTP
+from .utils.whatsapp import send_whatsapp_otp
 
 User = get_user_model()
 
@@ -37,6 +39,80 @@ class ProfileSerializer(serializers.ModelSerializer):
                 {"country_code": "Укажи ISO-2 код страны (например, UZ)."}
             )
         return attrs
+
+
+# ---------------- WhatsApp OTP (телефон) ----------------
+
+
+class SendPhoneOTPSerializer(serializers.Serializer):
+    phone = serializers.CharField()
+    purpose = serializers.ChoiceField(choices=[("verify", "verify"), ("reset", "reset")], default="verify")
+
+    def validate(self, attrs):
+        phone = attrs.get("phone")
+        if not phone or not str(phone).strip():
+            raise serializers.ValidationError({"phone": "Укажите номер телефона"})
+        attrs["phone"] = _normalize_phone(phone)
+        return attrs
+
+    def save(self, **kwargs):
+        phone = self.validated_data["phone"]
+        purpose = self.validated_data["purpose"]
+
+        last = (
+            PhoneOTP.objects.filter(phone=phone, purpose=purpose)
+            .order_by("-created_at")
+            .first()
+        )
+        if last:
+            diff = (timezone.now() - last.created_at).total_seconds()
+            left = max(0, RESEND_COOLDOWN_SEC - int(diff))
+            if left > 0:
+                raise serializers.ValidationError(
+                    {"detail": "Код уже отправлен. Подождите.", "seconds_left": left}
+                )
+
+        ttl_min = max(1, int(getattr(settings, "OTP_TTL_SECONDS", 300) // 60))
+        otp, raw = PhoneOTP.create_otp(phone, purpose, ttl_min=ttl_min)
+
+        ok = send_whatsapp_otp(phone, raw)
+        if not ok:
+            raise serializers.ValidationError({"phone": "Не удалось отправить код в WhatsApp"})
+
+        return {"detail": "Код отправлен в WhatsApp", "seconds_left": RESEND_COOLDOWN_SEC}
+
+
+class VerifyPhoneOTPSerializer(serializers.Serializer):
+    phone = serializers.CharField()
+    code = serializers.CharField(max_length=6)
+    purpose = serializers.ChoiceField(choices=[("verify", "verify"), ("reset", "reset")], default="verify")
+
+    def validate(self, attrs):
+        phone = attrs.get("phone")
+        if not phone or not str(phone).strip():
+            raise serializers.ValidationError({"phone": "Укажите номер телефона"})
+        attrs["phone"] = _normalize_phone(phone)
+        return attrs
+
+    def save(self, **kwargs):
+        phone = self.validated_data["phone"]
+        code = self.validated_data["code"]
+        purpose = self.validated_data["purpose"]
+
+        otp = (
+            PhoneOTP.objects.filter(
+                phone=phone,
+                purpose=purpose,
+                is_used=False,
+                expires_at__gte=timezone.now(),
+            )
+            .order_by("-created_at")
+            .first()
+        )
+        if not otp or not otp.check_and_consume(code):
+            raise serializers.ValidationError({"code": "Неверный или просроченный код"})
+
+        return {"verified": True}
 
 
 # ---------------- Регистрация ----------------
@@ -89,6 +165,17 @@ class RegisterSerializer(serializers.ModelSerializer):
                 {"country_code": "Укажи ISO-2 код страны (например, UZ)."}
             )
 
+        recent_minutes = int(getattr(settings, "OTP_RECENT_MINUTES", 10))
+        since = timezone.now() - timedelta(minutes=recent_minutes)
+        ok_recent = PhoneOTP.objects.filter(
+            phone=attrs["phone"],
+            purpose=PhoneOTP.PURPOSE_VERIFY,
+            is_used=True,
+            created_at__gte=since,
+        ).exists()
+        if not ok_recent:
+            raise serializers.ValidationError({"phone": "Подтвердите номер через WhatsApp-OTP"})
+
         password_validation.validate_password(attrs["password"])
         return attrs
 
@@ -100,8 +187,8 @@ class RegisterSerializer(serializers.ModelSerializer):
         role = validated.pop("role", UserRole.LOGISTIC)
         user = User.objects.create(
             role=role,
-            is_active=False,
-            is_email_verified=False,
+            is_active=True,
+            is_email_verified=True,
             **validated,
         )
         user.set_password(pwd)
@@ -110,13 +197,10 @@ class RegisterSerializer(serializers.ModelSerializer):
         Profile.objects.update_or_create(
             user=user, defaults={k: v for k, v in profile_data.items() if v is not None}
         )
-
-        otp, raw = EmailOTP.create_otp(user, EmailOTP.PURPOSE_VERIFY, ttl_min=15)
-        send_code_email(user.email, raw, purpose="verify")
         return user
 
 
-# ---------------- Верификация / ресенд ----------------
+# ---------------- Верификация / ресенд (по e-mail — оставить для сброса или совместимости) ----------------
 
 
 class VerifyEmailSerializer(serializers.Serializer):
@@ -195,7 +279,7 @@ class LoginSerializer(serializers.Serializer):
         if not user:
             raise serializers.ValidationError({"detail": "Неверные учетные данные"})
         if not user.is_email_verified:
-            raise serializers.ValidationError({"detail": "Email не подтвержден"})
+            raise serializers.ValidationError({"detail": "Аккаунт не подтверждён"})
 
         refresh = RefreshToken.for_user(user)
         access = refresh.access_token
@@ -227,6 +311,7 @@ class MeSerializer(serializers.ModelSerializer):
             "is_email_verified",
             "profile",
         )
+
         read_only_fields = (
             "id",
             "username",
@@ -266,9 +351,7 @@ class UpdateMeSerializer(serializers.ModelSerializer):
 
         return user
 
-
-# ---------------- Сброс пароля ----------------
-
+# ---------------- Сброс пароля (по e-mail — оставляем как есть) ----------------
 
 class ForgotPasswordSerializer(serializers.Serializer):
     email = serializers.EmailField()
@@ -334,9 +417,7 @@ class ResetPasswordSerializer(serializers.Serializer):
         user.save(update_fields=["password"])
         return {"detail": "Пароль обновлен"}
 
-
 # ---------------- Смена роли ----------------
-
 
 class RoleChangeSerializer(serializers.Serializer):
     role = serializers.ChoiceField(choices=UserRole.choices)

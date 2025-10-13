@@ -25,6 +25,8 @@ from .serializers import (
     RoleChangeSerializer,
     UpdateMeSerializer,
     VerifyEmailSerializer,
+    SendPhoneOTPSerializer,
+    VerifyPhoneOTPSerializer,
 )
 
 User = get_user_model()
@@ -44,6 +46,44 @@ def issue_tokens(user, remember: bool):
     return {"access": str(access), "refresh": str(refresh)}
 
 
+# ===================== WhatsApp-OTP (телефон) =====================
+
+@extend_schema(
+    tags=["auth"],
+    request=SendPhoneOTPSerializer,
+    responses=inline_serializer(
+        "SendPhoneOTPResponse",
+        {"detail": serializers.CharField(), "seconds_left": serializers.IntegerField()},
+    ),
+)
+class SendPhoneOTPView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        s = SendPhoneOTPSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        return Response(s.save())
+
+
+@extend_schema(
+    tags=["auth"],
+    request=VerifyPhoneOTPSerializer,
+    responses=inline_serializer(
+        "VerifyPhoneOTPResponse",
+        {"verified": serializers.BooleanField()},
+    ),
+)
+class VerifyPhoneOTPView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        s = VerifyPhoneOTPSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        return Response(s.save())
+
+
+# ===================== Регистрация / E-mail совместимость =====================
+
 @extend_schema(
     tags=["auth"],
     request=RegisterSerializer,
@@ -56,7 +96,7 @@ class RegisterView(generics.CreateAPIView):
     def create(self, request, *args, **kwargs):
         super().create(request, *args, **kwargs)
         return Response(
-            {"detail": "Регистрация успешна. Проверьте почту."},
+            {"detail": "Регистрация успешна."},
             status=status.HTTP_201_CREATED,
         )
 
@@ -97,6 +137,8 @@ class VerifyEmailView(APIView):
         Profile.objects.get_or_create(user=user)
         return Response({"detail": "E-mail подтвержден", **issue_tokens(user, remember=False)})
 
+
+# ===================== Логин / Токены / Выход =====================
 
 @extend_schema(
     tags=["auth"],
@@ -199,6 +241,8 @@ class LogoutView(APIView):
         return Response({"detail": "Вы вышли из системы"})
 
 
+# ===================== Профиль =====================
+
 @extend_schema(tags=["auth"], responses=MeSerializer)
 class MeView(generics.RetrieveAPIView):
     permission_classes = [IsAuthenticatedAndVerified]
@@ -235,6 +279,8 @@ class UpdateMeView(generics.UpdateAPIView):
         return Response(MeSerializer(instance).data)
 
 
+# ===================== Роли =====================
+
 @extend_schema(
     tags=["auth"],
     request=RoleChangeSerializer,
@@ -251,6 +297,8 @@ class ChangeRoleView(APIView):
         s.is_valid(raise_exception=True)
         return Response(s.save())
 
+
+# ===================== Сброс пароля по e-mail (оставили как было) =====================
 
 @extend_schema(
     tags=["auth"],

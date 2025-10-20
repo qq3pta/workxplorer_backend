@@ -1,13 +1,14 @@
 from __future__ import annotations
+
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
-from django.utils import timezone
+from api.geo.services import GeocodingError, geocode_city
 from django.contrib.gis.geos import Point
+from django.utils import timezone
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from api.geo.services import GeocodingError, geocode_city
 from .choices import ModerationStatus
 from .models import Cargo
 

@@ -7,6 +7,7 @@ __all__ = [
     "IsCarrier",
     "IsAuthenticatedAndVerified",
     "IsCarrierOrLogistic",
+    "IsCustomerOrLogistic",
 ]
 
 
@@ -46,3 +47,14 @@ class IsCarrierOrLogistic(BasePermission):
         return IsCarrier().has_permission(request, view) or IsLogistic().has_permission(
             request, view
         )
+
+
+class IsCustomerOrLogistic(BasePermission):
+    """
+    Разрешает доступ Заказчику (грузовладельцу) ИЛИ Логисту.
+    Удобно для публикации/редактирования заявок, если по продукту логист тоже может создавать.
+    """
+    message = "Доступ только для Заказчика или Логиста."
+
+    def has_permission(self, request, view) -> bool:
+        return IsCustomer().has_permission(request, view) or IsLogistic().has_permission(request, view)

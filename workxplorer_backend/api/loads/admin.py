@@ -1,5 +1,5 @@
 from django.contrib import admin, messages
-from django.db.models import F, FloatField, DecimalField
+from django.db.models import F, FloatField
 from django.db.models.expressions import Func
 from django.utils.html import format_html
 

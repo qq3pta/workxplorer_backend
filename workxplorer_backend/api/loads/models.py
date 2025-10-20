@@ -1,10 +1,11 @@
+import uuid
+
 from django.conf import settings
 from django.contrib.gis.db import models as gis_models
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models.manager import Manager as DjangoManager
 from django.utils import timezone
-import uuid
 
 from .choices import ContactPref, Currency, ModerationStatus, TransportType
 

@@ -2,12 +2,13 @@ from django.contrib.gis.db.models.functions import Distance
 from django.contrib.gis.geos import Point
 from django.contrib.gis.measure import D
 from django.core.exceptions import ValidationError
-from django.db.models import Count, DecimalField, F, FloatField, Q, ExpressionWrapper, DurationField
+from django.db.models import Count, DecimalField, DurationField, ExpressionWrapper, F, FloatField, Q
 from django.db.models.functions import Coalesce, Now
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema
-from rest_framework import generics, status, serializers as drf_serializers
+from rest_framework import generics, status
+from rest_framework import serializers as drf_serializers
 from rest_framework.response import Response
 
 from ..accounts.permissions import (

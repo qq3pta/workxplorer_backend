@@ -33,6 +33,7 @@ class RouteKmMixin(serializers.Serializer):
         try:
             if getattr(obj, "origin_point", None) and getattr(obj, "dest_point", None):
                 from api.routing.services import get_route
+
                 rc = get_route(obj.origin_point, obj.dest_point)
                 if rc:
                     return round(float(rc.distance_km), 1)
@@ -93,24 +94,38 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
         return origin_changed, dest_changed
 
     def _geocode_origin(self, attrs: dict[str, Any]) -> Point:
-        country = (attrs.get("origin_country") or self._val_or_instance(attrs, "origin_country") or "").strip()
-        city = (attrs.get("origin_city") or self._val_or_instance(attrs, "origin_city") or "").strip()
+        country = (
+            attrs.get("origin_country") or self._val_or_instance(attrs, "origin_country") or ""
+        ).strip()
+        city = (
+            attrs.get("origin_city") or self._val_or_instance(attrs, "origin_city") or ""
+        ).strip()
         if not city:
             raise serializers.ValidationError({"origin_city": "Укажите город погрузки"})
         try:
             return geocode_city(country=country, city=city, country_code=None)
         except GeocodingError:
-            raise serializers.ValidationError({"origin_city": "Не удалось геокодировать город"}) from None
+            raise serializers.ValidationError(
+                {"origin_city": "Не удалось геокодировать город"}
+            ) from None
 
     def _geocode_dest(self, attrs: dict[str, Any]) -> Point:
-        country = (attrs.get("destination_country") or self._val_or_instance(attrs, "destination_country") or "").strip()
-        city = (attrs.get("destination_city") or self._val_or_instance(attrs, "destination_city") or "").strip()
+        country = (
+            attrs.get("destination_country")
+            or self._val_or_instance(attrs, "destination_country")
+            or ""
+        ).strip()
+        city = (
+            attrs.get("destination_city") or self._val_or_instance(attrs, "destination_city") or ""
+        ).strip()
         if not city:
             raise serializers.ValidationError({"destination_city": "Укажите город разгрузки"})
         try:
             return geocode_city(country=country, city=city, country_code=None)
         except GeocodingError:
-            raise serializers.ValidationError({"destination_city": "Не удалось геокодировать город"}) from None
+            raise serializers.ValidationError(
+                {"destination_city": "Не удалось геокодировать город"}
+            ) from None
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
         required = [
@@ -130,7 +145,9 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
 
         ld = self._val_or_instance(attrs, "load_date")
         if ld and ld < timezone.now().date():
-            raise serializers.ValidationError({"load_date": "Дата загрузки не может быть в прошлом."})
+            raise serializers.ValidationError(
+                {"load_date": "Дата загрузки не может быть в прошлом."}
+            )
 
         dd = self._val_or_instance(attrs, "delivery_date")
         if dd and ld and dd < ld:
@@ -236,7 +253,11 @@ class CargoListSerializer(RouteKmMixin, serializers.ModelSerializer):
 
     def get_has_offers(self, obj: Cargo) -> bool:
         offers_active = getattr(obj, "offers_active", None)
-        return offers_active > 0 if offers_active is not None else obj.offers.filter(is_active=True).exists()
+        return (
+            offers_active > 0
+            if offers_active is not None
+            else obj.offers.filter(is_active=True).exists()
+        )
 
     def get_company_name(self, obj: Cargo) -> str:
         u = getattr(obj, "customer", None)
@@ -270,11 +291,17 @@ class CargoListSerializer(RouteKmMixin, serializers.ModelSerializer):
     @extend_schema_field(Decimal)
     def get_price_per_km(self, obj: Cargo) -> Decimal | None:
         price = getattr(obj, "price_value", None)
-        dist = getattr(obj, "route_km", None) or getattr(obj, "route_km_cached", None) or getattr(obj, "path_km", None)
+        dist = (
+            getattr(obj, "route_km", None)
+            or getattr(obj, "route_km_cached", None)
+            or getattr(obj, "path_km", None)
+        )
         try:
             if not price or not dist:
                 return None
-            per_km = (Decimal(str(price)) / Decimal(str(dist))).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            per_km = (Decimal(str(price)) / Decimal(str(dist))).quantize(
+                Decimal("0.01"), rounding=ROUND_HALF_UP
+            )
             return per_km
         except Exception:
             return None

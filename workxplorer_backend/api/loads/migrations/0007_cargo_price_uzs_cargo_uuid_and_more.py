@@ -7,57 +7,77 @@ import uuid
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
-        ('offers', '0003_offer_initiator_offer_offers_offe_initiat_306da5_idx'),
-        ('loads', '0006_cargo_route_duration_min_cached_and_more'),
+        ("offers", "0003_offer_initiator_offer_offers_offe_initiat_306da5_idx"),
+        ("loads", "0006_cargo_route_duration_min_cached_and_more"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='cargo',
-            name='price_uzs',
-            field=models.DecimalField(blank=True, decimal_places=2, max_digits=14, null=True, verbose_name='Цена в сумах'),
+            model_name="cargo",
+            name="price_uzs",
+            field=models.DecimalField(
+                blank=True, decimal_places=2, max_digits=14, null=True, verbose_name="Цена в сумах"
+            ),
         ),
         migrations.AddField(
-            model_name='cargo',
-            name='uuid',
+            model_name="cargo",
+            name="uuid",
             field=models.UUIDField(blank=True, default=uuid.uuid4, editable=False, null=True),
         ),
         migrations.AlterField(
-            model_name='cargo',
-            name='assigned_carrier',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='assigned_cargos', to=settings.AUTH_USER_MODEL, verbose_name='Назначенный перевозчик'),
+            model_name="cargo",
+            name="assigned_carrier",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="assigned_cargos",
+                to=settings.AUTH_USER_MODEL,
+                verbose_name="Назначенный перевозчик",
+            ),
         ),
         migrations.AlterField(
-            model_name='cargo',
-            name='chosen_offer',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='chosen_for', to='offers.offer', verbose_name='Выбранное предложение'),
+            model_name="cargo",
+            name="chosen_offer",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="chosen_for",
+                to="offers.offer",
+                verbose_name="Выбранное предложение",
+            ),
         ),
         migrations.AlterField(
-            model_name='cargo',
-            name='customer',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='cargos', to=settings.AUTH_USER_MODEL, verbose_name='Заказчик'),
+            model_name="cargo",
+            name="customer",
+            field=models.ForeignKey(
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="cargos",
+                to=settings.AUTH_USER_MODEL,
+                verbose_name="Заказчик",
+            ),
         ),
         migrations.AlterField(
-            model_name='cargo',
-            name='delivery_date',
-            field=models.DateField(blank=True, null=True, verbose_name='Дата доставки'),
+            model_name="cargo",
+            name="delivery_date",
+            field=models.DateField(blank=True, null=True, verbose_name="Дата доставки"),
         ),
         migrations.AlterField(
-            model_name='cargo',
-            name='description',
-            field=models.TextField(blank=True, verbose_name='Описание'),
+            model_name="cargo",
+            name="description",
+            field=models.TextField(blank=True, verbose_name="Описание"),
         ),
         migrations.AlterField(
-            model_name='cargo',
-            name='load_date',
-            field=models.DateField(verbose_name='Дата загрузки'),
+            model_name="cargo",
+            name="load_date",
+            field=models.DateField(verbose_name="Дата загрузки"),
         ),
         migrations.AlterField(
-            model_name='cargo',
-            name='product',
-            field=models.CharField(max_length=120, verbose_name='Название груза'),
+            model_name="cargo",
+            name="product",
+            field=models.CharField(max_length=120, verbose_name="Название груза"),
         ),
     ]

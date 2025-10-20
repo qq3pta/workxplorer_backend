@@ -40,9 +40,7 @@ class Cargo(models.Model):
     transport_type = models.CharField(max_length=10, choices=TransportType.choices)
     weight_kg = models.DecimalField(max_digits=12, decimal_places=2)
     price_value = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
-    price_currency = models.CharField(
-        max_length=3, choices=Currency.choices, default=Currency.UZS
-    )
+    price_currency = models.CharField(max_length=3, choices=Currency.choices, default=Currency.UZS)
     price_uzs = models.DecimalField(
         max_digits=14, decimal_places=2, null=True, blank=True, verbose_name="Цена в сумах"
     )
@@ -119,6 +117,7 @@ class Cargo(models.Model):
         try:
             if self.origin_point and self.dest_point:
                 from api.routing.services import get_route
+
                 rc = get_route(self.origin_point, self.dest_point)
                 if rc:
                     self.route_km_cached = float(rc.distance_km)
@@ -136,6 +135,7 @@ class Cargo(models.Model):
         """Конвертирует цену в сумах при создании груза."""
         try:
             from api.common.utils import convert_to_uzs
+
             if self.price_value and self.price_currency:
                 self.price_uzs = convert_to_uzs(self.price_value, self.price_currency)
                 self.save(update_fields=["price_uzs"])

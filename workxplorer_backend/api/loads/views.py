@@ -123,8 +123,10 @@ class MyCargosView(generics.ListAPIView):
             offers_active=Count("offers", filter=Q(offers__is_active=True)),
             path_m=Distance(F("origin_point"), F("dest_point")),
         )
-        return qs.annotate(path_km=F("path_m") / 1000.0).select_related("customer").order_by(
-            "-refreshed_at", "-created_at"
+        return (
+            qs.annotate(path_km=F("path_m") / 1000.0)
+            .select_related("customer")
+            .order_by("-refreshed_at", "-created_at")
         )
 
 
@@ -132,10 +134,14 @@ class MyCargosView(generics.ListAPIView):
 @extend_schema(tags=["loads"])
 class MyCargosBoardView(MyCargosView):
     def get_queryset(self):
-        qs = super().get_queryset().filter(
-            status=CargoStatus.POSTED,
-            is_hidden=False,
-            moderation_status=ModerationStatus.APPROVED,
+        qs = (
+            super()
+            .get_queryset()
+            .filter(
+                status=CargoStatus.POSTED,
+                is_hidden=False,
+                moderation_status=ModerationStatus.APPROVED,
+            )
         )
         p = self.request.query_params
         if p.get("uuid"):
@@ -217,10 +223,14 @@ class PublicLoadsView(generics.ListAPIView):
         # Сортировка
         order = p.get("order")
         allowed = {
-            "path_km", "-path_km",
-            "origin_dist_km", "-origin_dist_km",
-            "price_uzs_anno", "-price_uzs_anno",
-            "load_date", "-load_date",
+            "path_km",
+            "-path_km",
+            "origin_dist_km",
+            "-origin_dist_km",
+            "price_uzs_anno",
+            "-price_uzs_anno",
+            "load_date",
+            "-load_date",
         }
         if order in allowed:
             qs = qs.order_by(order)

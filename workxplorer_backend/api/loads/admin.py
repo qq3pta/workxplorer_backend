@@ -85,21 +85,25 @@ class CargoAdmin(admin.ModelAdmin):
     def path_km_display(self, obj):
         m = getattr(obj, "path_m", None)
         return "-" if m is None else f"{m / 1000:.1f}"
+
     path_km_display.short_description = "Путь (км, прямая)"
     path_km_display.admin_order_field = "path_m"
 
     def route_km_cached_display(self, obj):
         v = getattr(obj, "route_km_cached", None)
         return "-" if v is None else f"{float(v):.1f}"
+
     route_km_cached_display.short_description = "Маршрут (км, кэш)"
 
     def route_duration_min_cached_display(self, obj):
         v = getattr(obj, "route_duration_min_cached", None)
         return "-" if v is None else f"{float(v):.0f} мин"
+
     route_duration_min_cached_display.short_description = "Время (мин, кэш)"
 
     def age_minutes_display(self, obj):
         return f"{obj.age_minutes} мин назад"
+
     age_minutes_display.short_description = "Опубликовано"
     age_minutes_display.admin_order_field = "refreshed_at"
 
@@ -108,6 +112,7 @@ class CargoAdmin(admin.ModelAdmin):
         if obj.price_uzs:
             return format_html("<b>{:,.0f}</b> сум", obj.price_uzs)
         return "-"
+
     price_uzs_display.short_description = "Цена (UZS)"
     price_uzs_display.admin_order_field = "price_uzs"
 

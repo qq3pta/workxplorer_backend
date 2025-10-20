@@ -5,15 +5,14 @@ import uuid
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('loads', '0007_cargo_price_uzs_cargo_uuid_and_more'),
+        ("loads", "0007_cargo_price_uzs_cargo_uuid_and_more"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='cargo',
-            name='uuid',
+            model_name="cargo",
+            name="uuid",
             field=models.UUIDField(default=uuid.uuid4, editable=False, unique=True),
         ),
     ]

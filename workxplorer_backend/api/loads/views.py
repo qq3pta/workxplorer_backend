@@ -2,8 +2,9 @@ from django.contrib.gis.db.models.functions import Distance
 from django.contrib.gis.geos import Point
 from django.contrib.gis.measure import D
 from django.core.exceptions import ValidationError
-from django.db.models import Count, F, FloatField, Q
+from django.db.models import Count, F, FloatField, Q, DecimalField
 from django.db.models.expressions import Func
+from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema
@@ -15,6 +16,8 @@ from ..accounts.permissions import (
     IsAuthenticatedAndVerified,
     IsCarrierOrLogistic,
     IsCustomer,
+    IsCustomerOrLogistic,
+
 )
 from .choices import ModerationStatus
 from .models import Cargo, CargoStatus
@@ -49,7 +52,7 @@ class DistanceGeography(Func):
 
 @extend_schema(tags=["loads"])
 class PublishCargoView(generics.CreateAPIView):
-    permission_classes = [IsAuthenticatedAndVerified, IsCustomer]
+    permission_classes = [IsAuthenticatedAndVerified, IsCustomerOrLogistic]
     serializer_class = CargoPublishSerializer
     queryset = Cargo.objects.all()
 
@@ -232,6 +235,20 @@ class PublicLoadsView(generics.ListAPIView):
         if price_currency and any(f.name == "price_currency" for f in Cargo._meta.get_fields()):
             qs = qs.filter(price_currency=price_currency)
 
+
+        if any(f.name == "price_узs" for f in Cargo._meta.get_fields()):
+            qs = qs.annotate(
+                price_uzs_anno=Coalesce(
+                    F("price_uzs"),
+                    F("price_value"),
+                    output_field=DecimalField(max_digits=14, decimal_places=2),
+                )
+            )
+            if p.get("min_price_uzs"):
+                qs = qs.filter(price_uzs_anno__gte=p["min_price_узs"])
+            if p.get("max_price_uzs"):
+                qs = qs.filter(price_uzs_anno__lte=p["max_price_uzs"])
+
         # Наличие активных предложений
         has_offers = p.get("has_offers")
         if has_offers in {"true", "1"}:
@@ -274,8 +291,14 @@ class PublicLoadsView(generics.ListAPIView):
             "load_date",
             "-load_date",
         }
+        if "price_uzs_anno" in qs.query.annotations:
+            allowed |= {"price_uzs", "-price_uzs"}
+
         if order in allowed:
-            qs = qs.order_by(order)
+            if order in {"price_uzs", "-price_uzs"}:
+                qs = qs.order_by(order.replace("price_uzs", "price_uzs_anno"))
+            else:
+                qs = qs.order_by(order)
         else:
             if origin_point_for_order is not None:
                 qs = qs.order_by("origin_dist_km", "-refreshed_at", "-created_at")

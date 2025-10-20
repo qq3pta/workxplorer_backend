@@ -2,7 +2,7 @@ from django.contrib.gis.db.models.functions import Distance
 from django.contrib.gis.geos import Point
 from django.contrib.gis.measure import D
 from django.core.exceptions import ValidationError
-from django.db.models import Count, F, FloatField, Q, DecimalField
+from django.db.models import Count, DecimalField, F, FloatField, Q
 from django.db.models.expressions import Func
 from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404
@@ -17,7 +17,6 @@ from ..accounts.permissions import (
     IsCarrierOrLogistic,
     IsCustomer,
     IsCustomerOrLogistic,
-
 )
 from .choices import ModerationStatus
 from .models import Cargo, CargoStatus
@@ -234,7 +233,6 @@ class PublicLoadsView(generics.ListAPIView):
         price_currency = p.get("price_currency")
         if price_currency and any(f.name == "price_currency" for f in Cargo._meta.get_fields()):
             qs = qs.filter(price_currency=price_currency)
-
 
         if any(f.name == "price_узs" for f in Cargo._meta.get_fields()):
             qs = qs.annotate(

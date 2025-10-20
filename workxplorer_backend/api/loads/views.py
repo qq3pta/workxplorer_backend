@@ -2,7 +2,7 @@ from django.contrib.gis.db.models.functions import Distance
 from django.contrib.gis.geos import Point
 from django.contrib.gis.measure import D
 from django.core.exceptions import ValidationError
-from django.db.models import Count, DecimalField, DurationField, ExpressionWrapper, F, FloatField, Q
+from django.db.models import Count, DecimalField, ExpressionWrapper, F, FloatField, Q
 from django.db.models.functions import Coalesce, Now
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -39,7 +39,7 @@ class DistanceGeography(ExpressionWrapper):
         self.source_expressions = [origin, dest]
 
 
-# Публикация груза
+# ------------------ Публикация груза ------------------
 @extend_schema(tags=["loads"])
 class PublishCargoView(generics.CreateAPIView):
     permission_classes = [IsAuthenticatedAndVerified, IsCustomerOrLogistic]
@@ -48,7 +48,7 @@ class PublishCargoView(generics.CreateAPIView):
 
     def perform_create(self, serializer):
         cargo = serializer.save()
-        cargo.update_price_uzs()  # 💰 конвертация в UZS
+        cargo.update_price_uzs()
         return cargo
 
     def create(self, request, *args, **kwargs):
@@ -67,7 +67,7 @@ class PublishCargoView(generics.CreateAPIView):
         )
 
 
-# Детали груза
+# ------------------ Детали груза ------------------
 @extend_schema(tags=["loads"])
 class CargoDetailView(generics.RetrieveUpdateAPIView):
     permission_classes = [IsAuthenticatedAndVerified, IsCustomer]
@@ -92,6 +92,7 @@ class CargoDetailView(generics.RetrieveUpdateAPIView):
         obj.save(update_fields=["refreshed_at", "price_uzs"])
 
 
+# ------------------ Обновление заявки ------------------
 @extend_schema(tags=["loads"], responses=RefreshResponseSerializer)
 class CargoRefreshView(generics.GenericAPIView):
     permission_classes = [IsAuthenticatedAndVerified, IsCustomer]
@@ -110,7 +111,7 @@ class CargoRefreshView(generics.GenericAPIView):
         return Response({"detail": "Обновлено"}, status=status.HTTP_200_OK)
 
 
-# Мои заявки
+# ------------------ Мои заявки ------------------
 @extend_schema(tags=["loads"])
 class MyCargosView(generics.ListAPIView):
     permission_classes = [IsAuthenticatedAndVerified, IsCustomer]
@@ -131,7 +132,7 @@ class MyCargosView(generics.ListAPIView):
         )
 
 
-# Борда моих заявок
+# ------------------ Борда моих заявок ------------------
 @extend_schema(tags=["loads"])
 class MyCargosBoardView(MyCargosView):
     def get_queryset(self):
@@ -171,8 +172,8 @@ class PublicLoadsView(generics.ListAPIView):
             .annotate(
                 offers_active=Count("offers", filter=Q(offers__is_active=True)),
                 age_minutes=ExpressionWrapper(
-                    (Now() - F("created_at")) / timezone.timedelta(minutes=1),
-                    output_field=DurationField(),
+                    (Now() - F("created_at")) / 60000.0,
+                    output_field=FloatField(),
                 ),
             )
             .select_related("customer")
@@ -180,7 +181,7 @@ class PublicLoadsView(generics.ListAPIView):
 
         p = self.request.query_params
 
-        # Фильтры
+        # --- Фильтры ---
         if p.get("uuid"):
             qs = qs.filter(uuid=p["uuid"])
         if p.get("origin_city"):
@@ -197,6 +198,7 @@ class PublicLoadsView(generics.ListAPIView):
         if p.get("max_weight"):
             qs = qs.filter(weight_kg__lte=p["max_weight"])
 
+        # --- Цена ---
         qs = qs.annotate(
             price_uzs_anno=Coalesce(
                 F("price_uzs"),
@@ -209,7 +211,7 @@ class PublicLoadsView(generics.ListAPIView):
         if p.get("max_price_uzs"):
             qs = qs.filter(price_uzs_anno__lte=p["max_price_uzs"])
 
-        # Радиусные фильтры
+        # --- Радиусные фильтры ---
         o_lat, o_lng, o_r = p.get("origin_lat"), p.get("origin_lng"), p.get("origin_radius_km")
         if o_lat and o_lng and o_r:
             origin_point = Point(float(o_lng), float(o_lat), srid=4326)
@@ -221,7 +223,7 @@ class PublicLoadsView(generics.ListAPIView):
             dest_point = Point(float(d_lng), float(d_lat), srid=4326)
             qs = qs.filter(dest_point__distance_lte=(dest_point, D(km=float(d_r))))
 
-        # Сортировка
+        # --- Сортировка ---
         order = p.get("order")
         allowed = {
             "path_km",
@@ -241,6 +243,7 @@ class PublicLoadsView(generics.ListAPIView):
         return qs
 
 
+# ------------------ Отмена груза ------------------
 @extend_schema(tags=["loads"])
 class CargoCancelView(generics.GenericAPIView):
     permission_classes = [IsAuthenticatedAndVerified]

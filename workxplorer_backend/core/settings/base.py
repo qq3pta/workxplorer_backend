@@ -164,27 +164,22 @@ SPECTACULAR_SETTINGS = {
     "TITLE": "Workxplorer Backend API",
     "DESCRIPTION": "API docs",
     "VERSION": "1.0.0",
-     "ENUM_GENERATE_UNIQUE_NAME": False,
-
+    "ENUM_GENERATE_UNIQUE_NAME": False,
     "ENUM_NAME_OVERRIDES": {
         # Accounts
         "api.accounts.models.UserRole": "UserRoleEnum",
-
         # Loads
         "api.loads.choices.Currency": "CurrencyEnum",
         "api.loads.choices.TransportType": "TransportTypeEnum",
         "api.loads.choices.ModerationStatus": "ModerationStatusEnum",
         "api.loads.choices.ContactPref": "ContactPrefEnum",
         "api.loads.models.CargoStatus": "CargoStatusEnum",
-
         # Offers
         "api.offers.models.OfferStatus": "OfferStatusEnum",
-
         # Orders
         "api.orders.models.OrderStatus": "OrderStatusEnum",
         "api.orders.models.DocumentCategory": "DocumentCategoryEnum",
     },
-
     "COMPONENT_SPLIT_REQUEST": True,
     "POSTPROCESSING_HOOKS": [],
 }

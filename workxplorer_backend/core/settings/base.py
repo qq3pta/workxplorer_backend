@@ -195,7 +195,7 @@ SIMPLE_JWT = {
 
 # CORS
 CORS_ALLOW_ALL_ORIGINS = False
-CORS_ALLOWED_ORIGINS = [
+CORS_ALLOWED_ORIGINS = _csv("CORS_ALLOWED_ORIGINS") or [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "http://95.182.119.148:3000",

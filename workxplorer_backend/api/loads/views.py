@@ -41,6 +41,7 @@ class DistanceGeography(ExpressionWrapper):
 
 class ExtractMinutes(Func):
     """Совместимо с Django 4.2: считает EXTRACT(EPOCH FROM (NOW() - created_at)) / 60.0"""
+
     template = "EXTRACT(EPOCH FROM (NOW() - %(expressions)s)) / 60.0"
     output_field = FloatField()
 

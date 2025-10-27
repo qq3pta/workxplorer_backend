@@ -2,8 +2,8 @@ from django.contrib.gis.db.models.functions import Distance
 from django.contrib.gis.geos import Point
 from django.contrib.gis.measure import D
 from django.core.exceptions import ValidationError
-from django.db.models import Count, DecimalField, ExpressionWrapper, F, FloatField, Q, Value
-from django.db.models.functions import Coalesce, Now
+from django.db.models import Count, DecimalField, ExpressionWrapper, F, FloatField, Q, Func
+from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema
@@ -37,6 +37,12 @@ class DistanceGeography(ExpressionWrapper):
     def __init__(self, origin, dest):
         super().__init__(F(origin) * 1, output_field=self.output_field)
         self.source_expressions = [origin, dest]
+
+
+class ExtractMinutes(Func):
+    """Совместимо с Django 4.2: считает EXTRACT(EPOCH FROM (NOW() - created_at)) / 60.0"""
+    template = "EXTRACT(EPOCH FROM (NOW() - %(expressions)s)) / 60.0"
+    output_field = FloatField()
 
 
 # ------------------ Публикация груза ------------------
@@ -171,11 +177,7 @@ class PublicLoadsView(generics.ListAPIView):
             )
             .annotate(
                 offers_active=Count("offers", filter=Q(offers__is_active=True)),
-                # ✅ Совместимый способ: возраст записи в минутах
-                age_minutes=ExpressionWrapper(
-                    (Now() - F("created_at")) / Value(60.0),
-                    output_field=FloatField(),
-                ),
+                age_minutes=ExtractMinutes(F("created_at")),
             )
             .select_related("customer")
         )

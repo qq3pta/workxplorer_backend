@@ -178,7 +178,7 @@ class PublicLoadsView(generics.ListAPIView):
             )
             .annotate(
                 offers_active=Count("offers", filter=Q(offers__is_active=True)),
-                age_minutes=ExtractMinutes(F("created_at")),
+                age_minutes_anno=ExtractMinutes(F("created_at")),
             )
             .select_related("customer")
         )

@@ -1,0 +1,92 @@
+name: Backend CI (lint & tests)
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint_test:
+    name: Lint & Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      db:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_DB: workxplorer
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - "5432:5432"
+        options: >-
+          --health-cmd "pg_isready -U postgres -d workxplorer"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      # GeoDjango stack
+      - name: Install system libs (GEOS/GDAL/PROJ)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            gdal-bin libgdal-dev libgeos-dev libproj-dev \
+            libpq-dev build-essential
+
+      - name: Install Poetry
+        run: pip install "poetry==1.8.3"
+
+      # Cache Poetry downloads
+      - name: Cache Poetry downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pypoetry
+          key: poetry-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
+          restore-keys: poetry-${{ runner.os }}-
+
+      - name: Generate lock file
+        run: poetry lock --no-update
+
+      - name: Install deps
+        run: poetry install --no-interaction --no-ansi
+
+      # Быстрая проверка конфигурации Django
+      - name: Django check
+        env: &djenv
+          DJANGO_SETTINGS_MODULE: core.settings.dev
+          PYTHONPATH: ${{ github.workspace }}/workxplorer_backend
+          DB_HOST: 127.0.0.1
+          DB_PORT: 5432
+          DB_NAME: workxplorer
+          DB_USER: postgres
+          DB_PASSWORD: postgres
+        run: poetry run python workxplorer_backend/manage.py check --database default
+
+      # ---- Lint & format ----
+      - name: Ruff (import sort auto-fix)
+        run: poetry run ruff check . --select I --fix
+
+      - name: Ruff format (check)
+        run: poetry run ruff format --check .
+
+      - name: Ruff (verify)
+        run: poetry run ruff check .
+
+      # ---- Tests ----
+      - name: Pytest
+        env: *djenv
+        run: |
+          set +e
+          poetry run pytest -q
+          code=$?
+          if [ "$code" -eq 5 ]; then
+            echo "No tests collected → not failing CI."
+            exit 0
+          fi
+          exit "$code"

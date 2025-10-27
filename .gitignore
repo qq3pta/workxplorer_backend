@@ -1,0 +1,16 @@
+.vscode/
+.venv
+venv/
+__pycache__/
+*.pyc
+.idea
+staticfiles/
+media/
+*.log
+*.pid
+*.seed
+*.bak
+.env
+*.sqlite3
+.ruff_cache/
+static/

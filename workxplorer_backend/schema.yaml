@@ -1,0 +1,3230 @@
+openapi: 3.0.3
+info:
+  title: Workxplorer Backend API
+  version: 1.0.0
+  description: API docs
+paths:
+  /api/auth/change-role/:
+    post:
+      operationId: auth_change_role_create
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleChangeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RoleChangeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RoleChangeRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleChangeResponse'
+          description: ''
+  /api/auth/forgot-password/:
+    post:
+      operationId: auth_forgot_password_create
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ForgotPasswordRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ForgotPasswordRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ForgotPasswordRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForgotPasswordResponse'
+          description: ''
+  /api/auth/login/:
+    post:
+      operationId: auth_login_create
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+          description: ''
+  /api/auth/logout/:
+    post:
+      operationId: auth_logout_create
+      description: |-
+        POST /api/auth/logout
+        - с телом {"refresh": "<token>"}: выход только с текущего устройства
+        - без тела: выход со всех устройств
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LogoutRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LogoutRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LogoutRequestRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogoutResponse'
+          description: ''
+  /api/auth/me/:
+    get:
+      operationId: auth_me_retrieve
+      tags:
+      - auth
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Me'
+          description: ''
+  /api/auth/me/update/:
+    put:
+      operationId: auth_me_update_update
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateMeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UpdateMeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UpdateMeRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Me'
+          description: ''
+    patch:
+      operationId: auth_me_update_partial_update
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedUpdateMeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedUpdateMeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedUpdateMeRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Me'
+          description: ''
+  /api/auth/refresh/:
+    post:
+      operationId: auth_refresh_create
+      description: |-
+        Обновление токенов вручную (альтернатива стандартному TokenRefreshView),
+        с опциональной ротацией под remember_me.
+        Body: {"refresh": "<token>", "remember_me": true|false}
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequestRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenRefreshResponse'
+          description: ''
+  /api/auth/register/:
+    post:
+      operationId: auth_register_create
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterResponse'
+          description: ''
+  /api/auth/resend-verify/:
+    post:
+      operationId: auth_resend_verify_create
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResendVerifyRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ResendVerifyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ResendVerifyRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResendVerifyResponse'
+          description: ''
+  /api/auth/reset-password/:
+    post:
+      operationId: auth_reset_password_create
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResetPasswordResponse'
+          description: ''
+  /api/auth/send-otp/phone/:
+    post:
+      operationId: auth_send_otp_phone_create
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendPhoneOTPRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SendPhoneOTPRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SendPhoneOTPRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SendPhoneOTPResponse'
+          description: ''
+  /api/auth/verify-email/:
+    post:
+      operationId: auth_verify_email_create
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyEmailRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/VerifyEmailRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/VerifyEmailRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerifyEmailResponse'
+          description: ''
+  /api/auth/verify-otp/phone/:
+    post:
+      operationId: auth_verify_otp_phone_create
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyPhoneOTPRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/VerifyPhoneOTPRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/VerifyPhoneOTPRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerifyPhoneOTPResponse'
+          description: ''
+  /api/geo/suggest/cities/:
+    get:
+      operationId: geo_suggest_cities_retrieve
+      description: Подсказки по городам через Nominatim (OpenStreetMap), ограниченные
+        списком ALLOWED_COUNTRY_CODES.
+      summary: Подсказки по городам
+      parameters:
+      - in: query
+        name: country
+        schema:
+          type: string
+        description: 'ISO-2 код страны для фильтра (необязательно). Допустимые: AF,
+          AM, AZ, BG, BY, CN, GE, GR, HU, IN, IR, KG, KZ, MN, PK, PL, RO, RS, RU,
+          TJ, TM, TR, UA, UZ'
+      - in: query
+        name: limit
+        schema:
+          type: integer
+        description: Максимум результатов (1..50, по умолчанию 10)
+      - in: query
+        name: q
+        schema:
+          type: string
+        description: Строка поиска (минимум 2 символа)
+        required: true
+      tags:
+      - Geo
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CitySuggestResponse'
+          description: ''
+  /api/geo/suggest/countries/:
+    get:
+      operationId: geo_suggest_countries_retrieve
+      description: Подсказки по странам из предзаданного списка ISO_COUNTRIES.
+      summary: Подсказки по странам
+      parameters:
+      - in: query
+        name: limit
+        schema:
+          type: integer
+        description: Максимум результатов (1..50, по умолчанию 10)
+      - in: query
+        name: q
+        schema:
+          type: string
+        description: Код страны (ISO-2) или часть названия
+      tags:
+      - Geo
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CountrySuggestResponse'
+          description: ''
+  /api/loads/{uuid}/:
+    get:
+      operationId: loads_retrieve
+      parameters:
+      - in: path
+        name: uuid
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - loads
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CargoPublish'
+          description: ''
+    put:
+      operationId: loads_update
+      parameters:
+      - in: path
+        name: uuid
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - loads
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CargoPublishRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CargoPublishRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CargoPublishRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CargoPublish'
+          description: ''
+    patch:
+      operationId: loads_partial_update
+      parameters:
+      - in: path
+        name: uuid
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - loads
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedCargoPublishRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedCargoPublishRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedCargoPublishRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CargoPublish'
+          description: ''
+  /api/loads/{uuid}/cancel/:
+    post:
+      operationId: loads_cancel_create
+      parameters:
+      - in: path
+        name: uuid
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - loads
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshResponseRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RefreshResponseRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RefreshResponseRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefreshResponse'
+          description: ''
+  /api/loads/{uuid}/refresh/:
+    post:
+      operationId: loads_refresh_create
+      parameters:
+      - in: path
+        name: uuid
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - loads
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshResponseRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RefreshResponseRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RefreshResponseRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefreshResponse'
+          description: ''
+  /api/loads/board/:
+    get:
+      operationId: loads_board_list
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - loads
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedCargoListList'
+          description: ''
+  /api/loads/create/:
+    post:
+      operationId: loads_create_create
+      tags:
+      - loads
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CargoPublishRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CargoPublishRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CargoPublishRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CargoPublish'
+          description: ''
+  /api/loads/mine/:
+    get:
+      operationId: loads_mine_list
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - loads
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedCargoListList'
+          description: ''
+  /api/loads/public/:
+    get:
+      operationId: loads_public_list
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - loads
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedCargoListList'
+          description: ''
+  /api/offers/:
+    get:
+      operationId: offers_list
+      description: |-
+        Возвращает офферы, доступные текущему пользователю. Можно уточнить выборку параметром `scope`.
+
+        **scope=mine** — как Перевозчик (carrier);
+        **scope=incoming** — входящие: для Заказчика/Логиста — офферы от перевозчиков; для Перевозчика — инвайты от заказчиков (initiator=CUSTOMER);
+        **scope=all** — все (только для staff).
+      summary: Список офферов (видимые текущему пользователю)
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - in: query
+        name: scope
+        schema:
+          type: string
+        description: mine | incoming | all (только staff)
+      tags:
+      - offers
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedOfferShortList'
+          description: ''
+    post:
+      operationId: offers_create
+      description: Доступно только Перевозчику/Логисту.
+      summary: Создать оффер
+      tags:
+      - offers
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OfferCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OfferCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OfferCreateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OfferDetail'
+          description: ''
+  /api/offers/{id}/:
+    get:
+      operationId: offers_retrieve
+      description: Доступно перевозчику-автору, владельцу груза или логиcту.
+      summary: Детали оффера
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this offer.
+        required: true
+      tags:
+      - offers
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OfferDetail'
+          description: ''
+    put:
+      operationId: offers_update
+      description: |-
+        Эндпоинты:
+          POST   /api/offers/                  — создать (Перевозчик/Логист)
+          GET    /api/offers/                  — список, видимый текущему пользователю (scope=…)
+          GET    /api/offers/my/               — мои офферы как Перевозчик (alias)
+          GET    /api/offers/incoming/         — входящие (alias): заказчик/логист — офферы от перевозчиков; перевозчик — инвайты
+          GET    /api/offers/{id}/             — детали
+          POST   /api/offers/{id}/accept/      — принять
+          POST   /api/offers/{id}/reject/      — отклонить
+          POST   /api/offers/{id}/counter/     — контр-предложение
+          POST   /api/offers/invite/           — инвайт (Заказчик → Перевозчик)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this offer.
+        required: true
+      tags:
+      - offers
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OfferDetailRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OfferDetailRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OfferDetailRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OfferDetail'
+          description: ''
+    patch:
+      operationId: offers_partial_update
+      description: |-
+        Эндпоинты:
+          POST   /api/offers/                  — создать (Перевозчик/Логист)
+          GET    /api/offers/                  — список, видимый текущему пользователю (scope=…)
+          GET    /api/offers/my/               — мои офферы как Перевозчик (alias)
+          GET    /api/offers/incoming/         — входящие (alias): заказчик/логист — офферы от перевозчиков; перевозчик — инвайты
+          GET    /api/offers/{id}/             — детали
+          POST   /api/offers/{id}/accept/      — принять
+          POST   /api/offers/{id}/reject/      — отклонить
+          POST   /api/offers/{id}/counter/     — контр-предложение
+          POST   /api/offers/invite/           — инвайт (Заказчик → Перевозчик)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this offer.
+        required: true
+      tags:
+      - offers
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedOfferDetailRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedOfferDetailRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedOfferDetailRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OfferDetail'
+          description: ''
+    delete:
+      operationId: offers_destroy
+      description: |-
+        Эндпоинты:
+          POST   /api/offers/                  — создать (Перевозчик/Логист)
+          GET    /api/offers/                  — список, видимый текущему пользователю (scope=…)
+          GET    /api/offers/my/               — мои офферы как Перевозчик (alias)
+          GET    /api/offers/incoming/         — входящие (alias): заказчик/логист — офферы от перевозчиков; перевозчик — инвайты
+          GET    /api/offers/{id}/             — детали
+          POST   /api/offers/{id}/accept/      — принять
+          POST   /api/offers/{id}/reject/      — отклонить
+          POST   /api/offers/{id}/counter/     — контр-предложение
+          POST   /api/offers/invite/           — инвайт (Заказчик → Перевозчик)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this offer.
+        required: true
+      tags:
+      - offers
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/offers/{id}/accept/:
+    post:
+      operationId: offers_accept_create
+      description: Акцепт оффера текущим пользователем. При взаимном акцепте создаётся
+        Shipment.
+      summary: Принять оффер
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this offer.
+        required: true
+      tags:
+      - offers
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OfferAcceptResponse'
+          description: ''
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+  /api/offers/{id}/counter/:
+    post:
+      operationId: offers_counter_create
+      description: Создать контр-предложение. Разрешено владельцу груза или перевозчику
+        этого оффера.
+      summary: Контр-предложение
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this offer.
+        required: true
+      tags:
+      - offers
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OfferCounterRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OfferCounterRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OfferCounterRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OfferDetail'
+          description: ''
+  /api/offers/{id}/reject/:
+    post:
+      operationId: offers_reject_create
+      description: Отклонение/снятие оффера любой из сторон. Делает оффер неактивным.
+      summary: Отклонить оффер
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this offer.
+        required: true
+      tags:
+      - offers
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OfferRejectResponse'
+          description: ''
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+  /api/offers/incoming/:
+    get:
+      operationId: offers_incoming_list
+      description: |-
+        Alias к `GET /api/offers/?scope=incoming`.
+        Заказчик/Логист — видят офферы от перевозчиков на их заявки.
+        Перевозчик — видит инвайты от заказчиков (initiator=CUSTOMER).
+      summary: Входящие офферы / инвайты
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - offers
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedOfferShortList'
+          description: ''
+  /api/offers/invite/:
+    post:
+      operationId: offers_invite_create
+      description: Заказчик отправляет персональное предложение перевозчику на свой
+        груз.
+      summary: Инвайт перевозчику (Заказчик)
+      tags:
+      - offers
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OfferInviteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OfferInviteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OfferInviteRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OfferDetail'
+          description: ''
+  /api/offers/my/:
+    get:
+      operationId: offers_my_list
+      description: Alias к `GET /api/offers/?scope=mine`.
+      summary: Мои офферы (Перевозчик)
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - offers
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedOfferShortList'
+          description: ''
+  /api/orders/:
+    get:
+      operationId: orders_list
+      parameters:
+      - in: query
+        name: cargo
+        schema:
+          type: number
+      - in: query
+        name: date_from
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: date_to
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: load
+        schema:
+          type: number
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - in: query
+        name: role
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+      tags:
+      - orders
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedOrderListList'
+          description: ''
+    post:
+      operationId: orders_create
+      tags:
+      - orders
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderDetailRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OrderDetailRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OrderDetailRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderDetail'
+          description: ''
+  /api/orders/{id}/:
+    get:
+      operationId: orders_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this Заказ.
+        required: true
+      tags:
+      - orders
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderDetail'
+          description: ''
+    put:
+      operationId: orders_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this Заказ.
+        required: true
+      tags:
+      - orders
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderDetailRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OrderDetailRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OrderDetailRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderDetail'
+          description: ''
+    patch:
+      operationId: orders_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this Заказ.
+        required: true
+      tags:
+      - orders
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderDetailRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderDetailRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderDetailRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderDetail'
+          description: ''
+    delete:
+      operationId: orders_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this Заказ.
+        required: true
+      tags:
+      - orders
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/orders/{id}/documents/:
+    get:
+      operationId: orders_documents_retrieve
+      description: |-
+        GET  /orders/{id}/documents/ → список документов
+        POST /orders/{id}/documents/ → загрузка файла (multipart/form-data)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this Заказ.
+        required: true
+      tags:
+      - orders
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderDetail'
+          description: ''
+    post:
+      operationId: orders_documents_create
+      description: |-
+        GET  /orders/{id}/documents/ → список документов
+        POST /orders/{id}/documents/ → загрузка файла (multipart/form-data)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this Заказ.
+        required: true
+      tags:
+      - orders
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderDocumentRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OrderDocumentRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OrderDocumentRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderDocument'
+          description: ''
+  /api/orders/{id}/status/:
+    patch:
+      operationId: orders_status_partial_update
+      description: Обновление статуса (валидация через OrderStatusUpdateSerializer).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this Заказ.
+        required: true
+      tags:
+      - orders
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderStatusUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderStatusUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderStatusUpdateRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderStatusUpdate'
+          description: ''
+  /api/schema/:
+    get:
+      operationId: schema_retrieve
+      description: |-
+        OpenApi3 schema for this API. Format can be selected via content negotiation.
+
+        - YAML: application/vnd.oai.openapi
+        - JSON: application/vnd.oai.openapi+json
+      parameters:
+      - in: query
+        name: format
+        schema:
+          type: string
+          enum:
+          - json
+          - yaml
+      - in: query
+        name: lang
+        schema:
+          type: string
+          enum:
+          - af
+          - ar
+          - ar-dz
+          - ast
+          - az
+          - be
+          - bg
+          - bn
+          - br
+          - bs
+          - ca
+          - ckb
+          - cs
+          - cy
+          - da
+          - de
+          - dsb
+          - el
+          - en
+          - en-au
+          - en-gb
+          - eo
+          - es
+          - es-ar
+          - es-co
+          - es-mx
+          - es-ni
+          - es-ve
+          - et
+          - eu
+          - fa
+          - fi
+          - fr
+          - fy
+          - ga
+          - gd
+          - gl
+          - he
+          - hi
+          - hr
+          - hsb
+          - hu
+          - hy
+          - ia
+          - id
+          - ig
+          - io
+          - is
+          - it
+          - ja
+          - ka
+          - kab
+          - kk
+          - km
+          - kn
+          - ko
+          - ky
+          - lb
+          - lt
+          - lv
+          - mk
+          - ml
+          - mn
+          - mr
+          - ms
+          - my
+          - nb
+          - ne
+          - nl
+          - nn
+          - os
+          - pa
+          - pl
+          - pt
+          - pt-br
+          - ro
+          - ru
+          - sk
+          - sl
+          - sq
+          - sr
+          - sr-latn
+          - sv
+          - sw
+          - ta
+          - te
+          - tg
+          - th
+          - tk
+          - tr
+          - tt
+          - udm
+          - uk
+          - ur
+          - uz
+          - vi
+          - zh-hans
+          - zh-hant
+      tags:
+      - schema
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/vnd.oai.openapi:
+              schema:
+                type: object
+                additionalProperties: {}
+            application/yaml:
+              schema:
+                type: object
+                additionalProperties: {}
+            application/vnd.oai.openapi+json:
+              schema:
+                type: object
+                additionalProperties: {}
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/search/cargos/:
+    get:
+      operationId: search_cargos_list
+      parameters:
+      - in: query
+        name: destination_city
+        schema:
+          type: string
+      - in: query
+        name: origin_city
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - search
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedCargoListList'
+          description: ''
+components:
+  schemas:
+    CargoList:
+      type: object
+      properties:
+        uuid:
+          type: string
+          format: uuid
+          readOnly: true
+        product:
+          type: string
+          readOnly: true
+          title: Название груза
+        description:
+          type: string
+          readOnly: true
+          title: Описание
+        origin_country:
+          type: string
+          readOnly: true
+        origin_city:
+          type: string
+          readOnly: true
+        origin_address:
+          type: string
+          readOnly: true
+        destination_country:
+          type: string
+          readOnly: true
+        destination_city:
+          type: string
+          readOnly: true
+        destination_address:
+          type: string
+          readOnly: true
+        load_date:
+          type: string
+          format: date
+          readOnly: true
+          title: Дата загрузки
+        delivery_date:
+          type: string
+          format: date
+          readOnly: true
+          nullable: true
+          title: Дата доставки
+        transport_type:
+          enum:
+          - TENT
+          - CONT
+          - REEFER
+          - DUMP
+          - CARTR
+          - GRAIN
+          - LOG
+          - PICKUP
+          - MEGA
+          - OTHER
+          type: string
+          description: |-
+            * `TENT` - Тент
+            * `CONT` - Контейнер
+            * `REEFER` - Рефрижератор
+            * `DUMP` - Самосвал
+            * `CARTR` - Автотранспортер
+            * `GRAIN` - Зерновоз
+            * `LOG` - Лесовоз
+            * `PICKUP` - Пикап
+            * `MEGA` - Мега фура
+            * `OTHER` - Другое
+          x-spec-enum-id: 686daead3445b0c3
+          readOnly: true
+        weight_kg:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        weight_t:
+          type: number
+          format: double
+          readOnly: true
+        price_value:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          readOnly: true
+          nullable: true
+        price_currency:
+          enum:
+          - UZS
+          - KZT
+          - RUB
+          - USD
+          - EUR
+          type: string
+          description: |-
+            * `UZS` - сум
+            * `KZT` - тнг
+            * `RUB` - руб
+            * `USD` - USD
+            * `EUR` - EUR
+          x-spec-enum-id: e7202cc0f88ce412
+          readOnly: true
+        price_uzs:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          readOnly: true
+        contact_pref:
+          enum:
+          - email
+          - phone
+          - both
+          type: string
+          description: |-
+            * `email` - Email
+            * `phone` - Телефон
+            * `both` - Оба
+          x-spec-enum-id: ab696dcc50a3ff61
+          readOnly: true
+        contact_value:
+          type: string
+          readOnly: true
+        is_hidden:
+          type: boolean
+          readOnly: true
+        company_name:
+          type: string
+          readOnly: true
+        moderation_status:
+          enum:
+          - pending
+          - approved
+          - rejected
+          type: string
+          description: |-
+            * `pending` - На модерации
+            * `approved` - Одобрено
+            * `rejected` - Отклонено
+          x-spec-enum-id: 909c3f252c92f714
+          readOnly: true
+        status:
+          enum:
+          - POSTED
+          - MATCHED
+          - DELIVERED
+          - COMPLETED
+          - CANCELLED
+          type: string
+          description: |-
+            * `POSTED` - Опубликована
+            * `MATCHED` - В работе
+            * `DELIVERED` - Доставлено
+            * `COMPLETED` - Завершено
+            * `CANCELLED` - Отменена
+          x-spec-enum-id: 28e6744a895480dd
+          readOnly: true
+        age_minutes:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        refreshed_at:
+          type: string
+          format: date-time
+          readOnly: true
+        has_offers:
+          type: boolean
+          readOnly: true
+        path_km:
+          type: number
+          format: double
+          readOnly: true
+        route_km:
+          type: number
+          format: double
+          nullable: true
+          readOnly: true
+        price_per_km:
+          type: number
+          format: double
+          readOnly: true
+        origin_dist_km:
+          type: number
+          format: double
+          readOnly: true
+      required:
+      - age_minutes
+      - company_name
+      - contact_pref
+      - contact_value
+      - created_at
+      - delivery_date
+      - description
+      - destination_address
+      - destination_city
+      - destination_country
+      - has_offers
+      - is_hidden
+      - load_date
+      - moderation_status
+      - origin_address
+      - origin_city
+      - origin_country
+      - origin_dist_km
+      - path_km
+      - price_currency
+      - price_per_km
+      - price_uzs
+      - price_value
+      - product
+      - refreshed_at
+      - route_km
+      - status
+      - transport_type
+      - uuid
+      - weight_kg
+      - weight_t
+    CargoPublish:
+      type: object
+      properties:
+        uuid:
+          type: string
+          format: uuid
+          readOnly: true
+        product:
+          type: string
+          title: Название груза
+          maxLength: 120
+        description:
+          type: string
+          title: Описание
+        origin_country:
+          type: string
+          maxLength: 100
+        origin_city:
+          type: string
+          maxLength: 100
+        origin_address:
+          type: string
+          maxLength: 255
+        destination_country:
+          type: string
+          maxLength: 100
+        destination_city:
+          type: string
+          maxLength: 100
+        destination_address:
+          type: string
+          maxLength: 255
+        load_date:
+          type: string
+          format: date
+          title: Дата загрузки
+        delivery_date:
+          type: string
+          format: date
+          nullable: true
+          title: Дата доставки
+        transport_type:
+          enum:
+          - TENT
+          - CONT
+          - REEFER
+          - DUMP
+          - CARTR
+          - GRAIN
+          - LOG
+          - PICKUP
+          - MEGA
+          - OTHER
+          type: string
+          description: |-
+            * `TENT` - Тент
+            * `CONT` - Контейнер
+            * `REEFER` - Рефрижератор
+            * `DUMP` - Самосвал
+            * `CARTR` - Автотранспортер
+            * `GRAIN` - Зерновоз
+            * `LOG` - Лесовоз
+            * `PICKUP` - Пикап
+            * `MEGA` - Мега фура
+            * `OTHER` - Другое
+          x-spec-enum-id: 686daead3445b0c3
+        weight_kg:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        price_value:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          nullable: true
+        price_currency:
+          enum:
+          - UZS
+          - KZT
+          - RUB
+          - USD
+          - EUR
+          type: string
+          description: |-
+            * `UZS` - сум
+            * `KZT` - тнг
+            * `RUB` - руб
+            * `USD` - USD
+            * `EUR` - EUR
+          x-spec-enum-id: e7202cc0f88ce412
+        price_uzs:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          readOnly: true
+        contact_pref:
+          enum:
+          - email
+          - phone
+          - both
+          type: string
+          description: |-
+            * `email` - Email
+            * `phone` - Телефон
+            * `both` - Оба
+          x-spec-enum-id: ab696dcc50a3ff61
+        is_hidden:
+          type: boolean
+        route_km:
+          type: number
+          format: double
+          nullable: true
+          readOnly: true
+      required:
+      - contact_pref
+      - destination_address
+      - destination_city
+      - load_date
+      - origin_address
+      - origin_city
+      - price_uzs
+      - product
+      - route_km
+      - transport_type
+      - uuid
+      - weight_kg
+    CargoPublishRequest:
+      type: object
+      properties:
+        product:
+          type: string
+          minLength: 1
+          title: Название груза
+          maxLength: 120
+        description:
+          type: string
+          title: Описание
+        origin_country:
+          type: string
+          maxLength: 100
+        origin_city:
+          type: string
+          minLength: 1
+          maxLength: 100
+        origin_address:
+          type: string
+          minLength: 1
+          maxLength: 255
+        destination_country:
+          type: string
+          maxLength: 100
+        destination_city:
+          type: string
+          minLength: 1
+          maxLength: 100
+        destination_address:
+          type: string
+          minLength: 1
+          maxLength: 255
+        load_date:
+          type: string
+          format: date
+          title: Дата загрузки
+        delivery_date:
+          type: string
+          format: date
+          nullable: true
+          title: Дата доставки
+        transport_type:
+          enum:
+          - TENT
+          - CONT
+          - REEFER
+          - DUMP
+          - CARTR
+          - GRAIN
+          - LOG
+          - PICKUP
+          - MEGA
+          - OTHER
+          type: string
+          description: |-
+            * `TENT` - Тент
+            * `CONT` - Контейнер
+            * `REEFER` - Рефрижератор
+            * `DUMP` - Самосвал
+            * `CARTR` - Автотранспортер
+            * `GRAIN` - Зерновоз
+            * `LOG` - Лесовоз
+            * `PICKUP` - Пикап
+            * `MEGA` - Мега фура
+            * `OTHER` - Другое
+          x-spec-enum-id: 686daead3445b0c3
+        weight_kg:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        price_value:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          nullable: true
+        price_currency:
+          enum:
+          - UZS
+          - KZT
+          - RUB
+          - USD
+          - EUR
+          type: string
+          description: |-
+            * `UZS` - сум
+            * `KZT` - тнг
+            * `RUB` - руб
+            * `USD` - USD
+            * `EUR` - EUR
+          x-spec-enum-id: e7202cc0f88ce412
+        contact_pref:
+          enum:
+          - email
+          - phone
+          - both
+          type: string
+          description: |-
+            * `email` - Email
+            * `phone` - Телефон
+            * `both` - Оба
+          x-spec-enum-id: ab696dcc50a3ff61
+        is_hidden:
+          type: boolean
+      required:
+      - contact_pref
+      - destination_address
+      - destination_city
+      - load_date
+      - origin_address
+      - origin_city
+      - product
+      - transport_type
+      - weight_kg
+    City:
+      type: object
+      properties:
+        name:
+          type: string
+        country:
+          type: string
+        country_code:
+          type: string
+          maxLength: 2
+      required:
+      - country
+      - country_code
+      - name
+    CitySuggestResponse:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/City'
+      required:
+      - results
+    Country:
+      type: object
+      properties:
+        code:
+          type: string
+          maxLength: 2
+        name:
+          type: string
+      required:
+      - code
+      - name
+    CountrySuggestResponse:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Country'
+      required:
+      - results
+    ForgotPasswordRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 1
+      required:
+      - email
+    ForgotPasswordResponse:
+      type: object
+      properties:
+        detail:
+          type: string
+      required:
+      - detail
+    LoginRequest:
+      type: object
+      properties:
+        login:
+          type: string
+          minLength: 1
+        password:
+          type: string
+          minLength: 1
+        remember_me:
+          type: boolean
+          default: false
+      required:
+      - login
+      - password
+    LoginResponse:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/Me'
+        access:
+          type: string
+        refresh:
+          type: string
+      required:
+      - access
+      - refresh
+      - user
+    LogoutRequestRequest:
+      type: object
+      properties:
+        refresh:
+          type: string
+          minLength: 1
+    LogoutResponse:
+      type: object
+      properties:
+        detail:
+          type: string
+      required:
+      - detail
+    Me:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        username:
+          type: string
+          readOnly: true
+          title: Имя пользователя
+          description: Обязательное поле. Не более 150 символов. Только буквы, цифры
+            и символы @/./+/-/_.
+        email:
+          type: string
+          format: email
+          readOnly: true
+        first_name:
+          type: string
+          title: Имя
+          maxLength: 150
+        phone:
+          type: string
+          nullable: true
+          maxLength: 20
+        company_name:
+          type: string
+          maxLength: 255
+        photo:
+          type: string
+          format: uri
+          nullable: true
+        role:
+          enum:
+          - LOGISTIC
+          - CUSTOMER
+          - CARRIER
+          type: string
+          description: |-
+            * `LOGISTIC` - Логист
+            * `CUSTOMER` - Заказчик
+            * `CARRIER` - Перевозчик
+          x-spec-enum-id: f8c39d86e82f4ceb
+          readOnly: true
+        rating_as_customer:
+          type: number
+          format: double
+          readOnly: true
+        rating_as_carrier:
+          type: number
+          format: double
+          readOnly: true
+        is_email_verified:
+          type: boolean
+          readOnly: true
+        profile:
+          allOf:
+          - $ref: '#/components/schemas/Profile'
+          readOnly: true
+      required:
+      - email
+      - id
+      - is_email_verified
+      - profile
+      - rating_as_carrier
+      - rating_as_customer
+      - role
+      - username
+    OfferAcceptResponse:
+      type: object
+      properties:
+        detail:
+          type: string
+        accepted_by_customer:
+          type: boolean
+        accepted_by_carrier:
+          type: boolean
+      required:
+      - accepted_by_carrier
+      - accepted_by_customer
+      - detail
+    OfferCounterRequest:
+      type: object
+      properties:
+        price_value:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        price_currency:
+          type: string
+          maxLength: 3
+        message:
+          type: string
+      required:
+      - price_value
+    OfferCreateRequest:
+      type: object
+      description: Создание оффера ПЕРЕВОЗЧИКОМ на чужую заявку.
+      properties:
+        cargo:
+          type: integer
+        price_value:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          nullable: true
+        price_currency:
+          enum:
+          - UZS
+          - KZT
+          - RUB
+          - USD
+          - EUR
+          type: string
+          description: |-
+            * `UZS` - сум
+            * `KZT` - тнг
+            * `RUB` - руб
+            * `USD` - USD
+            * `EUR` - EUR
+          x-spec-enum-id: e7202cc0f88ce412
+          default: UZS
+        message:
+          type: string
+      required:
+      - cargo
+    OfferDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        price_value:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          nullable: true
+        price_currency:
+          enum:
+          - UZS
+          - KZT
+          - RUB
+          - USD
+          - EUR
+          type: string
+          description: |-
+            * `UZS` - сум
+            * `KZT` - тнг
+            * `RUB` - руб
+            * `USD` - USD
+            * `EUR` - EUR
+          x-spec-enum-id: e7202cc0f88ce412
+        message:
+          type: string
+        accepted_by_customer:
+          type: boolean
+          readOnly: true
+        accepted_by_carrier:
+          type: boolean
+          readOnly: true
+        initiator:
+          enum:
+          - CUSTOMER
+          - CARRIER
+          type: string
+          description: |-
+            * `CUSTOMER` - Заказчик
+            * `CARRIER` - Перевозчик
+          x-spec-enum-id: 49d1106781f6c083
+          readOnly: true
+        is_active:
+          type: boolean
+          readOnly: true
+          default: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        cargo:
+          type: integer
+        carrier:
+          type: integer
+          readOnly: true
+      required:
+      - accepted_by_carrier
+      - accepted_by_customer
+      - cargo
+      - carrier
+      - created_at
+      - id
+      - initiator
+      - is_active
+      - updated_at
+    OfferDetailRequest:
+      type: object
+      properties:
+        price_value:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          nullable: true
+        price_currency:
+          enum:
+          - UZS
+          - KZT
+          - RUB
+          - USD
+          - EUR
+          type: string
+          description: |-
+            * `UZS` - сум
+            * `KZT` - тнг
+            * `RUB` - руб
+            * `USD` - USD
+            * `EUR` - EUR
+          x-spec-enum-id: e7202cc0f88ce412
+        message:
+          type: string
+        cargo:
+          type: integer
+      required:
+      - cargo
+    OfferInviteRequest:
+      type: object
+      description: Создание оффера-ИНВАЙТА ЗАКАЗЧИКОМ конкретному перевозчику.
+      properties:
+        cargo:
+          type: integer
+        carrier_id:
+          type: integer
+        price_value:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          nullable: true
+        price_currency:
+          enum:
+          - UZS
+          - KZT
+          - RUB
+          - USD
+          - EUR
+          type: string
+          description: |-
+            * `UZS` - сум
+            * `KZT` - тнг
+            * `RUB` - руб
+            * `USD` - USD
+            * `EUR` - EUR
+          x-spec-enum-id: e7202cc0f88ce412
+          default: UZS
+        message:
+          type: string
+      required:
+      - cargo
+      - carrier_id
+    OfferRejectResponse:
+      type: object
+      properties:
+        detail:
+          type: string
+      required:
+      - detail
+    OfferShort:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        cargo:
+          type: integer
+          readOnly: true
+        cargo_origin:
+          type: string
+          readOnly: true
+        cargo_destination:
+          type: string
+          readOnly: true
+        cargo_customer_id:
+          type: integer
+          readOnly: true
+        price_value:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          readOnly: true
+          nullable: true
+        price_currency:
+          enum:
+          - UZS
+          - KZT
+          - RUB
+          - USD
+          - EUR
+          type: string
+          description: |-
+            * `UZS` - сум
+            * `KZT` - тнг
+            * `RUB` - руб
+            * `USD` - USD
+            * `EUR` - EUR
+          x-spec-enum-id: e7202cc0f88ce412
+          readOnly: true
+        message:
+          type: string
+          readOnly: true
+        accepted_by_customer:
+          type: boolean
+          readOnly: true
+        accepted_by_carrier:
+          type: boolean
+          readOnly: true
+        is_active:
+          type: boolean
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - accepted_by_carrier
+      - accepted_by_customer
+      - cargo
+      - cargo_customer_id
+      - cargo_destination
+      - cargo_origin
+      - created_at
+      - id
+      - is_active
+      - message
+      - price_currency
+      - price_value
+    OrderDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        cargo:
+          type: integer
+        cargo_id:
+          type: integer
+          readOnly: true
+        customer:
+          type: integer
+        carrier:
+          type: integer
+          nullable: true
+        status:
+          enum:
+          - pending
+          - en_route
+          - delivered
+          - no_driver
+          type: string
+          description: |-
+            * `pending` - В ожидании
+            * `en_route` - В пути
+            * `delivered` - Доставлен
+            * `no_driver` - Без водителя
+          x-spec-enum-id: da16da9fba8f0bc4
+        currency:
+          enum:
+          - UZS
+          - KZT
+          - RUB
+          - USD
+          - EUR
+          type: string
+          description: |-
+            * `UZS` - сум
+            * `KZT` - тнг
+            * `RUB` - руб
+            * `USD` - USD
+            * `EUR` - EUR
+          x-spec-enum-id: e7202cc0f88ce412
+        price_total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        route_distance_km:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+        price_per_km:
+          type: number
+          format: double
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        documents:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderDocument'
+          readOnly: true
+      required:
+      - cargo
+      - cargo_id
+      - created_at
+      - currency
+      - customer
+      - documents
+      - id
+      - price_per_km
+      - status
+    OrderDetailRequest:
+      type: object
+      properties:
+        cargo:
+          type: integer
+        customer:
+          type: integer
+        carrier:
+          type: integer
+          nullable: true
+        status:
+          enum:
+          - pending
+          - en_route
+          - delivered
+          - no_driver
+          type: string
+          description: |-
+            * `pending` - В ожидании
+            * `en_route` - В пути
+            * `delivered` - Доставлен
+            * `no_driver` - Без водителя
+          x-spec-enum-id: da16da9fba8f0bc4
+        currency:
+          enum:
+          - UZS
+          - KZT
+          - RUB
+          - USD
+          - EUR
+          type: string
+          description: |-
+            * `UZS` - сум
+            * `KZT` - тнг
+            * `RUB` - руб
+            * `USD` - USD
+            * `EUR` - EUR
+          x-spec-enum-id: e7202cc0f88ce412
+        price_total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        route_distance_km:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+      required:
+      - cargo
+      - currency
+      - customer
+      - status
+    OrderDocument:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        title:
+          type: string
+          maxLength: 255
+        file:
+          type: string
+          format: uri
+          pattern: (?:pdf|jpg|jpeg|png|doc|docx)$
+        file_name:
+          type: string
+          nullable: true
+          readOnly: true
+        file_size:
+          type: integer
+          minimum: 0
+          nullable: true
+          readOnly: true
+        uploaded_by:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - file
+      - file_name
+      - file_size
+      - id
+      - uploaded_by
+    OrderDocumentRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 255
+        file:
+          type: string
+          format: binary
+          pattern: (?:pdf|jpg|jpeg|png|doc|docx)$
+      required:
+      - file
+    OrderList:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        cargo:
+          type: integer
+        cargo_id:
+          type: integer
+          readOnly: true
+        customer:
+          type: integer
+        carrier:
+          type: integer
+          nullable: true
+        status:
+          enum:
+          - pending
+          - en_route
+          - delivered
+          - no_driver
+          type: string
+          description: |-
+            * `pending` - В ожидании
+            * `en_route` - В пути
+            * `delivered` - Доставлен
+            * `no_driver` - Без водителя
+          x-spec-enum-id: da16da9fba8f0bc4
+        currency:
+          enum:
+          - UZS
+          - KZT
+          - RUB
+          - USD
+          - EUR
+          type: string
+          description: |-
+            * `UZS` - сум
+            * `KZT` - тнг
+            * `RUB` - руб
+            * `USD` - USD
+            * `EUR` - EUR
+          x-spec-enum-id: e7202cc0f88ce412
+        price_total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        route_distance_km:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+        price_per_km:
+          type: number
+          format: double
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - cargo
+      - cargo_id
+      - created_at
+      - currency
+      - customer
+      - id
+      - price_per_km
+      - status
+    OrderStatusUpdate:
+      type: object
+      properties:
+        status:
+          enum:
+          - pending
+          - en_route
+          - delivered
+          - no_driver
+          type: string
+          description: |-
+            * `pending` - В ожидании
+            * `en_route` - В пути
+            * `delivered` - Доставлен
+            * `no_driver` - Без водителя
+          x-spec-enum-id: da16da9fba8f0bc4
+      required:
+      - status
+    PaginatedCargoListList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/CargoList'
+    PaginatedOfferShortList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/OfferShort'
+    PaginatedOrderListList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderList'
+    PatchedCargoPublishRequest:
+      type: object
+      properties:
+        product:
+          type: string
+          minLength: 1
+          title: Название груза
+          maxLength: 120
+        description:
+          type: string
+          title: Описание
+        origin_country:
+          type: string
+          maxLength: 100
+        origin_city:
+          type: string
+          minLength: 1
+          maxLength: 100
+        origin_address:
+          type: string
+          minLength: 1
+          maxLength: 255
+        destination_country:
+          type: string
+          maxLength: 100
+        destination_city:
+          type: string
+          minLength: 1
+          maxLength: 100
+        destination_address:
+          type: string
+          minLength: 1
+          maxLength: 255
+        load_date:
+          type: string
+          format: date
+          title: Дата загрузки
+        delivery_date:
+          type: string
+          format: date
+          nullable: true
+          title: Дата доставки
+        transport_type:
+          enum:
+          - TENT
+          - CONT
+          - REEFER
+          - DUMP
+          - CARTR
+          - GRAIN
+          - LOG
+          - PICKUP
+          - MEGA
+          - OTHER
+          type: string
+          description: |-
+            * `TENT` - Тент
+            * `CONT` - Контейнер
+            * `REEFER` - Рефрижератор
+            * `DUMP` - Самосвал
+            * `CARTR` - Автотранспортер
+            * `GRAIN` - Зерновоз
+            * `LOG` - Лесовоз
+            * `PICKUP` - Пикап
+            * `MEGA` - Мега фура
+            * `OTHER` - Другое
+          x-spec-enum-id: 686daead3445b0c3
+        weight_kg:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        price_value:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          nullable: true
+        price_currency:
+          enum:
+          - UZS
+          - KZT
+          - RUB
+          - USD
+          - EUR
+          type: string
+          description: |-
+            * `UZS` - сум
+            * `KZT` - тнг
+            * `RUB` - руб
+            * `USD` - USD
+            * `EUR` - EUR
+          x-spec-enum-id: e7202cc0f88ce412
+        contact_pref:
+          enum:
+          - email
+          - phone
+          - both
+          type: string
+          description: |-
+            * `email` - Email
+            * `phone` - Телефон
+            * `both` - Оба
+          x-spec-enum-id: ab696dcc50a3ff61
+        is_hidden:
+          type: boolean
+    PatchedOfferDetailRequest:
+      type: object
+      properties:
+        price_value:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          nullable: true
+        price_currency:
+          enum:
+          - UZS
+          - KZT
+          - RUB
+          - USD
+          - EUR
+          type: string
+          description: |-
+            * `UZS` - сум
+            * `KZT` - тнг
+            * `RUB` - руб
+            * `USD` - USD
+            * `EUR` - EUR
+          x-spec-enum-id: e7202cc0f88ce412
+        message:
+          type: string
+        cargo:
+          type: integer
+    PatchedOrderDetailRequest:
+      type: object
+      properties:
+        cargo:
+          type: integer
+        customer:
+          type: integer
+        carrier:
+          type: integer
+          nullable: true
+        status:
+          enum:
+          - pending
+          - en_route
+          - delivered
+          - no_driver
+          type: string
+          description: |-
+            * `pending` - В ожидании
+            * `en_route` - В пути
+            * `delivered` - Доставлен
+            * `no_driver` - Без водителя
+          x-spec-enum-id: da16da9fba8f0bc4
+        currency:
+          enum:
+          - UZS
+          - KZT
+          - RUB
+          - USD
+          - EUR
+          type: string
+          description: |-
+            * `UZS` - сум
+            * `KZT` - тнг
+            * `RUB` - руб
+            * `USD` - USD
+            * `EUR` - EUR
+          x-spec-enum-id: e7202cc0f88ce412
+        price_total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        route_distance_km:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+    PatchedOrderStatusUpdateRequest:
+      type: object
+      properties:
+        status:
+          enum:
+          - pending
+          - en_route
+          - delivered
+          - no_driver
+          type: string
+          description: |-
+            * `pending` - В ожидании
+            * `en_route` - В пути
+            * `delivered` - Доставлен
+            * `no_driver` - Без водителя
+          x-spec-enum-id: da16da9fba8f0bc4
+    PatchedUpdateMeRequest:
+      type: object
+      properties:
+        first_name:
+          type: string
+          title: Имя
+          maxLength: 150
+        phone:
+          type: string
+          nullable: true
+          maxLength: 20
+        company_name:
+          type: string
+          maxLength: 255
+        photo:
+          type: string
+          format: binary
+          nullable: true
+        profile:
+          $ref: '#/components/schemas/ProfileRequest'
+    Profile:
+      type: object
+      properties:
+        country:
+          type: string
+          title: Страна
+          maxLength: 64
+        country_code:
+          type: string
+          title: Код страны (ISO-2)
+          maxLength: 2
+        region:
+          type: string
+          title: Регион/область
+          maxLength: 128
+        city:
+          type: string
+          title: Город
+          maxLength: 128
+    ProfileRequest:
+      type: object
+      properties:
+        country:
+          type: string
+          title: Страна
+          maxLength: 64
+        country_code:
+          type: string
+          title: Код страны (ISO-2)
+          maxLength: 2
+        region:
+          type: string
+          title: Регион/область
+          maxLength: 128
+        city:
+          type: string
+          title: Город
+          maxLength: 128
+    RefreshResponse:
+      type: object
+      properties:
+        detail:
+          type: string
+      required:
+      - detail
+    RefreshResponseRequest:
+      type: object
+      properties:
+        detail:
+          type: string
+          minLength: 1
+      required:
+      - detail
+    RegisterRequest:
+      type: object
+      properties:
+        username:
+          type: string
+          minLength: 1
+          title: Имя пользователя
+          description: Обязательное поле. Не более 150 символов. Только буквы, цифры
+            и символы @/./+/-/_.
+          pattern: ^[\w.@+-]+$
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          minLength: 1
+          maxLength: 254
+        password:
+          type: string
+          writeOnly: true
+          minLength: 1
+        password2:
+          type: string
+          writeOnly: true
+          minLength: 1
+        first_name:
+          type: string
+          title: Имя
+          maxLength: 150
+        phone:
+          type: string
+          minLength: 1
+        company_name:
+          type: string
+          maxLength: 255
+        role:
+          enum:
+          - LOGISTIC
+          - CUSTOMER
+          - CARRIER
+          type: string
+          description: |-
+            * `LOGISTIC` - Логист
+            * `CUSTOMER` - Заказчик
+            * `CARRIER` - Перевозчик
+          x-spec-enum-id: f8c39d86e82f4ceb
+        country:
+          type: string
+        country_code:
+          type: string
+          maxLength: 2
+        region:
+          type: string
+        city:
+          type: string
+      required:
+      - email
+      - password
+      - password2
+      - phone
+      - username
+    RegisterResponse:
+      type: object
+      properties:
+        detail:
+          type: string
+      required:
+      - detail
+    ResendVerifyRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 1
+      required:
+      - email
+    ResendVerifyResponse:
+      type: object
+      properties:
+        detail:
+          type: string
+      required:
+      - detail
+    ResetPasswordRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 1
+        code:
+          type: string
+          minLength: 1
+          maxLength: 6
+        new_password:
+          type: string
+          minLength: 1
+      required:
+      - code
+      - email
+      - new_password
+    ResetPasswordResponse:
+      type: object
+      properties:
+        detail:
+          type: string
+      required:
+      - detail
+    RoleChangeRequest:
+      type: object
+      properties:
+        role:
+          enum:
+          - LOGISTIC
+          - CUSTOMER
+          - CARRIER
+          type: string
+          description: |-
+            * `LOGISTIC` - Логист
+            * `CUSTOMER` - Заказчик
+            * `CARRIER` - Перевозчик
+          x-spec-enum-id: f8c39d86e82f4ceb
+      required:
+      - role
+    RoleChangeResponse:
+      type: object
+      properties:
+        detail:
+          type: string
+        role:
+          type: string
+      required:
+      - detail
+    SendPhoneOTPRequest:
+      type: object
+      properties:
+        phone:
+          type: string
+          minLength: 1
+        purpose:
+          enum:
+          - verify
+          - reset
+          type: string
+          description: |-
+            * `verify` - verify
+            * `reset` - reset
+          x-spec-enum-id: f10c34aa2ec09134
+          default: verify
+      required:
+      - phone
+    SendPhoneOTPResponse:
+      type: object
+      properties:
+        detail:
+          type: string
+        seconds_left:
+          type: integer
+      required:
+      - detail
+      - seconds_left
+    TokenRefreshRequestRequest:
+      type: object
+      properties:
+        refresh:
+          type: string
+          minLength: 1
+        remember_me:
+          type: boolean
+      required:
+      - refresh
+    TokenRefreshResponse:
+      type: object
+      properties:
+        access:
+          type: string
+        refresh:
+          type: string
+      required:
+      - access
+      - refresh
+    UpdateMeRequest:
+      type: object
+      properties:
+        first_name:
+          type: string
+          title: Имя
+          maxLength: 150
+        phone:
+          type: string
+          nullable: true
+          maxLength: 20
+        company_name:
+          type: string
+          maxLength: 255
+        photo:
+          type: string
+          format: binary
+          nullable: true
+        profile:
+          $ref: '#/components/schemas/ProfileRequest'
+    VerifyEmailRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 1
+        code:
+          type: string
+          minLength: 1
+          maxLength: 6
+      required:
+      - code
+      - email
+    VerifyEmailResponse:
+      type: object
+      properties:
+        detail:
+          type: string
+        access:
+          type: string
+        refresh:
+          type: string
+      required:
+      - access
+      - detail
+      - refresh
+    VerifyPhoneOTPRequest:
+      type: object
+      properties:
+        phone:
+          type: string
+          minLength: 1
+        code:
+          type: string
+          minLength: 1
+          maxLength: 6
+        purpose:
+          enum:
+          - verify
+          - reset
+          type: string
+          description: |-
+            * `verify` - verify
+            * `reset` - reset
+          x-spec-enum-id: f10c34aa2ec09134
+          default: verify
+      required:
+      - code
+      - phone
+    VerifyPhoneOTPResponse:
+      type: object
+      properties:
+        verified:
+          type: boolean
+      required:
+      - verified
+  securitySchemes:
+    jwtAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

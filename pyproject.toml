@@ -1,0 +1,67 @@
+[tool.poetry]
+name = "workxplorer"
+version = "0.1.0"
+description = "MVP биржи грузоперевозок (backend)"
+authors = ["Alexandr Chatyev <alex.tawila@gmail.com>"]
+readme = "README.md"
+packages = [{ include = "workxplorer_backend" }]
+
+[tool.poetry.dependencies]
+python = ">=3.11,<3.13"
+Django = "^4.2"
+djangorestframework = "^3.14"
+drf-spectacular = "^0.27.0"
+django-environ = "^0.11.2"
+django-cors-headers = "^4.3.1"
+django-filter = "^24.2"
+django-redis = "^5.4.0"
+psycopg = { version = "^3.1.18", extras = ["binary"] }
+gunicorn = "^21.2.0"
+celery = "^5.4.0"
+redis = "^5.0.7"
+djangorestframework-simplejwt = "^5.5.1"
+pillow = "^11.3.0"
+python-dotenv = "^1.1.1"
+whitenoise = "^6.9.0"
+requests = "^2.32.5"
+dj-database-url = "^3.0.1"
+
+[tool.poetry.group.dev.dependencies]
+black = "^24.3.0"
+isort = "^5.13.2"
+ruff = "^0.5.0"
+mypy = "^1.10.0"
+pytest = "^8.2.0"
+pytest-django = "^4.9.0"
+factory-boy = "^3.3.0"
+faker = "^26.0.0"
+
+[tool.poetry.scripts]
+manage = "django.core.management:execute_from_command_line"
+
+[tool.black]
+line-length = 100
+target-version = ["py312"]
+
+[tool.isort]
+profile = "black"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+extend-ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"**/core/settings/*.py" = ["F403", "F405"]
+"**/migrations/*.py" = ["I001", "E501"]
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "core.settings.dev"
+pythonpath = ["workxplorer_backend"]

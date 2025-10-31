@@ -4,7 +4,7 @@ from datetime import timedelta
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.db import models
-from django.db.models import UniqueConstraint
+from django.db.models import UniqueConstraint, Avg, Q
 from django.db.models.functions import Lower
 from django.utils import timezone
 
@@ -49,6 +49,7 @@ class User(AbstractUser):
     def __str__(self):
         return self.username or self.email or f"User#{self.pk}"
 
+    # --- Вспомогательные проверки роли ---
     @property
     def is_logistic(self) -> bool:
         return self.role == UserRole.LOGISTIC
@@ -60,6 +61,26 @@ class User(AbstractUser):
     @property
     def is_carrier(self) -> bool:
         return self.role == UserRole.CARRIER
+
+    # --- Новые вычисляемые поля рейтингов и заказов ---
+    @property
+    def avg_rating(self):
+        """Средний рейтинг пользователя (по всем оценкам, где он был оцениваемым)."""
+        from api.ratings.models import UserRating
+        avg = UserRating.objects.filter(rated_user=self).aggregate(avg=Avg("score"))["avg"]
+        return round(avg or 0, 1)
+
+    @property
+    def rating_count(self):
+        """Количество полученных отзывов/оценок."""
+        from api.ratings.models import UserRating
+        return UserRating.objects.filter(rated_user=self).count()
+
+    @property
+    def completed_orders(self):
+        """Количество завершённых заказов для перевозчика."""
+        from api.orders.models import Order
+        return Order.objects.filter(carrier=self, status="delivered").count()
 
 
 class EmailOTP(models.Model):
@@ -110,9 +131,7 @@ class EmailOTP(models.Model):
 
 
 class PhoneOTP(models.Model):
-    """
-    OTP по телефону (для WhatsApp/SMS). Используется для подтверждения номера и сброса пароля.
-    """
+    """OTP по телефону (для WhatsApp/SMS)."""
 
     PURPOSE_VERIFY = "verify"
     PURPOSE_RESET = "reset"
@@ -137,10 +156,6 @@ class PhoneOTP(models.Model):
 
     @staticmethod
     def create_otp(phone: str, purpose: str, ttl_min: int = 5):
-        """
-        Создаёт запись и возвращает (obj, raw_code).
-        По умолчанию код живёт 5 минут (меняется настройкой в serializer через settings.OTP_TTL_SECONDS при необходимости).
-        """
         raw = f"{secrets.randbelow(10**6):06d}"
         obj = PhoneOTP.objects.create(
             phone=phone,
@@ -151,10 +166,6 @@ class PhoneOTP(models.Model):
         return obj, raw
 
     def check_and_consume(self, raw_code: str) -> bool:
-        """
-        Проверяет код и помечает как использованный при успехе.
-        Уменьшает attempts_left при неуспехе.
-        """
         if self.is_used or self.expires_at < timezone.now() or self.attempts_left == 0:
             return False
         ok = self.code == raw_code

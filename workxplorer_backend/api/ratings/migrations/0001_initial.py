@@ -7,32 +7,73 @@ import django.db.models.deletion
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = [
-        ('orders', '0002_alter_order_options_alter_orderdocument_options_and_more'),
+        ("orders", "0002_alter_order_options_alter_orderdocument_options_and_more"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='UserRating',
+            name="UserRating",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('score', models.PositiveSmallIntegerField(validators=[django.core.validators.MinValueValidator(1), django.core.validators.MaxValueValidator(5)], verbose_name='Оценка (1–5)')),
-                ('comment', models.TextField(blank=True, null=True, verbose_name='Комментарий')),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('order', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='ratings', to='orders.order', verbose_name='Заказ, в рамках которого выставлена оценка')),
-                ('rated_by', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='ratings_given', to=settings.AUTH_USER_MODEL, verbose_name='Кто поставил оценку')),
-                ('rated_user', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='ratings_received', to=settings.AUTH_USER_MODEL, verbose_name='Оцениваемый пользователь')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                    ),
+                ),
+                (
+                    "score",
+                    models.PositiveSmallIntegerField(
+                        validators=[
+                            django.core.validators.MinValueValidator(1),
+                            django.core.validators.MaxValueValidator(5),
+                        ],
+                        verbose_name="Оценка (1–5)",
+                    ),
+                ),
+                ("comment", models.TextField(blank=True, null=True, verbose_name="Комментарий")),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "order",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="ratings",
+                        to="orders.order",
+                        verbose_name="Заказ, в рамках которого выставлена оценка",
+                    ),
+                ),
+                (
+                    "rated_by",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="ratings_given",
+                        to=settings.AUTH_USER_MODEL,
+                        verbose_name="Кто поставил оценку",
+                    ),
+                ),
+                (
+                    "rated_user",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="ratings_received",
+                        to=settings.AUTH_USER_MODEL,
+                        verbose_name="Оцениваемый пользователь",
+                    ),
+                ),
             ],
             options={
-                'verbose_name': 'Оценка пользователя',
-                'verbose_name_plural': 'Оценки пользователей',
-                'ordering': ['-created_at'],
-                'indexes': [models.Index(fields=['rated_user'], name='ratings_use_rated_u_9647e9_idx'), models.Index(fields=['rated_by'], name='ratings_use_rated_b_ba5fcd_idx'), models.Index(fields=['order'], name='ratings_use_order_i_3e401a_idx')],
-                'unique_together': {('rated_user', 'order')},
+                "verbose_name": "Оценка пользователя",
+                "verbose_name_plural": "Оценки пользователей",
+                "ordering": ["-created_at"],
+                "indexes": [
+                    models.Index(fields=["rated_user"], name="ratings_use_rated_u_9647e9_idx"),
+                    models.Index(fields=["rated_by"], name="ratings_use_rated_b_ba5fcd_idx"),
+                    models.Index(fields=["order"], name="ratings_use_order_i_3e401a_idx"),
+                ],
+                "unique_together": {("rated_user", "order")},
             },
         ),
     ]

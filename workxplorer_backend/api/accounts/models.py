@@ -67,6 +67,7 @@ class User(AbstractUser):
     def avg_rating(self):
         """Средний рейтинг пользователя (по всем оценкам, где он был оцениваемым)."""
         from api.ratings.models import UserRating
+
         avg = UserRating.objects.filter(rated_user=self).aggregate(avg=Avg("score"))["avg"]
         return round(avg or 0, 1)
 
@@ -74,12 +75,14 @@ class User(AbstractUser):
     def rating_count(self):
         """Количество полученных отзывов/оценок."""
         from api.ratings.models import UserRating
+
         return UserRating.objects.filter(rated_user=self).count()
 
     @property
     def completed_orders(self):
         """Количество завершённых заказов для перевозчика."""
         from api.orders.models import Order
+
         return Order.objects.filter(carrier=self, status="delivered").count()
 
 

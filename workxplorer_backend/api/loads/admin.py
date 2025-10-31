@@ -110,7 +110,11 @@ class CargoAdmin(admin.ModelAdmin):
     def price_uzs_display(self, obj):
         """Показывает цену в сумах с форматированием и подсветкой валюты."""
         if obj.price_uzs:
-            return format_html("<b>{:,.0f}</b> сум", obj.price_uzs)
+            try:
+                value = float(obj.price_uzs)
+                return format_html("<b>{:,.0f}</b> сум", value)
+            except (ValueError, TypeError):
+                return format_html("<b>{}</b> сум", obj.price_uzs)
         return "-"
 
     price_uzs_display.short_description = "Цена (UZS)"

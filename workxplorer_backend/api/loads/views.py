@@ -2,7 +2,7 @@ from django.contrib.gis.db.models.functions import Distance
 from django.contrib.gis.geos import Point
 from django.contrib.gis.measure import D
 from django.core.exceptions import ValidationError
-from django.db.models import Count, DecimalField, ExpressionWrapper, F, FloatField, Q, Func
+from django.db.models import Count, DecimalField, ExpressionWrapper, F, FloatField, Func, Q
 from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404
 from django.utils import timezone

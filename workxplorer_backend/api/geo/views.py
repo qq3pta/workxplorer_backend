@@ -1,5 +1,5 @@
-from django.conf import settings
 import requests
+from django.conf import settings
 from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response

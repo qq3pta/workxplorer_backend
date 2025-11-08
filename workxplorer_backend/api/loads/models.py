@@ -4,7 +4,7 @@ from decimal import Decimal
 from django.conf import settings
 from django.contrib.gis.db import models as gis_models
 from django.core.exceptions import ValidationError
-from django.core.validators import MinValueValidator, MaxValueValidator
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db.models.manager import Manager as DjangoManager
 from django.utils import timezone
@@ -150,7 +150,9 @@ class Cargo(models.Model):
 
     def clean(self):
         if self.delivery_date and self.load_date and self.delivery_date < self.load_date:
-            raise ValidationError({"delivery_date": "Дата доставки не может быть раньше даты загрузки."})
+            raise ValidationError(
+                {"delivery_date": "Дата доставки не может быть раньше даты загрузки."}
+            )
 
         if self.axles is not None and not (3 <= self.axles <= 10):
             raise ValidationError({"axles": "Оси должны быть в диапазоне 3–10."})

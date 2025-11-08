@@ -27,6 +27,7 @@ from .serializers import (
 
 class EmptySerializer(serializers.Serializer):
     """Пустое тело запроса (для POST без body)."""
+
     pass
 
 
@@ -114,10 +115,14 @@ def _apply_common_filters(qs, params):
 
     # --- сортировка ---
     allowed = {
-        "created_at", "-created_at",
-        "price_value", "-price_value",
-        "cargo__load_date", "-cargo__load_date",
-        "cargo__delivery_date", "-cargo__delivery_date",
+        "created_at",
+        "-created_at",
+        "price_value",
+        "-price_value",
+        "cargo__load_date",
+        "-cargo__load_date",
+        "cargo__delivery_date",
+        "-cargo__delivery_date",
     }
     order = p.get("order")
     if order in allowed:
@@ -145,15 +150,23 @@ def _apply_common_filters(qs, params):
             "origin_city, destination_city, company|q, customer_email/phone, carrier_email/phone, order"
         ),
         parameters=[
-            OpenApiParameter("scope", required=False, type=str, description="mine | incoming | all"),
+            OpenApiParameter(
+                "scope", required=False, type=str, description="mine | incoming | all"
+            ),
             OpenApiParameter("cargo_id", required=False, type=str),
             OpenApiParameter("cargo_uuid", required=False, type=str),
             OpenApiParameter("carrier_id", required=False, type=str),
             OpenApiParameter("customer_id", required=False, type=str),
-            OpenApiParameter("initiator", required=False, type=str, description="CUSTOMER | CARRIER"),
+            OpenApiParameter(
+                "initiator", required=False, type=str, description="CUSTOMER | CARRIER"
+            ),
             OpenApiParameter("is_active", required=False, type=str, description="true|false"),
-            OpenApiParameter("accepted_by_customer", required=False, type=str, description="true|false"),
-            OpenApiParameter("accepted_by_carrier", required=False, type=str, description="true|false"),
+            OpenApiParameter(
+                "accepted_by_customer", required=False, type=str, description="true|false"
+            ),
+            OpenApiParameter(
+                "accepted_by_carrier", required=False, type=str, description="true|false"
+            ),
             OpenApiParameter("created_from", required=False, type=str),
             OpenApiParameter("created_to", required=False, type=str),
             OpenApiParameter("load_date_from", required=False, type=str),
@@ -296,9 +309,7 @@ class OfferViewSet(ModelViewSet):
     def incoming(self, request):
         u = request.user
         if getattr(u, "is_carrier", False) or getattr(u, "role", None) == "CARRIER":
-            qs = self.get_queryset().filter(
-                carrier=u, initiator=Offer.Initiator.CUSTOMER
-            )
+            qs = self.get_queryset().filter(carrier=u, initiator=Offer.Initiator.CUSTOMER)
         else:
             qs = self.get_queryset().filter(cargo__customer=u)
         qs = _apply_common_filters(qs, request.query_params)

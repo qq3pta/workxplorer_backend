@@ -11,6 +11,7 @@ class GeoDistance(Func):
     ST_Distance(a::geography, b::geography) -> расстояние в метрах.
     Работает нативно с PointField(geography=True).
     """
+
     function = "ST_Distance"
     output_field = FloatField()
 
@@ -91,21 +92,25 @@ class CargoAdmin(admin.ModelAdmin):
     def path_km_display(self, obj):
         m = getattr(obj, "path_m", None)
         return "-" if m is None else f"{m / 1000:.1f}"
+
     path_km_display.short_description = "Путь (км, прямая)"
     path_km_display.admin_order_field = "path_m"
 
     def route_km_cached_display(self, obj):
         v = getattr(obj, "route_km_cached", None)
         return "-" if v is None else f"{float(v):.1f}"
+
     route_km_cached_display.short_description = "Маршрут (км, кэш)"
 
     def route_duration_min_cached_display(self, obj):
         v = getattr(obj, "route_duration_min_cached", None)
         return "-" if v is None else f"{float(v):.0f} мин"
+
     route_duration_min_cached_display.short_description = "Время (мин, кэш)"
 
     def age_minutes_display(self, obj):
         return f"{obj.age_minutes} мин назад"
+
     age_minutes_display.short_description = "Опубликовано"
     age_minutes_display.admin_order_field = "refreshed_at"
 
@@ -118,6 +123,7 @@ class CargoAdmin(admin.ModelAdmin):
             except (ValueError, TypeError):
                 return format_html("<b>{}</b> сум", obj.price_uzs)
         return "-"
+
     price_uzs_display.short_description = "Цена (UZS)"
     price_uzs_display.admin_order_field = "price_uzs"
 
@@ -128,6 +134,7 @@ class CargoAdmin(admin.ModelAdmin):
             return f"{float(obj.weight_kg) / 1000:.3f}"
         except Exception:
             return "-"
+
     weight_t_display.short_description = "Вес (т)"
 
     # --------- экшны ----------
@@ -145,6 +152,7 @@ class CargoAdmin(admin.ModelAdmin):
             messages.success(request, f"✅ Пересчитано маршрутов: {ok}")
         if fail:
             messages.warning(request, f"⚠️ Ошибок: {fail}")
+
     recalculate_route_km.short_description = "Пересчитать маршрут (обновить кэш)"
 
     def recalculate_price_uzs(self, request, queryset):
@@ -160,4 +168,5 @@ class CargoAdmin(admin.ModelAdmin):
             messages.success(request, f"💰 Цены пересчитаны: {ok}")
         if fail:
             messages.warning(request, f"⚠️ Ошибок: {fail}")
+
     recalculate_price_uzs.short_description = "Пересчитать цену (UZS)"

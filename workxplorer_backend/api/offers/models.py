@@ -2,15 +2,14 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+from api.loads.choices import Currency
+from api.loads.models import Cargo, CargoStatus
 from django.apps import apps
 from django.conf import settings
 from django.core.exceptions import AppRegistryNotReady, PermissionDenied, ValidationError
 from django.core.validators import MinValueValidator
 from django.db import models, transaction
 from django.db.models import Q, UniqueConstraint
-
-from api.loads.choices import Currency
-from api.loads.models import Cargo, CargoStatus
 
 
 class Offer(models.Model):
@@ -75,7 +74,9 @@ class Offer(models.Model):
         ]
 
     def __str__(self) -> str:
-        return f"Offer#{self.pk} cargo={self.cargo_id} carrier={self.carrier_id} by={self.initiator}"
+        return (
+            f"Offer#{self.pk} cargo={self.cargo_id} carrier={self.carrier_id} by={self.initiator}"
+        )
 
     # ---------------- Бизнес-логика ----------------
 
@@ -172,7 +173,9 @@ class Offer(models.Model):
             defaults={
                 "customer_id": cargo.customer_id,
                 "carrier_id": self.carrier_id,
-                "currency": self.price_currency or getattr(cargo, "price_currency", None) or Currency.UZS,
+                "currency": self.price_currency
+                or getattr(cargo, "price_currency", None)
+                or Currency.UZS,
                 "price_total": self.price_value or Decimal("0"),
                 "route_distance_km": route_km,
             },

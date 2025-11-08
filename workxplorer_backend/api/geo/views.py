@@ -1,5 +1,4 @@
-import os
-
+from django.conf import settings
 import requests
 from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema
 from rest_framework.permissions import AllowAny
@@ -40,10 +39,23 @@ ISO_COUNTRIES = [
 ]
 
 ALLOWED_COUNTRY_CODES = {c["code"] for c in ISO_COUNTRIES}
+ALLOWED_PLACE_TYPES = {"city", "town", "village", "hamlet", "locality"}
 
 
 class SuggestThrottle(AnonRateThrottle):
     rate = "60/min"
+
+
+def _lang_pref(lang: str) -> str:
+    """
+    Accept-Language цепочка предпочтений.
+    """
+    lang = (lang or "ru").lower()
+    if lang.startswith("uz"):
+        return "uz,uz-Latn,ru,en"
+    if lang.startswith("en"):
+        return "en,ru,uz,uz-Latn"
+    return "ru,uz,uz-Latn,en"  # default
 
 
 class CountrySuggestView(APIView):
@@ -81,7 +93,7 @@ class CountrySuggestView(APIView):
             limit = int(request.query_params.get("limit") or 10)
         except ValueError:
             limit = 10
-        limit = max(1, min(50, limit))  # clamp
+        limit = max(1, min(50, limit))
 
         if not q:
             data = ISO_COUNTRIES[:limit]
@@ -95,6 +107,7 @@ class CountrySuggestView(APIView):
 class CitySuggestView(APIView):
     """
     Подсказки по городам через Nominatim (OpenStreetMap), ограниченные списком ALLOWED_COUNTRY_CODES.
+    Возвращает ТОЛЬКО населённые пункты (без улиц/площадей), локализованные под язык.
     """
 
     permission_classes = [AllowAny]
@@ -119,6 +132,13 @@ class CitySuggestView(APIView):
                 location=OpenApiParameter.QUERY,
             ),
             OpenApiParameter(
+                name="lang",
+                description="Язык результата: ru | uz | en (по умолчанию ru)",
+                required=False,
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+            ),
+            OpenApiParameter(
                 name="limit",
                 description="Максимум результатов (1..50, по умолчанию 10)",
                 required=False,
@@ -132,53 +152,88 @@ class CitySuggestView(APIView):
     def get(self, request):
         q = (request.query_params.get("q") or "").strip()
         country = (request.query_params.get("country") or "").upper().strip()
+        lang = (request.query_params.get("lang") or "ru").strip()
         try:
             limit = int(request.query_params.get("limit") or 10)
         except ValueError:
             limit = 10
-        limit = max(1, min(50, limit))  # clamp
+        limit = max(1, min(50, limit))
 
         if len(q) < 2:
             return Response({"results": []})
-
         if country and country not in ALLOWED_COUNTRY_CODES:
             return Response({"results": []})
 
         try:
-            params = {"q": q, "format": "json", "addressdetails": 1, "limit": limit}
-            params["countrycodes"] = (
-                country.lower()
-                if country
-                else ",".join(code.lower() for code in ALLOWED_COUNTRY_CODES)
-            )
+            params = {
+                "q": q,
+                "format": "json",
+                "addressdetails": 1,
+                "namedetails": 1,  # чтобы взять «чистое» имя
+                "limit": limit,
+                "countrycodes": (
+                    country.lower()
+                    if country
+                    else ",".join(code.lower() for code in ALLOWED_COUNTRY_CODES)
+                ),
+            }
 
-            ua = os.getenv("GEO_NOMINATIM_USER_AGENT", "workxplorer/geo-suggest")
+            ua = getattr(settings, "GEO_NOMINATIM_USER_AGENT", "workxplorer/geo-suggest")
+            headers = {
+                "User-Agent": ua,
+                "Accept-Language": _lang_pref(lang),
+            }
+
             r = requests.get(
                 "https://nominatim.openstreetmap.org/search",
                 params=params,
-                headers={"User-Agent": ua},
+                headers=headers,
                 timeout=8,
             )
             r.raise_for_status()
 
-            out = []
-            for item in r.json():
-                addr = item.get("address") or {}
-                name = (item.get("display_name") or "").split(",")[0].strip()
-                code = (addr.get("country_code") or "").upper()
-                country_name = addr.get("country") or code
-                if not name or not code or code not in ALLOWED_COUNTRY_CODES:
+            data = r.json()
+            if not isinstance(data, list):
+                data = []
+
+            out, seen = [], set()
+            for item in data:
+                # только населённые пункты
+                if item.get("class") != "place" or item.get("type") not in ALLOWED_PLACE_TYPES:
                     continue
-                out.append({"name": name, "country": country_name, "country_code": code})
-            seen = set()
-            uniq = []
-            for x in out:
-                key = (x["name"], x["country_code"])
+
+                addr = item.get("address") or {}
+                cc = (addr.get("country_code") or "").upper()
+                if not cc or cc not in ALLOWED_COUNTRY_CODES:
+                    continue
+
+                nd = item.get("namedetails") or {}
+                main_lang = lang.split(",")[0]
+                candidates = [
+                    nd.get(f"name:{main_lang}"),
+                    nd.get("name:ru"),
+                    nd.get("name:uz"),
+                    nd.get("name:uz-Latn"),
+                    nd.get("name:en"),
+                    nd.get("name"),
+                ]
+                name = next((v for v in candidates if v), None) or (
+                    (item.get("display_name") or "").split(",")[0].strip()
+                )
+                if not name:
+                    continue
+
+                country_label = addr.get("country") or cc
+
+                key = (name, cc)
                 if key in seen:
                     continue
                 seen.add(key)
-                uniq.append(x)
 
-            return Response({"results": uniq[:limit]})
+                out.append({"name": name, "country": country_label, "country_code": cc})
+                if len(out) >= limit:
+                    break
+
+            return Response({"results": out})
         except Exception:
             return Response({"results": []})

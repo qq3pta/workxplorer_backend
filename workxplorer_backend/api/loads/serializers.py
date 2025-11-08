@@ -52,6 +52,7 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
     price_uzs = serializers.DecimalField(
         max_digits=14, decimal_places=2, read_only=True, required=False
     )
+    weight_tons = serializers.FloatField(required=False, write_only=True, min_value=0.001)
 
     class Meta:
         model = Cargo
@@ -69,6 +70,9 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
             "delivery_date",
             "transport_type",
             "weight_kg",
+            "weight_tons",
+            "axles",
+            "volume_m3",
             "price_value",
             "price_currency",
             "price_uzs",
@@ -134,14 +138,22 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
             "destination_address",
             "load_date",
             "transport_type",
-            "weight_kg",
             "contact_pref",
         ]
+
+        wt = attrs.get("weight_tons")
+        if wt is not None:
+            attrs["weight_kg"] = Decimal(str(wt)) * Decimal("1000")
+
         if self.instance is None:
             missing = [f for f in required if attrs.get(f) in (None, "", [])]
             if missing:
                 raise serializers.ValidationError(
                     {f: "Обязательное поле по ТЗ 2.6.13" for f in missing}
+                )
+            if attrs.get("weight_kg") in (None, ""):
+                raise serializers.ValidationError(
+                    {"weight_kg": "Укажите вес (в кг) или weight_tons (в тоннах)."}
                 )
 
         ld = self._val_or_instance(attrs, "load_date")
@@ -156,14 +168,35 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
                 {"delivery_date": "Дата доставки не может быть раньше даты загрузки."}
             )
 
+        wk = attrs.get("weight_kg", self._val_or_instance(attrs, "weight_kg"))
+        if wk is not None and Decimal(str(wk)) <= 0:
+            raise serializers.ValidationError({"weight_kg": "Вес должен быть больше нуля."})
+
         price = self._val_or_instance(attrs, "price_value")
         if price is not None and price < 0:
             raise serializers.ValidationError({"price_value": "Цена не может быть отрицательной."})
+
+        ax = attrs.get("axles", self._val_or_instance(attrs, "axles"))
+        if ax is not None and not (3 <= int(ax) <= 10):
+            raise serializers.ValidationError({"axles": "Оси должны быть в диапазоне 3–10."})
+
+        vol = attrs.get("volume_m3", self._val_or_instance(attrs, "volume_m3"))
+        if vol is not None:
+            try:
+                if Decimal(str(vol)) <= 0:
+                    raise serializers.ValidationError({"volume_m3": "Объём должен быть больше нуля."})
+            except Exception:
+                raise serializers.ValidationError({"volume_m3": "Некорректное значение объёма."})
 
         return attrs
 
     def create(self, validated_data: dict[str, Any]) -> Cargo:
         user = self.context["request"].user
+
+        wt = validated_data.pop("weight_tons", None)
+        if wt is not None and "weight_kg" not in validated_data:
+            validated_data["weight_kg"] = Decimal(str(wt)) * Decimal("1000")
+
         origin_point = self._geocode_origin(validated_data)
         dest_point = self._geocode_dest(validated_data)
 
@@ -183,6 +216,10 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
         return cargo
 
     def update(self, instance: Cargo, validated_data: dict[str, Any]) -> Cargo:
+        wt = validated_data.pop("weight_tons", None)
+        if wt is not None:
+            validated_data["weight_kg"] = Decimal(str(wt)) * Decimal("1000")
+
         need_origin, need_dest = self._need_regeocode(validated_data)
         if need_origin:
             instance.origin_point = self._geocode_origin(validated_data)
@@ -202,7 +239,6 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
         return instance
 
 
-# ---------- Листинг ----------
 class CargoListSerializer(RouteKmMixin, serializers.ModelSerializer):
     price_uzs = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
     uuid = serializers.UUIDField(read_only=True)
@@ -210,6 +246,7 @@ class CargoListSerializer(RouteKmMixin, serializers.ModelSerializer):
     path_km = serializers.FloatField(read_only=True, required=False)
     origin_dist_km = serializers.FloatField(read_only=True, required=False)
     has_offers = serializers.SerializerMethodField()
+    offers_count = serializers.SerializerMethodField()
     company_name = serializers.SerializerMethodField()
     contact_value = serializers.SerializerMethodField()
     weight_t = serializers.SerializerMethodField()
@@ -232,6 +269,8 @@ class CargoListSerializer(RouteKmMixin, serializers.ModelSerializer):
             "transport_type",
             "weight_kg",
             "weight_t",
+            "axles",
+            "volume_m3",
             "price_value",
             "price_currency",
             "price_uzs",
@@ -245,6 +284,7 @@ class CargoListSerializer(RouteKmMixin, serializers.ModelSerializer):
             "created_at",
             "refreshed_at",
             "has_offers",
+            "offers_count",
             "path_km",
             "route_km",
             "price_per_km",
@@ -259,6 +299,11 @@ class CargoListSerializer(RouteKmMixin, serializers.ModelSerializer):
             if offers_active is not None
             else obj.offers.filter(is_active=True).exists()
         )
+
+    @extend_schema_field(int)
+    def get_offers_count(self, obj):
+        oa = getattr(obj, "offers_active", None)
+        return int(oa or 0) if oa is not None else obj.offers.filter(is_active=True).count()
 
     def get_company_name(self, obj: Cargo) -> str:
         u = getattr(obj, "customer", None)

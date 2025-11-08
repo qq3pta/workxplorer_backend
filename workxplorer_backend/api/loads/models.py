@@ -1,8 +1,10 @@
 import uuid
+from decimal import Decimal
 
 from django.conf import settings
 from django.contrib.gis.db import models as gis_models
 from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator, MaxValueValidator
 from django.db import models
 from django.db.models.manager import Manager as DjangoManager
 from django.utils import timezone
@@ -20,31 +22,64 @@ class CargoStatus(models.TextChoices):
 
 class Cargo(models.Model):
     uuid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+
     customer = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="cargos",
         verbose_name="Заказчик",
     )
+
+    # Основное
     product = models.CharField("Название груза", max_length=120)
     description = models.TextField("Описание", blank=True)
+
+    # Маршрут
     origin_country = models.CharField(max_length=100, default="", blank=True)
     origin_address = models.CharField(max_length=255)
     origin_city = models.CharField(max_length=100)
+
     destination_country = models.CharField(max_length=100, default="", blank=True)
     destination_address = models.CharField(max_length=255)
     destination_city = models.CharField(max_length=100)
+
     origin_point = gis_models.PointField(geography=True, srid=4326, null=True, blank=True)
     dest_point = gis_models.PointField(geography=True, srid=4326, null=True, blank=True)
+
     load_date = models.DateField("Дата загрузки")
     delivery_date = models.DateField("Дата доставки", null=True, blank=True)
+
+    # Транспорт / габариты
     transport_type = models.CharField(max_length=10, choices=TransportType.choices)
+
+    # вес храним в кг (Decimal)
     weight_kg = models.DecimalField(max_digits=12, decimal_places=2)
+
+    # количество осей (3–10)
+    axles = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(3), MaxValueValidator(10)],
+        help_text="Количество осей (3–10)",
+    )
+
+    # объём кузова/груза, м³
+    volume_m3 = models.DecimalField(
+        max_digits=7,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Объём, м³",
+    )
+
+    # Цена
     price_value = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
     price_currency = models.CharField(max_length=3, choices=Currency.choices, default=Currency.UZS)
     price_uzs = models.DecimalField(
         max_digits=14, decimal_places=2, null=True, blank=True, verbose_name="Цена в сумах"
     )
+
+    # Контакты / модерация / статус
     contact_pref = models.CharField(max_length=10, choices=ContactPref.choices)
     is_hidden = models.BooleanField(default=False)
     moderation_status = models.CharField(
@@ -57,6 +92,8 @@ class Cargo(models.Model):
         max_length=20, choices=CargoStatus.choices, default=CargoStatus.POSTED
     )
     created_at = models.DateTimeField(auto_now_add=True)
+
+    # Назначения
     assigned_carrier = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -73,6 +110,8 @@ class Cargo(models.Model):
         related_name="chosen_for",
         verbose_name="Выбранное предложение",
     )
+
+    # Кэш маршрута
     route_km_cached = models.FloatField(null=True, blank=True)
     route_duration_min_cached = models.FloatField(null=True, blank=True)
 
@@ -88,16 +127,35 @@ class Cargo(models.Model):
             models.Index(fields=["refreshed_at"]),
             models.Index(fields=["price_value"]),
             models.Index(fields=["price_currency"]),
+            models.Index(fields=["axles"]),
+            models.Index(fields=["volume_m3"]),
         ]
 
     def __str__(self):
         return f"{self.product} ({self.origin_city} → {self.destination_city})"
 
+    @property
+    def weight_tons(self):
+        try:
+            return (Decimal(self.weight_kg) / Decimal("1000")).quantize(Decimal("0.0001"))
+        except Exception:
+            return None
+
+    @weight_tons.setter
+    def weight_tons(self, value):
+        if value is None:
+            self.weight_kg = None
+        else:
+            self.weight_kg = (Decimal(str(value)) * Decimal("1000")).quantize(Decimal("0.01"))
+
     def clean(self):
         if self.delivery_date and self.load_date and self.delivery_date < self.load_date:
-            raise ValidationError(
-                {"delivery_date": "Дата доставки не может быть раньше даты загрузки."}
-            )
+            raise ValidationError({"delivery_date": "Дата доставки не может быть раньше даты загрузки."})
+
+        if self.axles is not None and not (3 <= self.axles <= 10):
+            raise ValidationError({"axles": "Оси должны быть в диапазоне 3–10."})
+        if self.volume_m3 is not None and self.volume_m3 <= 0:
+            raise ValidationError({"volume_m3": "Объём должен быть больше нуля."})
 
     @property
     def age_minutes(self) -> int:
@@ -133,7 +191,7 @@ class Cargo(models.Model):
         return None
 
     def update_price_uzs(self):
-        """Конвертирует цену в сумах при создании груза."""
+        """Конвертирует цену в сумах при создании/обновлении груза."""
         try:
             from common.utils import convert_to_uzs
 

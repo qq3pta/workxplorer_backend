@@ -40,8 +40,7 @@ class DistanceGeography(ExpressionWrapper):
 
 
 class ExtractMinutes(Func):
-    """Совместимо с Django 4.2: считает EXTRACT(EPOCH FROM (NOW() - created_at)) / 60.0"""
-
+    """Django 4.2-совместимо: EXTRACT(EPOCH FROM (NOW() - field)) / 60.0"""
     template = "EXTRACT(EPOCH FROM (NOW() - %(expressions)s)) / 60.0"
     output_field = FloatField()
 
@@ -96,7 +95,7 @@ class CargoDetailView(generics.RetrieveUpdateAPIView):
         obj = serializer.save()
         obj.refreshed_at = timezone.now()
         obj.update_price_uzs()
-        obj.save(update_fields=["refreshed_at", "price_uzs"])
+        obj.save(update_fields=["refreshed_at", "price_uzс"])
 
 
 # ------------------ Обновление заявки ------------------
@@ -106,11 +105,11 @@ class CargoRefreshView(generics.GenericAPIView):
     serializer_class = RefreshResponseSerializer
     queryset = Cargo.objects.all()
 
-    def post(self, request, pk: int):
+    def post(self, request, uuid: str):
         if _swagger(self):
             return Response({"detail": "schema"}, status=status.HTTP_200_OK)
 
-        obj = get_object_or_404(Cargo, pk=pk, customer=request.user)
+        obj = get_object_or_404(Cargo, uuid=uuid, customer=request.user)
         try:
             obj.bump()
         except ValidationError as e:
@@ -128,15 +127,115 @@ class MyCargosView(generics.ListAPIView):
     def get_queryset(self):
         if _swagger(self):
             return Cargo.objects.none()
-        qs = Cargo.objects.filter(customer=self.request.user).annotate(
-            offers_active=Count("offers", filter=Q(offers__is_active=True)),
-            path_m=Distance(F("origin_point"), F("dest_point")),
-        )
-        return (
-            qs.annotate(path_km=F("path_m") / 1000.0)
+
+        qs = (
+            Cargo.objects.filter(customer=self.request.user)
+            .annotate(
+                offers_active=Count("offers", filter=Q(offers__is_active=True)),
+                path_m=Distance(F("origin_point"), F("dest_point")),
+            )
+            .annotate(
+                path_km=F("path_m") / 1000.0,
+                price_uzs_anno=Coalesce(
+                    F("price_uzs"),
+                    F("price_value"),
+                    output_field=DecimalField(max_digits=14, decimal_places=2),
+                ),
+            )
             .select_related("customer")
-            .order_by("-refreshed_at", "-created_at")
         )
+
+        p = self.request.query_params
+
+        # Базовые фильтры
+        if p.get("uuid"):
+            qs = qs.filter(uuid=p["uuid"])
+        if p.get("origin_city"):
+            qs = qs.filter(origin_city__iexact=p["origin_city"])
+        if p.get("destination_city"):
+            qs = qs.filter(destination_city__iexact=p["destination_city"])
+        if p.get("load_date"):
+            qs = qs.filter(load_date=p["load_date"])
+        if p.get("load_date_from"):
+            qs = qs.filter(load_date__gte=p["load_date_from"])
+        if p.get("load_date_to"):
+            qs = qs.filter(load_date__lte=p["load_date_to"])
+
+        # Симметрия с публичной: транспорт / вес / оси / объём / цена
+        if p.get("transport_type"):
+            qs = qs.filter(transport_type=p["transport_type"])
+        if p.get("min_weight"):
+            qs = qs.filter(weight_kg__gte=p["min_weight"])
+        if p.get("max_weight"):
+            qs = qs.filter(weight_kg__lte=p["max_weight"])
+        if p.get("axles_min"):
+            qs = qs.filter(axles__gte=p["axles_min"])
+        if p.get("axles_max"):
+            qs = qs.filter(axles__lte=p["axles_max"])
+        if p.get("volume_min"):
+            qs = qs.filter(volume_m3__gte=p["volume_min"])
+        if p.get("volume_max"):
+            qs = qs.filter(volume_m3__lte=p["volume_max"])
+        if p.get("min_price_uzs"):
+            qs = qs.filter(price_uzs_anno__gte=p["min_price_uzs"])
+        if p.get("max_price_узs"):
+            qs = qs.filter(price_uzs_anno__lte=p["max_price_uzs"])
+
+        # Радиусные фильтры (как на публичной)
+        o_lat, o_lng, o_r = p.get("origin_lat"), p.get("origin_lng"), p.get("origin_radius_km")
+        if o_lat and o_lng and o_r:
+            try:
+                origin_point = Point(float(o_lng), float(o_lat), srid=4326)
+                qs = qs.filter(origin_point__distance_lte=(origin_point, D(km=float(o_r))))
+                qs = qs.annotate(origin_dist_km=Distance("origin_point", origin_point) / 1000.0)
+            except (TypeError, ValueError):
+                pass
+
+        d_lat, d_lng, d_r = p.get("dest_lat"), p.get("dest_lng"), p.get("dest_radius_km")
+        if d_lat and d_lng and d_r:
+            try:
+                dest_point = Point(float(d_lng), float(d_lat), srid=4326)
+                qs = qs.filter(dest_point__distance_lte=(dest_point, D(km=float(d_r))))
+            except (TypeError, ValueError):
+                pass
+
+        # Поиск по компании/аккаунту
+        q = p.get("company") or p.get("q")
+        if q:
+            qs = qs.filter(
+                Q(customer__company_name__icontains=q)
+                | Q(customer__username__icontains=q)
+                | Q(customer__email__icontains=q)
+            )
+
+        # Фильтры по контактам владельца
+        if p.get("customer_email"):
+            qs = qs.filter(customer__email__iexact=p["customer_email"])
+        if p.get("customer_phone"):
+            qs = qs.filter(
+                Q(customer__phone__icontains=p["customer_phone"])
+                | Q(customer__phone_number__icontains=p["customer_phone"])
+            )
+
+        # Сортировки
+        allowed = {
+            "path_km",
+            "-path_km",
+            "origin_dist_km",
+            "-origin_dist_km",
+            "price_uzs_anno",
+            "-price_uzs_anno",
+            "load_date",
+            "-load_date",
+            "axles",
+            "-axles",
+            "volume_m3",
+            "-volume_m3",
+        }
+        order = p.get("order")
+        if order in allowed:
+            return qs.order_by(order)
+        return qs.order_by("-refreshed_at", "-created_at")
 
 
 # ------------------ Борда моих заявок ------------------
@@ -152,13 +251,6 @@ class MyCargosBoardView(MyCargosView):
                 moderation_status=ModerationStatus.APPROVED,
             )
         )
-        p = self.request.query_params
-        if p.get("uuid"):
-            qs = qs.filter(uuid=p["uuid"])
-        if p.get("origin_city"):
-            qs = qs.filter(origin_city__iexact=p["origin_city"])
-        if p.get("destination_city"):
-            qs = qs.filter(destination_city__iexact=p["destination_city"])
         return qs
 
 
@@ -178,14 +270,24 @@ class PublicLoadsView(generics.ListAPIView):
             )
             .annotate(
                 offers_active=Count("offers", filter=Q(offers__is_active=True)),
-                age_minutes_anno=ExtractMinutes(F("created_at")),
+                age_minutes_anno=ExtractMinutes(F("refreshed_at")),
+                path_m=Distance(F("origin_point"), F("dest_point")),
+            )
+            .annotate(
+                path_km=F("path_m") / 1000.0,
+                price_uzs_anno=Coalesce(
+                    F("price_uzs"),
+                    F("price_value"),
+                    output_field=DecimalField(max_digits=14, decimal_places=2),
+                ),
+                route_km_anno=Coalesce(F("route_km_cached"), F("path_km")),
             )
             .select_related("customer")
         )
 
         p = self.request.query_params
 
-        # --- Фильтры ---
+        # --- Базовые фильтры ---
         if p.get("uuid"):
             qs = qs.filter(uuid=p["uuid"])
         if p.get("origin_city"):
@@ -194,53 +296,102 @@ class PublicLoadsView(generics.ListAPIView):
             qs = qs.filter(destination_city__iexact=p["destination_city"])
         if p.get("load_date"):
             qs = qs.filter(load_date=p["load_date"])
+        if p.get("load_date_from"):
+            qs = qs.filter(load_date__gte=p["load_date_from"])
+        if p.get("load_date_to"):
+            qs = qs.filter(load_date__lte=p["load_date_to"])
         if p.get("transport_type"):
             qs = qs.filter(transport_type=p["transport_type"])
 
+        # --- Вес ---
         if p.get("min_weight"):
             qs = qs.filter(weight_kg__gte=p["min_weight"])
         if p.get("max_weight"):
             qs = qs.filter(weight_kg__lte=p["max_weight"])
 
-        # --- Цена ---
-        qs = qs.annotate(
-            price_uzs_anno=Coalesce(
-                F("price_uzs"),
-                F("price_value"),
-                output_field=DecimalField(max_digits=14, decimal_places=2),
-            )
-        )
+        # --- Новые фильтры: оси и объём ---
+        if p.get("axles_min"):
+            qs = qs.filter(axles__gte=p["axles_min"])
+        if p.get("axles_max"):
+            qs = qs.filter(axles__lte=p["axles_max"])
+        if p.get("volume_min"):
+            qs = qs.filter(volume_m3__gte=p["volume_min"])
+        if p.get("volume_max"):
+            qs = qs.filter(volume_m3__lte=p["volume_max"])
+
+        # --- Цена (в суммах) ---
         if p.get("min_price_uzs"):
-            qs = qs.filter(price_uzs_anno__gte=p["min_price_uzs"])
+            qs = qs.filter(price_узs_anno__gte=p["min_price_uzs"])
         if p.get("max_price_uzs"):
             qs = qs.filter(price_uzs_anno__lte=p["max_price_uzs"])
 
         # --- Радиусные фильтры ---
         o_lat, o_lng, o_r = p.get("origin_lat"), p.get("origin_lng"), p.get("origin_radius_km")
         if o_lat and o_lng and o_r:
-            origin_point = Point(float(o_lng), float(o_lat), srid=4326)
-            qs = qs.filter(origin_point__distance_lte=(origin_point, D(km=float(o_r))))
-            qs = qs.annotate(origin_dist_km=Distance("origin_point", origin_point) / 1000.0)
+            try:
+                origin_point = Point(float(o_lng), float(o_lat), srid=4326)
+                qs = qs.filter(origin_point__distance_lte=(origin_point, D(km=float(o_r))))
+                qs = qs.annotate(origin_dist_km=Distance("origin_point", origin_point) / 1000.0)
+            except (TypeError, ValueError):
+                pass
 
         d_lat, d_lng, d_r = p.get("dest_lat"), p.get("dest_lng"), p.get("dest_radius_km")
         if d_lat and d_lng and d_r:
-            dest_point = Point(float(d_lng), float(d_lat), srid=4326)
-            qs = qs.filter(dest_point__distance_lte=(dest_point, D(km=float(d_r))))
+            try:
+                dest_point = Point(float(d_lng), float(d_lat), srid=4326)
+                qs = qs.filter(dest_point__distance_lte=(dest_point, D(km=float(d_r))))
+            except (TypeError, ValueError):
+                pass
+
+        # 🔎 Поиск по компании / аккаунту
+        q = p.get("company") or p.get("q")
+        if q:
+            qs = qs.filter(
+                Q(customer__company_name__icontains=q)
+                | Q(customer__username__icontains=q)
+                | Q(customer__email__icontains=q)
+            )
+
+        # 👤 Фильтры по контактам владельца
+        if p.get("customer_id"):
+            qs = qs.filter(customer_id=p["customer_id"])
+        if p.get("customer_email"):
+            qs = qs.filter(customer__email__iexact=p["customer_email"])
+        if p.get("customer_phone"):
+            qs = qs.filter(
+                Q(customer__phone__icontains=p["customer_phone"])
+                | Q(customer__phone_number__icontains=p["customer_phone"])
+            )
 
         # --- Сортировка ---
-        order = p.get("order")
         allowed = {
             "path_km",
             "-path_km",
+            "route_km_anno",
+            "-route_km_anno",
             "origin_dist_km",
             "-origin_dist_km",
             "price_uzs_anno",
             "-price_uzs_anno",
             "load_date",
             "-load_date",
+            "axles",
+            "-axles",
+            "volume_m3",
+            "-volume_m3",
+            "age_minutes_anno",
+            "-age_minutes_anno",
         }
-        if order in allowed:
-            qs = qs.order_by(order)
+        order_alias = {
+            "route_km": "route_km_anno",
+            "-route_km": "-route_km_anno",
+            "age_minutes": "age_minutes_anno",
+            "-age_minutes": "-age_minutes_anno",
+        }
+        order = p.get("order")
+        ordexpr = order_alias.get(order, order)
+        if ordexpr in allowed:
+            qs = qs.order_by(ordexpr)
         else:
             qs = qs.order_by("-refreshed_at", "-created_at")
 
@@ -254,21 +405,17 @@ class CargoCancelView(generics.GenericAPIView):
     serializer_class = RefreshResponseSerializer
     queryset = Cargo.objects.all()
 
-    def post(self, request, pk: int):
+    def post(self, request, uuid: str):
         if _swagger(self):
             return Response({"detail": "schema"}, status=status.HTTP_200_OK)
 
-        cargo = get_object_or_404(Cargo, pk=pk)
+        cargo = get_object_or_404(Cargo, uuid=uuid)
         user_id = request.user.id
 
         if user_id not in (cargo.customer_id, getattr(cargo, "assigned_carrier_id", None)):
             return Response({"detail": "Нет доступа"}, status=status.HTTP_403_FORBIDDEN)
 
-        if cargo.status in (
-            CargoStatus.DELIVERED,
-            CargoStatus.COMPLETED,
-            CargoStatus.CANCELLED,
-        ):
+        if cargo.status in (CargoStatus.DELIVERED, CargoStatus.COMPLETED, CargoStatus.CANCELLED):
             return Response({"detail": "Статус уже финальный"}, status=status.HTTP_400_BAD_REQUEST)
 
         cargo.status = CargoStatus.CANCELLED

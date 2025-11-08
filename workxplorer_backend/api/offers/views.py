@@ -27,8 +27,105 @@ from .serializers import (
 
 class EmptySerializer(serializers.Serializer):
     """Пустое тело запроса (для POST без body)."""
-
     pass
+
+
+# --------- helpers ---------
+def _apply_common_filters(qs, params):
+    """
+    Общие фильтры/поиск для list/my/incoming:
+      - cargo / carrier / customer filters
+      - инициатор, активность, акцепты
+      - даты (created, load/delivery)
+      - поиск по компании/почте/телефону
+      - сортировка
+    """
+    p = params
+
+    # --- id/uuid привязки ---
+    if p.get("cargo_id"):
+        qs = qs.filter(cargo_id=p["cargo_id"])
+    if p.get("cargo_uuid"):
+        qs = qs.filter(cargo__uuid=p["cargo_uuid"])
+    if p.get("carrier_id"):
+        qs = qs.filter(carrier_id=p["carrier_id"])
+    if p.get("customer_id"):
+        qs = qs.filter(cargo__customer_id=p["customer_id"])
+
+    # --- инициатор/активность/акцепты ---
+    if p.get("initiator"):
+        qs = qs.filter(initiator=p["initiator"])
+    if p.get("is_active") in ("true", "false", "1", "0"):
+        qs = qs.filter(is_active=p.get("is_active") in ("true", "1"))
+    if p.get("accepted_by_customer") in ("true", "false", "1", "0"):
+        qs = qs.filter(accepted_by_customer=p.get("accepted_by_customer") in ("true", "1"))
+    if p.get("accepted_by_carrier") in ("true", "false", "1", "0"):
+        qs = qs.filter(accepted_by_carrier=p.get("accepted_by_carrier") in ("true", "1"))
+
+    # --- даты создания оффера ---
+    if p.get("created_from"):
+        qs = qs.filter(created_at__gte=p["created_from"])
+    if p.get("created_to"):
+        qs = qs.filter(created_at__lte=p["created_to"])
+
+    # --- даты по грузу (для списков/макета) ---
+    if p.get("load_date_from"):
+        qs = qs.filter(cargo__load_date__gte=p["load_date_from"])
+    if p.get("load_date_to"):
+        qs = qs.filter(cargo__load_date__lte=p["load_date_to"])
+    if p.get("delivery_date_from"):
+        qs = qs.filter(cargo__delivery_date__gte=p["delivery_date_from"])
+    if p.get("delivery_date_to"):
+        qs = qs.filter(cargo__delivery_date__lte=p["delivery_date_to"])
+
+    # --- города / адреса (иногда удобно на доске) ---
+    if p.get("origin_city"):
+        qs = qs.filter(cargo__origin_city__iexact=p["origin_city"])
+    if p.get("destination_city"):
+        qs = qs.filter(cargo__destination_city__iexact=p["destination_city"])
+
+    # --- поиск по компании/аккаунту ---
+    q = p.get("company") or p.get("q")
+    if q:
+        qs = qs.filter(
+            Q(cargo__customer__company_name__icontains=q)
+            | Q(cargo__customer__username__icontains=q)
+            | Q(cargo__customer__email__icontains=q)
+            | Q(carrier__company_name__icontains=q)
+            | Q(carrier__username__icontains=q)
+            | Q(carrier__email__icontains=q)
+        )
+
+    # --- фильтры по контактам (почта/телефон) ---
+    if p.get("customer_email"):
+        qs = qs.filter(cargo__customer__email__iexact=p["customer_email"])
+    if p.get("customer_phone"):
+        qs = qs.filter(
+            Q(cargo__customer__phone__icontains=p["customer_phone"])
+            | Q(cargo__customer__phone_number__icontains=p["customer_phone"])
+        )
+    if p.get("carrier_email"):
+        qs = qs.filter(carrier__email__iexact=p["carrier_email"])
+    if p.get("carrier_phone"):
+        qs = qs.filter(
+            Q(carrier__phone__icontains=p["carrier_phone"])
+            | Q(carrier__phone_number__icontains=p["carrier_phone"])
+        )
+
+    # --- сортировка ---
+    allowed = {
+        "created_at", "-created_at",
+        "price_value", "-price_value",
+        "cargo__load_date", "-cargo__load_date",
+        "cargo__delivery_date", "-cargo__delivery_date",
+    }
+    order = p.get("order")
+    if order in allowed:
+        qs = qs.order_by(order)
+    else:
+        qs = qs.order_by("-created_at")
+
+    return qs
 
 
 @extend_schema_view(
@@ -41,15 +138,37 @@ class EmptySerializer(serializers.Serializer):
             "**scope=mine** — как Перевозчик (carrier);\n"
             "**scope=incoming** — входящие: для Заказчика/Логиста — офферы от перевозчиков; "
             "для Перевозчика — инвайты от заказчиков (initiator=CUSTOMER);\n"
-            "**scope=all** — все (только для staff)."
+            "**scope=all** — все (только для staff).\n\n"
+            "Доп. query: cargo_id, cargo_uuid, carrier_id, customer_id, initiator, "
+            "is_active, accepted_by_customer, accepted_by_carrier, "
+            "created_from/to, load_date_from/to, delivery_date_from/to, "
+            "origin_city, destination_city, company|q, customer_email/phone, carrier_email/phone, order"
         ),
         parameters=[
-            OpenApiParameter(
-                name="scope",
-                description="mine | incoming | all (только staff)",
-                required=False,
-                type=str,
-            ),
+            OpenApiParameter("scope", required=False, type=str, description="mine | incoming | all"),
+            OpenApiParameter("cargo_id", required=False, type=str),
+            OpenApiParameter("cargo_uuid", required=False, type=str),
+            OpenApiParameter("carrier_id", required=False, type=str),
+            OpenApiParameter("customer_id", required=False, type=str),
+            OpenApiParameter("initiator", required=False, type=str, description="CUSTOMER | CARRIER"),
+            OpenApiParameter("is_active", required=False, type=str, description="true|false"),
+            OpenApiParameter("accepted_by_customer", required=False, type=str, description="true|false"),
+            OpenApiParameter("accepted_by_carrier", required=False, type=str, description="true|false"),
+            OpenApiParameter("created_from", required=False, type=str),
+            OpenApiParameter("created_to", required=False, type=str),
+            OpenApiParameter("load_date_from", required=False, type=str),
+            OpenApiParameter("load_date_to", required=False, type=str),
+            OpenApiParameter("delivery_date_from", required=False, type=str),
+            OpenApiParameter("delivery_date_to", required=False, type=str),
+            OpenApiParameter("origin_city", required=False, type=str),
+            OpenApiParameter("destination_city", required=False, type=str),
+            OpenApiParameter("company", required=False, type=str, description="или q"),
+            OpenApiParameter("q", required=False, type=str),
+            OpenApiParameter("customer_email", required=False, type=str),
+            OpenApiParameter("customer_phone", required=False, type=str),
+            OpenApiParameter("carrier_email", required=False, type=str),
+            OpenApiParameter("carrier_phone", required=False, type=str),
+            OpenApiParameter("order", required=False, type=str),
         ],
         responses=OfferShortSerializer(many=True),
     ),
@@ -62,7 +181,7 @@ class EmptySerializer(serializers.Serializer):
     create=extend_schema(
         tags=["offers"],
         summary="Создать оффер",
-        description="Доступно только Перевозчику/Логисту.",
+        description="Доступно только Перевозчику.",
         request=OfferCreateSerializer,
         responses=OfferDetailSerializer,
     ),
@@ -71,7 +190,7 @@ class EmptySerializer(serializers.Serializer):
 class OfferViewSet(ModelViewSet):
     """
     Эндпоинты:
-      POST   /api/offers/                  — создать (Перевозчик/Логист)
+      POST   /api/offers/                  — создать (Перевозчик)
       GET    /api/offers/                  — список, видимый текущему пользователю (scope=…)
       GET    /api/offers/my/               — мои офферы как Перевозчик (alias)
       GET    /api/offers/incoming/         — входящие (alias): заказчик/логист — офферы от перевозчиков; перевозчик — инвайты
@@ -95,7 +214,7 @@ class OfferViewSet(ModelViewSet):
             "counter": OfferCounterSerializer,
             "accept": EmptySerializer,
             "reject": EmptySerializer,
-            "invite": OfferInviteSerializer,  # NEW
+            "invite": OfferInviteSerializer,
         }.get(self.action, OfferDetailSerializer)
 
     # Права по action
@@ -103,8 +222,7 @@ class OfferViewSet(ModelViewSet):
         if self.action in {"create", "my"}:
             classes = [IsAuthenticatedAndVerified, IsCarrier]
         elif self.action == "incoming":
-            # входящие теперь доступны и Перевозчику (для инвайтов), и Заказчику/Логисту
-            classes = [IsAuthenticatedAndVerified]
+            classes = [IsAuthenticatedAndVerified]  # доступно всем ролям внутри системы
         elif self.action == "invite":
             classes = [IsAuthenticatedAndVerified, IsCustomer]
         else:
@@ -119,13 +237,12 @@ class OfferViewSet(ModelViewSet):
     def list(self, request, *args, **kwargs):
         u = request.user
         scope = request.query_params.get("scope")
-        qs = self.get_queryset().filter(is_active=True)
+        qs = self.get_queryset()
 
+        # базовая видимость по scope
         if scope == "mine":
             qs = qs.filter(carrier=u)
         elif scope == "incoming":
-            # Заказчик/Логист видят входящие офферы от перевозчиков,
-            # Перевозчик — инвайты от заказчика (initiator=CUSTOMER)
             if getattr(u, "is_carrier", False) or getattr(u, "role", None) == "CARRIER":
                 qs = qs.filter(carrier=u, initiator=Offer.Initiator.CUSTOMER)
             else:
@@ -133,7 +250,6 @@ class OfferViewSet(ModelViewSet):
         elif scope == "all":
             if not getattr(u, "is_staff", False):
                 return Response({"detail": "Forbidden"}, status=status.HTTP_403_FORBIDDEN)
-            # staff видит все активные
         else:
             # умолчания по ролям
             if getattr(u, "is_carrier", False) or getattr(u, "role", None) == "CARRIER":
@@ -145,7 +261,9 @@ class OfferViewSet(ModelViewSet):
             else:
                 qs = qs.none()
 
-        qs = qs.order_by("-created_at")
+        # общие фильтры/поиск/сортировка
+        qs = _apply_common_filters(qs, request.query_params)
+
         page = self.paginate_queryset(qs)
         ser = OfferShortSerializer(page or qs, many=True)
         return self.get_paginated_response(ser.data) if page is not None else Response(ser.data)
@@ -158,7 +276,8 @@ class OfferViewSet(ModelViewSet):
     )
     @action(detail=False, methods=["get"])
     def my(self, request):
-        qs = self.get_queryset().filter(carrier=request.user).order_by("-created_at")
+        qs = self.get_queryset().filter(carrier=request.user)
+        qs = _apply_common_filters(qs, request.query_params)
         page = self.paginate_queryset(qs)
         ser = self.get_serializer(page or qs, many=True)
         return self.get_paginated_response(ser.data) if page is not None else Response(ser.data)
@@ -178,11 +297,11 @@ class OfferViewSet(ModelViewSet):
         u = request.user
         if getattr(u, "is_carrier", False) or getattr(u, "role", None) == "CARRIER":
             qs = self.get_queryset().filter(
-                carrier=u, is_active=True, initiator=Offer.Initiator.CUSTOMER
+                carrier=u, initiator=Offer.Initiator.CUSTOMER
             )
         else:
-            qs = self.get_queryset().filter(cargo__customer=u, is_active=True)
-        qs = qs.order_by("-created_at")
+            qs = self.get_queryset().filter(cargo__customer=u)
+        qs = _apply_common_filters(qs, request.query_params)
         page = self.paginate_queryset(qs)
         ser = self.get_serializer(page or qs, many=True)
         return self.get_paginated_response(ser.data) if page is not None else Response(ser.data)
@@ -201,7 +320,7 @@ class OfferViewSet(ModelViewSet):
     @extend_schema(
         tags=["offers"],
         summary="Принять оффер",
-        description="Акцепт оффера текущим пользователем. При взаимном акцепте создаётся Shipment.",
+        description="Акцепт оффера текущим пользователем. При взаимном акцепте создаётся заказ.",
         request=None,
         responses={
             200: OfferAcceptResponseSerializer,
@@ -283,7 +402,6 @@ class OfferViewSet(ModelViewSet):
     )
     @action(detail=False, methods=["post"])
     def invite(self, request):
-        # Права уже проверяются в get_permissions: IsAuthenticatedAndVerified + IsCustomer
         ser = self.get_serializer(data=request.data, context={"request": request})
         ser.is_valid(raise_exception=True)
         with transaction.atomic():

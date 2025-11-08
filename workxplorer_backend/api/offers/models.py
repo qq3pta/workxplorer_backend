@@ -1,10 +1,16 @@
-from api.loads.choices import Currency
-from api.loads.models import Cargo, CargoStatus
+from __future__ import annotations
+
+from decimal import Decimal
+
 from django.apps import apps
 from django.conf import settings
 from django.core.exceptions import AppRegistryNotReady, PermissionDenied, ValidationError
+from django.core.validators import MinValueValidator
 from django.db import models, transaction
 from django.db.models import Q, UniqueConstraint
+
+from api.loads.choices import Currency
+from api.loads.models import Cargo, CargoStatus
 
 
 class Offer(models.Model):
@@ -12,6 +18,7 @@ class Offer(models.Model):
         CUSTOMER = "CUSTOMER", "Заказчик"
         CARRIER = "CARRIER", "Перевозчик"
 
+    # Привязки
     cargo = models.ForeignKey(
         Cargo,
         on_delete=models.CASCADE,
@@ -23,9 +30,22 @@ class Offer(models.Model):
         related_name="offers",
     )
 
-    price_value = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
-    price_currency = models.CharField(max_length=3, choices=Currency.choices, default=Currency.UZS)
+    # Содержимое оффера
+    price_value = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal("0.00"))],
+    )
+    price_currency = models.CharField(
+        max_length=3,
+        choices=Currency.choices,
+        default=Currency.UZS,
+    )
     message = models.TextField(blank=True)
+
+    # Согласования
     accepted_by_customer = models.BooleanField(default=False)
     accepted_by_carrier = models.BooleanField(default=False)
     initiator = models.CharField(
@@ -34,6 +54,7 @@ class Offer(models.Model):
         default=Initiator.CARRIER,
     )
 
+    # Технические поля
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -53,18 +74,29 @@ class Offer(models.Model):
             models.Index(fields=["initiator", "is_active"]),
         ]
 
-    def __str__(self):
-        return (
-            f"Offer#{self.pk} cargo={self.cargo_id} carrier={self.carrier_id} by={self.initiator}"
-        )
+    def __str__(self) -> str:
+        return f"Offer#{self.pk} cargo={self.cargo_id} carrier={self.carrier_id} by={self.initiator}"
 
     # ---------------- Бизнес-логика ----------------
 
-    def make_counter(self, *, price_value, price_currency=None, message=None):
+    @property
+    def is_handshake(self) -> bool:
+        """Есть взаимный акцепт обеих сторон."""
+        return self.accepted_by_customer and self.accepted_by_carrier
+
+    def make_counter(
+        self,
+        *,
+        price_value: Decimal | None,
+        price_currency: str | None = None,
+        message: str | None = None,
+        by_user=None,
+    ) -> None:
         """
         Контр-предложение:
-        - обновляет price_value/price_currency/message (если заданы),
+        - обновляет цену/валюту/сообщение (если заданы),
         - сбрасывает акцепты обеих сторон,
+        - помечает инициатора шага,
         - оставляет оффер активным.
         """
         if price_value is not None:
@@ -74,6 +106,13 @@ class Offer(models.Model):
         if message is not None:
             self.message = message
 
+        if by_user is not None:
+            self.initiator = (
+                self.Initiator.CUSTOMER
+                if by_user.id == self.cargo.customer_id
+                else self.Initiator.CARRIER
+            )
+
         self.accepted_by_customer = False
         self.accepted_by_carrier = False
 
@@ -82,20 +121,17 @@ class Offer(models.Model):
                 "price_value",
                 "price_currency",
                 "message",
+                "initiator",
                 "accepted_by_customer",
                 "accepted_by_carrier",
                 "updated_at",
             ]
         )
 
-    @property
-    def is_handshake(self) -> bool:
-        return self.accepted_by_customer and self.accepted_by_carrier
-
     def _finalize_handshake(self, cargo_locked: Cargo | None = None) -> None:
         """
         Эффекты взаимного согласия (выполнять ТОЛЬКО внутри transaction.atomic).
-        Если передан cargo_locked — считаем, что он взят под select_for_update().
+        Если передан cargo_locked — считаем, что строка уже взята под select_for_update().
         """
         cargo = cargo_locked or self.cargo
 
@@ -111,33 +147,38 @@ class Offer(models.Model):
             update_fields.append("assigned_carrier")
         if hasattr(cargo, "chosen_offer_id"):
             update_fields.append("chosen_offer")
+
         cargo.save(update_fields=update_fields)
+
         Offer.objects.filter(cargo_id=cargo.id, is_active=True).exclude(pk=self.pk).update(
             is_active=False
         )
+
         try:
             Order = apps.get_model("orders", "Order")
         except (LookupError, AppRegistryNotReady):
             return
+
+        route_km = (
+            getattr(cargo, "route_distance_km", None)
+            or getattr(cargo, "route_km_cached", None)
+            or getattr(cargo, "route_km", None)
+            or getattr(cargo, "path_km", None)
+            or 0
+        )
 
         Order.objects.get_or_create(
             cargo=cargo,
             defaults={
                 "customer_id": cargo.customer_id,
                 "carrier_id": self.carrier_id,
-                "currency": (
-                    self.price_currency or getattr(cargo, "price_currency", None) or Currency.UZS
-                ),
-                "price_total": self.price_value or 0,
-                "route_distance_km": (
-                    getattr(cargo, "route_distance_km", None)
-                    or getattr(cargo, "route_km", None)
-                    or getattr(cargo, "distance_km", 0)
-                ),
+                "currency": self.price_currency or getattr(cargo, "price_currency", None) or Currency.UZS,
+                "price_total": self.price_value or Decimal("0"),
+                "route_distance_km": route_km,
             },
         )
 
-    def accept_by(self, user):
+    def accept_by(self, user) -> None:
         """
         Акцепт со стороны клиента (владельца груза) или перевозчика.
         Разрешено только участникам и только для активного оффера.
@@ -165,6 +206,7 @@ class Offer(models.Model):
                     .get(pk=self.cargo_id)
                 )
 
+                # Если уже кем-то зафиксирован матч с выбранным оффером — выходим
                 if cargo_locked.status == CargoStatus.MATCHED and getattr(
                     cargo_locked, "chosen_offer_id", None
                 ):
@@ -172,7 +214,7 @@ class Offer(models.Model):
 
                 self._finalize_handshake(cargo_locked=cargo_locked)
 
-    def reject_by(self, user):
+    def reject_by(self, user) -> None:
         """
         Отклонение со стороны любой из сторон — оффер деактивируется.
         Разрешено только участникам сделки.

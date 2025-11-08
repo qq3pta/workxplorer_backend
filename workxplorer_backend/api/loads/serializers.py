@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any
 
 from api.geo.services import GeocodingError, geocode_city
@@ -183,14 +183,11 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
         vol = attrs.get("volume_m3", self._val_or_instance(attrs, "volume_m3"))
         if vol is not None:
             try:
-                if Decimal(str(vol)) <= 0:
-                    raise serializers.ValidationError(
-                        {"volume_m3": "Объём должен быть больше нуля."}
-                    )
-            except Exception:
-                raise serializers.ValidationError({"volume_m3": "Некорректное значение объёма."})
-
-        return attrs
+                dv = Decimal(str(vol))
+            except (InvalidOperation, TypeError, ValueError):
+                raise serializers.ValidationError({"volume_m3": "Некорректное значение объёма."}) from None
+            if dv <= 0:
+                raise serializers.ValidationError({"volume_m3": "Объём должен быть больше нуля."})
 
     def create(self, validated_data: dict[str, Any]) -> Cargo:
         user = self.context["request"].user

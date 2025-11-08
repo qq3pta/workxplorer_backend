@@ -3,11 +3,11 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any
 
+from api.loads.choices import Currency, ModerationStatus
+from api.loads.models import Cargo, CargoStatus
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
-from api.loads.choices import Currency, ModerationStatus
-from api.loads.models import Cargo, CargoStatus
 from .models import Offer
 
 User = get_user_model()
@@ -17,11 +17,14 @@ class OfferCreateSerializer(serializers.ModelSerializer):
     """
     Создание оффера ПЕРЕВОЗЧИКОМ на чужую заявку.
     """
+
     cargo = serializers.PrimaryKeyRelatedField(queryset=Cargo.objects.all())
     price_value = serializers.DecimalField(
         max_digits=14, decimal_places=2, required=False, allow_null=True, min_value=Decimal("0.00")
     )
-    price_currency = serializers.ChoiceField(choices=Currency.choices, required=False, default=Currency.UZS)
+    price_currency = serializers.ChoiceField(
+        choices=Currency.choices, required=False, default=Currency.UZS
+    )
     message = serializers.CharField(required=False, allow_blank=True)
 
     class Meta:
@@ -33,7 +36,9 @@ class OfferCreateSerializer(serializers.ModelSerializer):
         cargo: Cargo = attrs["cargo"]
 
         if cargo.customer_id == user.id:
-            raise serializers.ValidationError({"cargo": "Нельзя сделать оффер на собственную заявку."})
+            raise serializers.ValidationError(
+                {"cargo": "Нельзя сделать оффер на собственную заявку."}
+            )
 
         # Груз должен быть опубликован и доступен
         if getattr(cargo, "is_hidden", False):
@@ -45,7 +50,9 @@ class OfferCreateSerializer(serializers.ModelSerializer):
 
         # Только один активный оффер на пару cargo-carrier
         if Offer.objects.filter(cargo=cargo, carrier=user, is_active=True).exists():
-            raise serializers.ValidationError({"cargo": "У вас уже есть активный оффер на эту заявку."})
+            raise serializers.ValidationError(
+                {"cargo": "У вас уже есть активный оффер на эту заявку."}
+            )
 
         return attrs
 
@@ -62,6 +69,7 @@ class OfferInviteSerializer(serializers.Serializer):
     """
     Инвайт от ЗАКАЗЧИКА конкретному перевозчику.
     """
+
     cargo = serializers.PrimaryKeyRelatedField(queryset=Cargo.objects.all())
     carrier_id = serializers.PrimaryKeyRelatedField(source="carrier", queryset=User.objects.all())
     price_value = serializers.DecimalField(
@@ -108,6 +116,7 @@ class OfferShortSerializer(serializers.ModelSerializer):
     """
     Короткая карточка оффера для списков.
     """
+
     cargo_uuid = serializers.UUIDField(source="cargo.uuid", read_only=True)
     cargo_origin = serializers.CharField(source="cargo.origin_city", read_only=True)
     cargo_destination = serializers.CharField(source="cargo.destination_city", read_only=True)
@@ -152,6 +161,7 @@ class OfferCounterSerializer(serializers.Serializer):
     """
     Контр-предложение (любой стороной).
     """
+
     price_value = serializers.DecimalField(
         max_digits=14, decimal_places=2, min_value=Decimal("0.01")
     )

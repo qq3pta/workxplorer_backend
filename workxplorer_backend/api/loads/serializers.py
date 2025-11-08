@@ -184,7 +184,9 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
         if vol is not None:
             try:
                 if Decimal(str(vol)) <= 0:
-                    raise serializers.ValidationError({"volume_m3": "Объём должен быть больше нуля."})
+                    raise serializers.ValidationError(
+                        {"volume_m3": "Объём должен быть больше нуля."}
+                    )
             except Exception:
                 raise serializers.ValidationError({"volume_m3": "Некорректное значение объёма."})
 

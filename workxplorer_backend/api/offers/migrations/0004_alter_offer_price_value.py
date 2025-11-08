@@ -6,15 +6,20 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('offers', '0003_offer_initiator_offer_offers_offe_initiat_306da5_idx'),
+        ("offers", "0003_offer_initiator_offer_offers_offe_initiat_306da5_idx"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='offer',
-            name='price_value',
-            field=models.DecimalField(blank=True, decimal_places=2, max_digits=14, null=True, validators=[django.core.validators.MinValueValidator(Decimal('0.00'))]),
+            model_name="offer",
+            name="price_value",
+            field=models.DecimalField(
+                blank=True,
+                decimal_places=2,
+                max_digits=14,
+                null=True,
+                validators=[django.core.validators.MinValueValidator(Decimal("0.00"))],
+            ),
         ),
     ]

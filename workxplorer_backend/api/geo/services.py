@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+
 import requests
 from django.conf import settings
 from django.contrib.gis.geos import Point
@@ -59,7 +60,7 @@ def geocode_city(
     time.sleep(1.0)  # лёгкий бэк-офф против rate limit
 
     params = {
-        "q": name,                 # работает надёжнее, чем отдельные city/state поля
+        "q": name,  # работает надёжнее, чем отдельные city/state поля
         "format": "json",
         "addressdetails": 1,
         "namedetails": 1,

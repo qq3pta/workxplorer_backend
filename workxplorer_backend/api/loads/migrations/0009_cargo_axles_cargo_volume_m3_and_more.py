@@ -5,28 +5,37 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('loads', '0008_alter_cargo_uuid'),
+        ("loads", "0008_alter_cargo_uuid"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='cargo',
-            name='axles',
-            field=models.PositiveSmallIntegerField(blank=True, help_text='Количество осей (3–10)', null=True, validators=[django.core.validators.MinValueValidator(3), django.core.validators.MaxValueValidator(10)]),
+            model_name="cargo",
+            name="axles",
+            field=models.PositiveSmallIntegerField(
+                blank=True,
+                help_text="Количество осей (3–10)",
+                null=True,
+                validators=[
+                    django.core.validators.MinValueValidator(3),
+                    django.core.validators.MaxValueValidator(10),
+                ],
+            ),
         ),
         migrations.AddField(
-            model_name='cargo',
-            name='volume_m3',
-            field=models.DecimalField(blank=True, decimal_places=2, help_text='Объём, м³', max_digits=7, null=True),
+            model_name="cargo",
+            name="volume_m3",
+            field=models.DecimalField(
+                blank=True, decimal_places=2, help_text="Объём, м³", max_digits=7, null=True
+            ),
         ),
         migrations.AddIndex(
-            model_name='cargo',
-            index=models.Index(fields=['axles'], name='loads_cargo_axles_667d0d_idx'),
+            model_name="cargo",
+            index=models.Index(fields=["axles"], name="loads_cargo_axles_667d0d_idx"),
         ),
         migrations.AddIndex(
-            model_name='cargo',
-            index=models.Index(fields=['volume_m3'], name='loads_cargo_volume__c39670_idx'),
+            model_name="cargo",
+            index=models.Index(fields=["volume_m3"], name="loads_cargo_volume__c39670_idx"),
         ),
     ]

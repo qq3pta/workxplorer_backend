@@ -33,5 +33,5 @@ urlpatterns = [
     path("reset-password/", ResetPasswordView.as_view()),
     path("logout/", LogoutView.as_view()),
     path("change-role/", ChangeRoleView.as_view()),
-    path("me/analytics/", AnalyticsView.as_view(),
+    path("me/analytics/", AnalyticsView.as_view()),
 ]

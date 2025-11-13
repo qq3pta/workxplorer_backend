@@ -191,6 +191,8 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
             if dv <= 0:
                 raise serializers.ValidationError({"volume_m3": "Объём должен быть больше нуля."})
 
+        return attrs
+
     def create(self, validated_data: dict[str, Any]) -> Cargo:
         user = self.context["request"].user
 

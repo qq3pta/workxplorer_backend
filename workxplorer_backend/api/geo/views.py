@@ -85,10 +85,9 @@ class CountrySuggestView(APIView):
             data = ISO_COUNTRIES[:limit]
         else:
             # фильтр по названию или коду
-            data = [
-                c for c in ISO_COUNTRIES
-                if q in c["name"].lower() or q in c["code"].lower()
-            ][:limit]
+            data = [c for c in ISO_COUNTRIES if q in c["name"].lower() or q in c["code"].lower()][
+                :limit
+            ]
         return Response({"results": data})
 
 
@@ -96,16 +95,34 @@ class CitySuggestView(APIView):
     """
     Подсказки по городам через Nominatim (OpenStreetMap) с приоритетом совпадений в начале имени.
     """
+
     permission_classes = [AllowAny]
     throttle_classes = [SuggestThrottle]
 
     @extend_schema(
         summary="Подсказки по городам (сортировка по совпадению в начале)",
         parameters=[
-            OpenApiParameter(name="q", description="Строка поиска (мин 2 символа)", required=True, type=OpenApiTypes.STR),
-            OpenApiParameter(name="country", description="ISO-2 код страны", required=False, type=OpenApiTypes.STR),
-            OpenApiParameter(name="lang", description="Язык: ru|uz|en", required=False, type=OpenApiTypes.STR),
-            OpenApiParameter(name="limit", description="Максимум результатов (1..50)", required=False, type=OpenApiTypes.INT),
+            OpenApiParameter(
+                name="q",
+                description="Строка поиска (мин 2 символа)",
+                required=True,
+                type=OpenApiTypes.STR,
+            ),
+            OpenApiParameter(
+                name="country",
+                description="ISO-2 код страны",
+                required=False,
+                type=OpenApiTypes.STR,
+            ),
+            OpenApiParameter(
+                name="lang", description="Язык: ru|uz|en", required=False, type=OpenApiTypes.STR
+            ),
+            OpenApiParameter(
+                name="limit",
+                description="Максимум результатов (1..50)",
+                required=False,
+                type=OpenApiTypes.INT,
+            ),
         ],
         responses={200: CitySuggestResponseSerializer},
         tags=["Geo"],
@@ -129,14 +146,23 @@ class CitySuggestView(APIView):
                 "addressdetails": 1,
                 "namedetails": 1,
                 "limit": limit * 3,  # берём больше, чтобы фильтровать и сортировать
-                "countrycodes": country.lower() if country else ",".join(cc.lower() for cc in ALLOWED_COUNTRY_CODES),
+                "countrycodes": country.lower()
+                if country
+                else ",".join(cc.lower() for cc in ALLOWED_COUNTRY_CODES),
             }
             headers = {
-                "User-Agent": getattr(settings, "GEO_NOMINATIM_USER_AGENT", "workxplorer/geo-suggest"),
+                "User-Agent": getattr(
+                    settings, "GEO_NOMINATIM_USER_AGENT", "workxplorer/geo-suggest"
+                ),
                 "Accept-Language": _lang_pref(lang),
             }
 
-            r = requests.get("https://nominatim.openstreetmap.org/search", params=params, headers=headers, timeout=8)
+            r = requests.get(
+                "https://nominatim.openstreetmap.org/search",
+                params=params,
+                headers=headers,
+                timeout=8,
+            )
             r.raise_for_status()
             data = r.json()
             if not isinstance(data, list):

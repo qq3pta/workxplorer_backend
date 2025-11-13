@@ -200,7 +200,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         return user
 
 
-# ---------------- Верификация / ресенд (по e-mail — оставить для сброса или совместимости) ----------------
+# ---------------- Верификация e-mail ----------------
 
 
 class VerifyEmailSerializer(serializers.Serializer):
@@ -309,6 +309,7 @@ class MeSerializer(serializers.ModelSerializer):
             "rating_as_customer",
             "rating_as_carrier",
             "is_email_verified",
+            "date_joined",
             "profile",
         )
 
@@ -352,7 +353,7 @@ class UpdateMeSerializer(serializers.ModelSerializer):
         return user
 
 
-# ---------------- Сброс пароля (по e-mail — оставляем как есть) ----------------
+# ---------------- Сброс пароля ----------------
 
 
 class ForgotPasswordSerializer(serializers.Serializer):
@@ -434,3 +435,14 @@ class RoleChangeSerializer(serializers.Serializer):
         user.role = new_role
         user.save(update_fields=["role"])
         return {"detail": "Роль обновлена", "role": user.role}
+
+# ---------------- Аналитика профиля ----------------
+
+class AnalyticsSerializer(serializers.Serializer):
+    successful_deliveries = serializers.IntegerField()
+    successful_deliveries_change = serializers.FloatField()
+    registered_since = serializers.DateField()
+    days_since_registered = serializers.IntegerField()
+    rating = serializers.FloatField()
+    distance_km = serializers.FloatField()
+    deals_count = serializers.IntegerField()

@@ -8,13 +8,14 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from .filters import OrderFilter
-from .models import Order
+from .models import Order, OrderStatusHistory
 from .permissions import IsOrderParticipant
 from .serializers import (
     OrderDetailSerializer,
     OrderDocumentSerializer,
     OrderListSerializer,
     OrderStatusUpdateSerializer,
+    OrderStatusHistorySerializer,
 )
 
 
@@ -39,6 +40,8 @@ class OrdersViewSet(viewsets.ModelViewSet):
             return OrderDetailSerializer
         if self.action == "set_status":
             return OrderStatusUpdateSerializer
+        if self.action == "status_history":
+            return OrderStatusHistorySerializer
         if self.action == "documents" and self.request.method == "POST":
             return OrderDocumentSerializer
         return OrderDetailSerializer
@@ -50,11 +53,27 @@ class OrdersViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["patch"], url_path="status")
     def set_status(self, request, pk=None):
-        """Обновление статуса (валидация через OrderStatusUpdateSerializer)."""
+        """
+        Обновление статуса (валидация через OrderStatusUpdateSerializer)
+        + запись в историю статусов.
+        """
         order = self.get_object()
+        old_status = order.status  # что было
+
         ser = self.get_serializer(order, data=request.data, partial=True)
         ser.is_valid(raise_exception=True)
         ser.save()
+
+        new_status = ser.validated_data.get("status", order.status)
+
+        if new_status != old_status:
+            OrderStatusHistory.objects.create(
+                order=order,
+                old_status=old_status,
+                new_status=new_status,
+                user=request.user,
+            )
+
         return Response(ser.data, status=http_status.HTTP_200_OK)
 
     @action(detail=True, methods=["get", "post"], url_path="documents")
@@ -67,12 +86,30 @@ class OrdersViewSet(viewsets.ModelViewSet):
 
         if request.method == "GET":
             qs = order.documents.all()
+
+            # фильтр по папке ?category=licenses / contracts / loading / unloading / other
+            category = request.query_params.get("category")
+            if category:
+                qs = qs.filter(category=category)
+
             data = OrderDocumentSerializer(
                 qs, many=True, context=self.get_serializer_context()
             ).data
             return Response(data, status=http_status.HTTP_200_OK)
 
+        # POST — загрузка файла
         ser = self.get_serializer(data=request.data, context=self.get_serializer_context())
         ser.is_valid(raise_exception=True)
         ser.save(order=order, uploaded_by=request.user)
         return Response(ser.data, status=http_status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["get"], url_path="status-history")
+    def status_history(self, request, pk=None):
+        """
+        GET /api/orders/{id}/status-history/ → история смены статусов
+        для таймлайна на вкладке «Статусы».
+        """
+        order = self.get_object()
+        qs = order.status_history.all()
+        ser = self.get_serializer(qs, many=True)
+        return Response(ser.data, status=http_status.HTTP_200_OK)

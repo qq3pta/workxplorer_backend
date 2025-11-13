@@ -10,6 +10,7 @@ class GeoDistance(Func):
     ST_Distance(a::geography, b::geography) -> расстояние в метрах.
     Работает с PointField(geography=True), если есть гео-поля.
     """
+
     function = "ST_Distance"
     output_field = FloatField()
 
@@ -47,6 +48,7 @@ class OrderAdmin(admin.ModelAdmin):
         if obj.price_per_km is None:
             return "-"
         return f"{obj.price_per_km:.2f}"
+
     price_per_km_display.short_description = "Цена за км"
 
 
@@ -70,18 +72,21 @@ class OrderDocumentAdmin(admin.ModelAdmin):
 
     def category_display(self, obj):
         return obj.get_category_display()
+
     category_display.short_description = "Категория"
 
     def file_name(self, obj):
         if obj.file:
             return obj.file.name.split("/")[-1]
         return "-"
+
     file_name.short_description = "Имя файла"
 
     def file_size(self, obj):
         if obj.file and hasattr(obj.file, "size"):
             return f"{obj.file.size / 1024:.1f} KB"
         return "-"
+
     file_size.short_description = "Размер файла"
 
 
@@ -102,13 +107,18 @@ class OrderStatusHistoryAdmin(admin.ModelAdmin):
         u = obj.user
         if not u:
             return "-"
-        return getattr(u, "full_name", None) or getattr(u, "name", None) or getattr(u, "username", "-")
+        return (
+            getattr(u, "full_name", None) or getattr(u, "name", None) or getattr(u, "username", "-")
+        )
+
     user_name.short_description = "Пользователь"
 
     def old_status_label(self, obj):
         return obj.get_old_status_display()
+
     old_status_label.short_description = "Старый статус"
 
     def new_status_label(self, obj):
         return obj.get_new_status_display()
+
     new_status_label.short_description = "Новый статус"

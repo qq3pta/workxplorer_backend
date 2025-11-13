@@ -1,14 +1,15 @@
 import requests
 from django.conf import settings
-from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle
 from rest_framework.views import APIView
+from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema
+import time
 
-from .serializers import CountrySuggestResponseSerializer, CitySuggestResponseSerializer
+from .serializers import CitySuggestResponseSerializer, CountrySuggestResponseSerializer
 
-# Список стран
+# --- Страны ---
 ISO_COUNTRIES = [
     {"code": "KZ", "name": "Казахстан"},
     {"code": "UZ", "name": "Узбекистан"},
@@ -45,7 +46,6 @@ class SuggestThrottle(AnonRateThrottle):
 
 
 def _lang_pref(lang: str) -> str:
-    """Цепочка Accept-Language."""
     lang = (lang or "ru").lower()
     if lang.startswith("uz"):
         return "uz,uz-Latn,ru,en"
@@ -66,12 +66,14 @@ class CountrySuggestView(APIView):
                 description="Код страны (ISO-2) или часть названия",
                 required=False,
                 type=OpenApiTypes.STR,
+                location="query",
             ),
             OpenApiParameter(
                 name="limit",
                 description="Максимум результатов (1..50, по умолчанию 10)",
                 required=False,
                 type=OpenApiTypes.INT,
+                location="query",
             ),
         ],
         responses={200: CountrySuggestResponseSerializer},
@@ -79,49 +81,56 @@ class CountrySuggestView(APIView):
     )
     def get(self, request):
         q = (request.query_params.get("q") or "").strip().lower()
-        limit = max(1, min(50, int(request.query_params.get("limit") or 10)))
+        try:
+            limit = int(request.query_params.get("limit") or 10)
+        except ValueError:
+            limit = 10
+        limit = max(1, min(50, limit))
 
         if not q:
             data = ISO_COUNTRIES[:limit]
         else:
-            # фильтр по названию или коду
             data = [c for c in ISO_COUNTRIES if q in c["name"].lower() or q in c["code"].lower()][
                 :limit
             ]
+
         return Response({"results": data})
 
 
 class CitySuggestView(APIView):
-    """
-    Подсказки по городам через Nominatim (OpenStreetMap) с приоритетом совпадений в начале имени.
-    """
-
     permission_classes = [AllowAny]
     throttle_classes = [SuggestThrottle]
 
     @extend_schema(
-        summary="Подсказки по городам (сортировка по совпадению в начале)",
+        summary="Подсказки по городам",
         parameters=[
             OpenApiParameter(
                 name="q",
-                description="Строка поиска (мин 2 символа)",
+                description="Строка поиска (минимум 2 символа)",
                 required=True,
                 type=OpenApiTypes.STR,
+                location="query",
             ),
             OpenApiParameter(
                 name="country",
-                description="ISO-2 код страны",
+                description="ISO-2 код страны для фильтра (необязательно)",
                 required=False,
                 type=OpenApiTypes.STR,
+                location="query",
             ),
             OpenApiParameter(
-                name="lang", description="Язык: ru|uz|en", required=False, type=OpenApiTypes.STR
+                name="lang",
+                description="Язык результата: ru | uz | en (по умолчанию ru)",
+                required=False,
+                type=OpenApiTypes.STR,
+                location="query",
             ),
             OpenApiParameter(
                 name="limit",
-                description="Максимум результатов (1..50)",
+                description="Максимум результатов (1..50, по умолчанию 10)",
                 required=False,
                 type=OpenApiTypes.INT,
+                location="query",
             ),
         ],
         responses={200: CitySuggestResponseSerializer},
@@ -129,15 +138,16 @@ class CitySuggestView(APIView):
     )
     def get(self, request):
         q = (request.query_params.get("q") or "").strip()
-        if len(q) < 2:
-            return Response({"results": []})
-
         country = (request.query_params.get("country") or "").upper().strip()
-        if country and country not in ALLOWED_COUNTRY_CODES:
-            return Response({"results": []})
-
         lang = (request.query_params.get("lang") or "ru").strip()
-        limit = max(1, min(50, int(request.query_params.get("limit") or 10)))
+        try:
+            limit = int(request.query_params.get("limit") or 10)
+        except ValueError:
+            limit = 10
+        limit = max(1, min(50, limit))
+
+        if len(q) < 2 or (country and country not in ALLOWED_COUNTRY_CODES):
+            return Response({"results": []})
 
         try:
             params = {
@@ -145,18 +155,20 @@ class CitySuggestView(APIView):
                 "format": "json",
                 "addressdetails": 1,
                 "namedetails": 1,
-                "limit": limit * 3,  # берём больше, чтобы фильтровать и сортировать
+                "limit": limit,
                 "countrycodes": country.lower()
                 if country
-                else ",".join(cc.lower() for cc in ALLOWED_COUNTRY_CODES),
+                else ",".join(code.lower() for code in ALLOWED_COUNTRY_CODES),
             }
+
+            ua = getattr(settings, "GEO_NOMINATIM_USER_AGENT", "workxplorer/geo-suggest")
             headers = {
-                "User-Agent": getattr(
-                    settings, "GEO_NOMINATIM_USER_AGENT", "workxplorer/geo-suggest"
-                ),
+                "User-Agent": ua,
                 "Accept-Language": _lang_pref(lang),
             }
 
+            # 🔹 Лёгкий sleep, чтобы не банили Nominatim
+            time.sleep(1.0)
             r = requests.get(
                 "https://nominatim.openstreetmap.org/search",
                 params=params,
@@ -168,49 +180,33 @@ class CitySuggestView(APIView):
             if not isinstance(data, list):
                 data = []
 
-            seen = set()
-            start_matches, inside_matches = [], []
-            q_lower = q.lower()
-
+            out, seen = [], set()
             for item in data:
                 if item.get("class") != "place" or item.get("type") not in ALLOWED_PLACE_TYPES:
                     continue
-
-                addr = item.get("address") or {}
-                cc = (addr.get("country_code") or "").upper()
-                if cc not in ALLOWED_COUNTRY_CODES:
+                cc = (item.get("address", {}).get("country_code") or "").upper()
+                if country and cc != country:
                     continue
-
-                nd = item.get("namedetails") or {}
-                main_lang = lang.split(",")[0]
-                candidates = [
-                    nd.get(f"name:{main_lang}"),
-                    nd.get("name:ru"),
-                    nd.get("name:uz"),
-                    nd.get("name:uz-Latn"),
-                    nd.get("name:en"),
-                    nd.get("name"),
-                ]
-                name = next((v for v in candidates if v), None)
-                if not name or q_lower not in name.lower():
+                name = (
+                    item.get("namedetails", {}).get(f"name:{lang}")
+                    or item.get("namedetails", {}).get("name:ru")
+                    or item.get("namedetails", {}).get("name:uz")
+                    or item.get("namedetails", {}).get("name:en")
+                    or item.get("display_name", "").split(",")[0].strip()
+                )
+                if not name or (name, cc) in seen:
                     continue
+                seen.add((name, cc))
+                out.append(
+                    {
+                        "name": name,
+                        "country": item.get("address", {}).get("country", cc),
+                        "country_code": cc,
+                    }
+                )
+                if len(out) >= limit:
+                    break
 
-                key = (name, cc)
-                if key in seen:
-                    continue
-                seen.add(key)
-
-                country_label = addr.get("country") or cc
-                city_obj = {"name": name, "country": country_label, "country_code": cc}
-
-                # Сортировка: сначала начало совпадения
-                if name.lower().startswith(q_lower):
-                    start_matches.append(city_obj)
-                else:
-                    inside_matches.append(city_obj)
-
-            out = start_matches + inside_matches
-            return Response({"results": out[:limit]})
-
-        except Exception:
+            return Response({"results": out})
+        except requests.RequestException:
             return Response({"results": []})

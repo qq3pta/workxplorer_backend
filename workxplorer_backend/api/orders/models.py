@@ -132,6 +132,7 @@ class OrderDocument(models.Model):
     def __str__(self) -> str:
         return self.title or f"Document#{self.pk}"
 
+
 class OrderStatusHistory(models.Model):
     """
     История изменений статуса заказа для таймлайна на вкладке «Статусы».

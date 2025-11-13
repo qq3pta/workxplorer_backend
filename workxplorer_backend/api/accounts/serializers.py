@@ -436,7 +436,9 @@ class RoleChangeSerializer(serializers.Serializer):
         user.save(update_fields=["role"])
         return {"detail": "Роль обновлена", "role": user.role}
 
+
 # ---------------- Аналитика профиля ----------------
+
 
 class AnalyticsSerializer(serializers.Serializer):
     successful_deliveries = serializers.IntegerField()

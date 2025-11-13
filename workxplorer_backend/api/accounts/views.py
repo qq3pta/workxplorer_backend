@@ -369,7 +369,7 @@ class AnalyticsView(APIView):
             rating = user.rating_as_carrier or 0
         else:
             qs = qs.filter(Q(customer=user) | Q(carrier=user))
-            rating = (user.rating_as_customer or user.rating_as_carrier or 0)
+            rating = user.rating_as_customer or user.rating_as_carrier or 0
 
         # Текущий и предыдущий 30-дневные периоды
         days = 30

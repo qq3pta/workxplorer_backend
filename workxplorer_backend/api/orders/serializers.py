@@ -112,14 +112,11 @@ class OrderStatusUpdateSerializer(serializers.ModelSerializer):
         model = Order
         fields = ("status",)
 
+
 class OrderStatusHistorySerializer(serializers.ModelSerializer):
     user_name = serializers.SerializerMethodField()
-    old_status_label = serializers.CharField(
-        source="get_old_status_display", read_only=True
-    )
-    new_status_label = serializers.CharField(
-        source="get_new_status_display", read_only=True
-    )
+    old_status_label = serializers.CharField(source="get_old_status_display", read_only=True)
+    new_status_label = serializers.CharField(source="get_new_status_display", read_only=True)
 
     class Meta:
         model = OrderStatusHistory
@@ -138,7 +135,5 @@ class OrderStatusHistorySerializer(serializers.ModelSerializer):
         if not u:
             return ""
         return (
-            getattr(u, "full_name", None)
-            or getattr(u, "name", None)
-            or getattr(u, "username", "")
+            getattr(u, "full_name", None) or getattr(u, "name", None) or getattr(u, "username", "")
         )

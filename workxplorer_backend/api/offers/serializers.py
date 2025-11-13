@@ -127,7 +127,9 @@ class OfferShortSerializer(serializers.ModelSerializer):
 
     destination_city = serializers.CharField(source="cargo.destination_city", read_only=True)
     destination_country = serializers.CharField(source="cargo.destination_country", read_only=True)
-    delivery_date = serializers.DateField(source="cargo.delivery_date", read_only=True, allow_null=True)
+    delivery_date = serializers.DateField(
+        source="cargo.delivery_date", read_only=True, allow_null=True
+    )
 
     transport_type = serializers.CharField(source="cargo.transport_type", read_only=True)
     transport_type_display = serializers.SerializerMethodField()
@@ -147,7 +149,6 @@ class OfferShortSerializer(serializers.ModelSerializer):
             "id",
             "cargo",
             "cargo_uuid",
-
             # груз
             "origin_city",
             "origin_country",
@@ -158,22 +159,18 @@ class OfferShortSerializer(serializers.ModelSerializer):
             "transport_type",
             "transport_type_display",
             "weight_t",
-
             # перевозчик
             "carrier_name",
             "carrier_contact",
-
             # деньги
             "price_value",
             "price_currency",
-
             # статус оффера
             "accepted_by_customer",
             "accepted_by_carrier",
             "is_active",
             "status_display",
             "is_handshake",
-
             # доп. инфо
             "message",
             "created_at",
@@ -253,7 +250,6 @@ class OfferShortSerializer(serializers.ModelSerializer):
         # Если перевозчик уже подтвердил свою ставку, но ждём клиента
         if obj.accepted_by_carrier and not obj.accepted_by_customer:
             return "Ожидает ответа"
-
 
         if obj.accepted_by_customer and not obj.accepted_by_carrier:
             return "Ожидает ответа"

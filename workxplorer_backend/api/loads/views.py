@@ -96,7 +96,7 @@ class CargoDetailView(generics.RetrieveUpdateAPIView):
         obj = serializer.save()
         obj.refreshed_at = timezone.now()
         obj.update_price_uzs()
-        obj.save(update_fields=["refreshed_at", "price_uzс"])
+        obj.save(update_fields=["refreshed_at", "price_uzs"])
 
 
 # ------------------ Обновление заявки ------------------
@@ -242,6 +242,8 @@ class MyCargosView(generics.ListAPIView):
 # ------------------ Борда моих заявок ------------------
 @extend_schema(tags=["loads"])
 class MyCargosBoardView(MyCargosView):
+    permission_classes = [IsAuthenticatedAndVerified, IsCustomerOrLogistic]
+
     def get_queryset(self):
         qs = (
             super()

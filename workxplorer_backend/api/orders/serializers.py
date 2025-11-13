@@ -5,7 +5,7 @@ from api.loads.choices import Currency
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from .models import Order, OrderDocument
+from .models import Order, OrderDocument, OrderStatusHistory
 
 
 def _field_choices(model, field_name: str) -> Iterable[tuple[str, str]]:
@@ -31,11 +31,25 @@ class OrderDocumentSerializer(serializers.ModelSerializer):
     file_name = serializers.SerializerMethodField(read_only=True)
     file_size = serializers.SerializerMethodField(read_only=True)
 
+    # (licenses / contracts / loading / unloading / other)
+    category = serializers.ChoiceField(
+        choices=OrderDocument.Category.choices,
+        required=False,
+        default=OrderDocument.Category.OTHER,
+    )
+
+    category_display = serializers.CharField(
+        source="get_category_display",
+        read_only=True,
+    )
+
     class Meta:
         model = OrderDocument
         fields = (
             "id",
             "title",
+            "category",
+            "category_display",
             "file",
             "file_name",
             "file_size",
@@ -97,3 +111,34 @@ class OrderStatusUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order
         fields = ("status",)
+
+class OrderStatusHistorySerializer(serializers.ModelSerializer):
+    user_name = serializers.SerializerMethodField()
+    old_status_label = serializers.CharField(
+        source="get_old_status_display", read_only=True
+    )
+    new_status_label = serializers.CharField(
+        source="get_new_status_display", read_only=True
+    )
+
+    class Meta:
+        model = OrderStatusHistory
+        fields = (
+            "id",
+            "user_name",
+            "old_status",
+            "old_status_label",
+            "new_status",
+            "new_status_label",
+            "created_at",
+        )
+
+    def get_user_name(self, obj):
+        u = obj.user
+        if not u:
+            return ""
+        return (
+            getattr(u, "full_name", None)
+            or getattr(u, "name", None)
+            or getattr(u, "username", "")
+        )

@@ -88,7 +88,21 @@ class Order(models.Model):
 
 
 class OrderDocument(models.Model):
+    class Category(models.TextChoices):
+        LICENSES = "licenses", "Лицензии"
+        CONTRACTS = "contracts", "Договора"
+        LOADING = "loading", "Документы о погрузке"
+        UNLOADING = "unloading", "Документы о разгрузке"
+        OTHER = "other", "Дополнительно"
+
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="documents")
+
+    category = models.CharField(
+        max_length=32,
+        choices=Category.choices,
+        default=Category.OTHER,
+    )
+
     title = models.CharField(max_length=255, blank=True)
 
     file = models.FileField(
@@ -112,7 +126,49 @@ class OrderDocument(models.Model):
             models.Index(fields=["order"], name="orderdoc_order_idx"),
             models.Index(fields=["created_at"], name="orderdoc_created_idx"),
             models.Index(fields=["uploaded_by"], name="orderdoc_uploader_idx"),
+            models.Index(fields=["category"], name="orderdoc_category_idx"),
         ]
 
     def __str__(self) -> str:
         return self.title or f"Document#{self.pk}"
+
+class OrderStatusHistory(models.Model):
+    """
+    История изменений статуса заказа для таймлайна на вкладке «Статусы».
+    """
+
+    order = models.ForeignKey(
+        Order,
+        on_delete=models.CASCADE,
+        related_name="status_history",
+    )
+    old_status = models.CharField(
+        max_length=20,
+        choices=Order.OrderStatus.choices,
+        blank=True,
+        null=True,
+    )
+    new_status = models.CharField(
+        max_length=20,
+        choices=Order.OrderStatus.choices,
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="order_status_changes",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = _("Изменение статуса заказа")
+        verbose_name_plural = _("История статусов заказов")
+        indexes = [
+            models.Index(fields=["order"], name="orderstatus_order_idx"),
+            models.Index(fields=["created_at"], name="orderstatus_created_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"Order#{self.order_id}: {self.old_status} → {self.new_status}"

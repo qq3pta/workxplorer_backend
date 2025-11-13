@@ -114,13 +114,32 @@ class OfferInviteSerializer(serializers.Serializer):
 
 class OfferShortSerializer(serializers.ModelSerializer):
     """
-    Короткая карточка оффера для списков.
+    Короткая карточка оффера для списков
+    (экраны «Мои предложения → Я предложил / Предложили мне»).
     """
 
+    # --- Данные по грузу (для колонок Откуда/Куда/Дата/Тип/Вес) ---
     cargo_uuid = serializers.UUIDField(source="cargo.uuid", read_only=True)
-    cargo_origin = serializers.CharField(source="cargo.origin_city", read_only=True)
-    cargo_destination = serializers.CharField(source="cargo.destination_city", read_only=True)
-    cargo_customer_id = serializers.IntegerField(source="cargo.customer_id", read_only=True)
+
+    origin_city = serializers.CharField(source="cargo.origin_city", read_only=True)
+    origin_country = serializers.CharField(source="cargo.origin_country", read_only=True)
+    load_date = serializers.DateField(source="cargo.load_date", read_only=True)
+
+    destination_city = serializers.CharField(source="cargo.destination_city", read_only=True)
+    destination_country = serializers.CharField(source="cargo.destination_country", read_only=True)
+    delivery_date = serializers.DateField(source="cargo.delivery_date", read_only=True, allow_null=True)
+
+    transport_type = serializers.CharField(source="cargo.transport_type", read_only=True)
+    transport_type_display = serializers.SerializerMethodField()
+    weight_t = serializers.SerializerMethodField()
+
+    # --- Перевозчик / контакты ---
+    carrier_name = serializers.SerializerMethodField()
+    carrier_contact = serializers.SerializerMethodField()
+
+    # --- Статус для цветных “чипсов” ---
+    status_display = serializers.SerializerMethodField()
+    is_handshake = serializers.SerializerMethodField()
 
     class Meta:
         model = Offer
@@ -128,18 +147,118 @@ class OfferShortSerializer(serializers.ModelSerializer):
             "id",
             "cargo",
             "cargo_uuid",
-            "cargo_origin",
-            "cargo_destination",
-            "cargo_customer_id",
+
+            # груз
+            "origin_city",
+            "origin_country",
+            "load_date",
+            "destination_city",
+            "destination_country",
+            "delivery_date",
+            "transport_type",
+            "transport_type_display",
+            "weight_t",
+
+            # перевозчик
+            "carrier_name",
+            "carrier_contact",
+
+            # деньги
             "price_value",
             "price_currency",
-            "message",
+
+            # статус оффера
             "accepted_by_customer",
             "accepted_by_carrier",
             "is_active",
+            "status_display",
+            "is_handshake",
+
+            # доп. инфо
+            "message",
             "created_at",
         )
         read_only_fields = fields
+
+    # ----- helpers -----
+
+    def get_transport_type_display(self, obj: Offer) -> str:
+        """
+        Для колонки «Тип» в макете (Т, Р, М, С, П...).
+        Если в Cargo есть choices, берём label и первую букву.
+        """
+        cargo = obj.cargo
+        if hasattr(cargo, "get_transport_type_display"):
+            label = cargo.get_transport_type_display()  # напр. "Тент"
+            return label[:1] if label else ""
+        # fallback: просто первая буква кода
+        return (cargo.transport_type or "")[:1]
+
+    def get_weight_t(self, obj: Offer) -> float | None:
+        """
+        Вес в тоннах для колонки «Вес (т)».
+        """
+        cargo = obj.cargo
+        if cargo.weight_kg is None:
+            return None
+        try:
+            return round(float(cargo.weight_kg) / 1000.0, 1)
+        except Exception:
+            return None
+
+    def get_carrier_name(self, obj: Offer) -> str:
+        """
+        Название перевозчика для колонки «Перевозчик».
+        """
+        u = obj.carrier
+        if not u:
+            return ""
+        return (
+            getattr(u, "company_name", None)
+            or getattr(u, "company", None)
+            or getattr(u, "name", None)
+            or getattr(u, "username", "")
+        )
+
+    def get_carrier_contact(self, obj: Offer) -> str:
+        """
+        Телефон / email для колонки «Контакты».
+        """
+        u = obj.carrier
+        if not u:
+            return ""
+        phone = getattr(u, "phone", None) or getattr(u, "phone_number", None)
+        email = getattr(u, "email", None)
+        return phone or email or ""
+
+    def get_is_handshake(self, obj: Offer) -> bool:
+        """
+        Флаг, что оффер принят обеими сторонами
+        (для зелёной галочки / завершённой сделки).
+        """
+        return bool(obj.accepted_by_customer and obj.accepted_by_carrier and obj.is_active)
+
+    def get_status_display(self, obj: Offer) -> str:
+        """
+        Человекочитаемый статус под макет.
+        Можно потом подправить формулировки под точные ТЗ.
+        """
+        if not obj.is_active:
+            return "Отменено"
+
+        if obj.accepted_by_customer and obj.accepted_by_carrier:
+            # Для вкладки «Я предложил» это и есть тот самый "Ответ получен"
+            return "Ответ получен"
+
+        # Если перевозчик уже подтвердил свою ставку, но ждём клиента
+        if obj.accepted_by_carrier and not obj.accepted_by_customer:
+            return "Ожидает ответа"
+
+
+        if obj.accepted_by_customer and not obj.accepted_by_carrier:
+            return "Ожидает ответа"
+
+        return "Ожидает ответа"
 
 
 class OfferDetailSerializer(serializers.ModelSerializer):

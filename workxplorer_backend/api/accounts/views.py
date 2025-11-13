@@ -2,6 +2,8 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.db.models import Q, Sum
+from django.utils import timezone
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import generics, serializers, status
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -13,9 +15,11 @@ from rest_framework_simplejwt.tokens import (
     RefreshToken,
 )
 
-from .models import Profile
+from api.orders.models import Order
+from .models import Profile, UserRole
 from .permissions import IsAuthenticatedAndVerified
 from .serializers import (
+    AnalyticsSerializer,
     ForgotPasswordSerializer,
     LoginSerializer,
     MeSerializer,
@@ -83,7 +87,7 @@ class VerifyPhoneOTPView(APIView):
         return Response(s.save())
 
 
-# ===================== Регистрация / E-mail совместимость =====================
+# ===================== Регистрация / E-mail =====================
 
 
 @extend_schema(
@@ -303,7 +307,7 @@ class ChangeRoleView(APIView):
         return Response(s.save())
 
 
-# ===================== Сброс пароля по e-mail (оставили как было) =====================
+# ===================== Сброс пароля по e-mail =====================
 
 
 @extend_schema(
@@ -332,3 +336,76 @@ class ResetPasswordView(APIView):
         s = ResetPasswordSerializer(data=request.data)
         s.is_valid(raise_exception=True)
         return Response(s.save())
+
+
+# ===================== Аналитика профиля =====================
+
+
+@extend_schema(
+    tags=["auth"],
+    responses=AnalyticsSerializer,
+)
+class AnalyticsView(APIView):
+    """
+    GET /api/auth/me/analytics/ — данные для карточек аналитики в профиле.
+    """
+
+    permission_classes = [IsAuthenticatedAndVerified]
+
+    def get(self, request):
+        user = request.user
+        now = timezone.now()
+
+        # Базовый queryset успешных перевозок
+        qs = Order.objects.filter(status=Order.OrderStatus.DELIVERED)
+
+        # Фильтрация по роли
+        role = getattr(user, "role", None)
+        if role == UserRole.LOGISTIC:
+            qs = qs.filter(customer=user)
+            rating = user.rating_as_customer or 0
+        elif role == UserRole.CARRIER:
+            qs = qs.filter(carrier=user)
+            rating = user.rating_as_carrier or 0
+        else:
+            qs = qs.filter(Q(customer=user) | Q(carrier=user))
+            rating = (user.rating_as_customer or user.rating_as_carrier or 0)
+
+        # Текущий и предыдущий 30-дневные периоды
+        days = 30
+        current_start = now - timedelta(days=days)
+        prev_start = now - timedelta(days=days * 2)
+
+        current_qs = qs.filter(created_at__gte=current_start)
+        prev_qs = qs.filter(created_at__gte=prev_start, created_at__lt=current_start)
+
+        current_cnt = current_qs.count()
+        prev_cnt = prev_qs.count()
+
+        if prev_cnt > 0:
+            successful_change = (current_cnt - prev_cnt) / prev_cnt
+        else:
+            successful_change = 1.0 if current_cnt > 0 else 0.0
+
+        # Регистрация
+        registered_since = getattr(user, "date_joined", now).date()
+        days_since_registered = (now.date() - registered_since).days
+
+        # Пройденное расстояние и количество сделок
+        agg = qs.aggregate(total_km=Sum("route_distance_km"))
+        distance_km = float(agg["total_km"] or 0)
+        deals_count = qs.count()
+
+        data = {
+            "successful_deliveries": current_cnt,
+            "successful_deliveries_change": round(successful_change, 3),
+            "registered_since": registered_since,
+            "days_since_registered": days_since_registered,
+            "rating": float(rating or 0),
+            "distance_km": distance_km,
+            "deals_count": deals_count,
+        }
+
+        ser = AnalyticsSerializer(data=data)
+        ser.is_valid(raise_exception=True)
+        return Response(ser.data)

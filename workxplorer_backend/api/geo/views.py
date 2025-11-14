@@ -1,9 +1,8 @@
-from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema
-from rest_framework.permissions import AllowAny
-from rest_framework.response import Response
-from rest_framework.throttling import AnonRateThrottle
 from rest_framework.views import APIView
-from django.db.models import Q
+from rest_framework.response import Response
+from rest_framework.permissions import AllowAny
+from rest_framework.throttling import AnonRateThrottle
+from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema
 
 from .models import GeoPlace
 from .serializers import CitySuggestResponseSerializer, CountrySuggestResponseSerializer
@@ -41,7 +40,7 @@ class CountrySuggestView(APIView):
     )
     def get(self, request):
         q = (request.query_params.get("q") or "").strip()
-        limit = max(1, min(50, int(request.query_params.get("limit") or 10)))
+        limit = max(1, min(50, int(request.query_params.get("limit") or 50)))
 
         qs = GeoPlace.objects.values("country", "country_code").distinct()
         if q:
@@ -61,7 +60,7 @@ class CitySuggestView(APIView):
         parameters=[
             OpenApiParameter(
                 "q",
-                description="Часть названия города или страны",
+                description="Часть названия города",
                 required=True,
                 type=OpenApiTypes.STR,
                 location="query",
@@ -79,15 +78,13 @@ class CitySuggestView(APIView):
     )
     def get(self, request):
         q = (request.query_params.get("q") or "").strip()
-        limit = max(1, min(50, int(request.query_params.get("limit") or 10)))
+        limit = max(1, min(50, int(request.query_params.get("limit") or 50)))
 
         if not q:
             return Response({"results": []})
 
-        # Поиск по городу или стране
-        qs = GeoPlace.objects.filter(Q(name__icontains=q) | Q(country__icontains=q)).distinct()[
-            :limit
-        ]
+        # Поиск всех городов из базы, регистронезависимо
+        qs = GeoPlace.objects.filter(name__icontains=q)[:limit]
 
         results = [
             {"name": x.name, "country": x.country, "country_code": x.country_code} for x in qs

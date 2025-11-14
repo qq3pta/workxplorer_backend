@@ -43,8 +43,10 @@ ISO_COUNTRIES = [
 ALLOWED_COUNTRY_CODES = {c["code"] for c in ISO_COUNTRIES}
 ALLOWED_PLACE_TYPES = {"city", "town", "village", "hamlet", "locality"}
 
+
 class SuggestThrottle(AnonRateThrottle):
     rate = "60/min"
+
 
 def _lang_pref(lang: str) -> str:
     """Accept-Language предпочтения."""
@@ -54,6 +56,7 @@ def _lang_pref(lang: str) -> str:
     if lang.startswith("en"):
         return "en,ru,uz,uz-Latn"
     return "ru,uz,uz-Latn,en"
+
 
 # ------------------ СТРАНЫ ------------------
 class CountrySuggestView(APIView):
@@ -92,11 +95,12 @@ class CountrySuggestView(APIView):
         if not q:
             data = ISO_COUNTRIES[:limit]
         else:
-            data = [
-                c for c in ISO_COUNTRIES if q in c["name"].lower() or q in c["code"].lower()
-            ][:limit]
+            data = [c for c in ISO_COUNTRIES if q in c["name"].lower() or q in c["code"].lower()][
+                :limit
+            ]
 
         return Response({"results": data})
+
 
 # ------------------ ГОРОДА ------------------
 class CitySuggestView(APIView):
@@ -158,7 +162,9 @@ class CitySuggestView(APIView):
                 "addressdetails": 1,
                 "namedetails": 1,
                 "limit": limit,
-                "countrycodes": country.lower() if country else ",".join(code.lower() for code in ALLOWED_COUNTRY_CODES),
+                "countrycodes": country.lower()
+                if country
+                else ",".join(code.lower() for code in ALLOWED_COUNTRY_CODES),
             }
 
             ua = getattr(settings, "GEO_NOMINATIM_USER_AGENT", "workxplorer/geo-suggest")
@@ -169,7 +175,12 @@ class CitySuggestView(APIView):
 
             # лёгкий бэк-офф против rate-limit
             time.sleep(1.0)
-            r = requests.get("https://nominatim.openstreetmap.org/search", params=params, headers=headers, timeout=8)
+            r = requests.get(
+                "https://nominatim.openstreetmap.org/search",
+                params=params,
+                headers=headers,
+                timeout=8,
+            )
             r.raise_for_status()
             data = r.json()
             if not isinstance(data, list):
@@ -186,11 +197,11 @@ class CitySuggestView(APIView):
 
                 nd = item.get("namedetails") or {}
                 name = (
-                    nd.get(f"name:{lang}") or
-                    nd.get("name:ru") or
-                    nd.get("name:uz") or
-                    nd.get("name:en") or
-                    item.get("display_name", "").split(",")[0].strip()
+                    nd.get(f"name:{lang}")
+                    or nd.get("name:ru")
+                    or nd.get("name:uz")
+                    or nd.get("name:en")
+                    or item.get("display_name", "").split(",")[0].strip()
                 )
 
                 if not name or (name, cc) in seen:

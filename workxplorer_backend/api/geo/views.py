@@ -1,15 +1,14 @@
 from __future__ import annotations
 
 import time
-
 import requests
 from django.conf import settings
-from django.db.models import Q
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from rest_framework.throttling import AnonRateThrottle
 from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema
+from django.contrib.gis.geos import Point
 
 from .models import GeoPlace
 from .serializers import CitySuggestResponseSerializer, CountrySuggestResponseSerializer
@@ -32,10 +31,7 @@ def _lang_pref(lang: str) -> str:
     return "ru,uz,uz-Latn,en"
 
 
-def _search_nominatim_city(q: str, country: str | None, lang: str, limit: int = 10):
-    """
-    Поиск города через Nominatim с фильтром по стране и локализацией.
-    """
+def _search_nominatim(q: str, lang: str, limit: int = 10):
     params = {
         "q": q,
         "format": "json",
@@ -43,8 +39,6 @@ def _search_nominatim_city(q: str, country: str | None, lang: str, limit: int = 
         "namedetails": 1,
         "limit": limit,
     }
-    if country:
-        params["countrycodes"] = country.lower()
 
     headers = {
         "User-Agent": getattr(settings, "GEO_NOMINATIM_USER_AGENT", "workxplorer/geo-suggest"),
@@ -52,7 +46,7 @@ def _search_nominatim_city(q: str, country: str | None, lang: str, limit: int = 
     }
 
     try:
-        time.sleep(1)  # rate limit
+        time.sleep(1)
         r = requests.get(NOMINATIM_URL, params=params, headers=headers, timeout=8)
         r.raise_for_status()
         data = r.json()
@@ -63,7 +57,6 @@ def _search_nominatim_city(q: str, country: str | None, lang: str, limit: int = 
         return []
 
 
-# ---------------- Countries ----------------
 class CountrySuggestView(APIView):
     permission_classes = [AllowAny]
     throttle_classes = [SuggestThrottle]
@@ -73,7 +66,7 @@ class CountrySuggestView(APIView):
         parameters=[
             OpenApiParameter(
                 "q",
-                description="Код страны (ISO-2) или часть названия",
+                description="Часть названия страны",
                 required=False,
                 type=OpenApiTypes.STR,
                 location="query",
@@ -95,14 +88,12 @@ class CountrySuggestView(APIView):
 
         qs = GeoPlace.objects.values("country", "country_code").distinct()
         if q:
-            qs = qs.filter(Q(country__icontains=q) | Q(country_code__icontains=q))
+            qs = qs.filter(country__icontains=q)
 
         results = [{"name": x["country"], "code": x["country_code"]} for x in qs[:limit]]
-        serializer = CountrySuggestResponseSerializer({"results": results})
-        return Response(serializer.data)
+        return Response(CountrySuggestResponseSerializer({"results": results}).data)
 
 
-# ---------------- Cities ----------------
 class CitySuggestView(APIView):
     permission_classes = [AllowAny]
     throttle_classes = [SuggestThrottle]
@@ -112,15 +103,8 @@ class CitySuggestView(APIView):
         parameters=[
             OpenApiParameter(
                 "q",
-                description="Строка поиска (минимум 2 символа)",
+                description="Часть названия города",
                 required=True,
-                type=OpenApiTypes.STR,
-                location="query",
-            ),
-            OpenApiParameter(
-                "country",
-                description="ISO-2 код страны для фильтра (необязательно)",
-                required=False,
                 type=OpenApiTypes.STR,
                 location="query",
             ),
@@ -144,26 +128,21 @@ class CitySuggestView(APIView):
     )
     def get(self, request):
         q = (request.query_params.get("q") or "").strip()
-        country = (request.query_params.get("country") or "").upper().strip()
         lang = (request.query_params.get("lang") or "ru").strip()
         limit = max(1, min(50, int(request.query_params.get("limit") or 10)))
 
         if len(q) < 2:
             return Response({"results": []})
 
-        # Сначала поиск в GeoPlace
-        qs = GeoPlace.objects.all()
-        if country:
-            qs = qs.filter(country_code__iexact=country)
-        qs = qs.filter(name__icontains=q)[:limit]
-
+        # Поиск в базе
+        qs = GeoPlace.objects.filter(name__icontains=q)[:limit]
         results = [
             {"name": x.name, "country": x.country, "country_code": x.country_code} for x in qs
         ]
 
-        # Если ничего не найдено — обращаемся к Nominatim
+        # Если не найдено — поиск через Nominatim
         if not results:
-            data = _search_nominatim_city(q, country, lang, limit)
+            data = _search_nominatim(q, lang, limit)
             seen = set()
             for item in data:
                 if item.get("class") != "place" or item.get("type") not in ALLOWED_PLACE_TYPES:
@@ -183,13 +162,16 @@ class CitySuggestView(APIView):
                 seen.add((name, cc))
                 country_label = item.get("address", {}).get("country") or cc
 
-                # Сохраняем в GeoPlace
+                lat = item.get("lat")
+                lon = item.get("lon")
+                point = Point(float(lon), float(lat)) if lat and lon else None
+
                 try:
                     GeoPlace.objects.create(
                         name=name,
                         country=country_label,
                         country_code=cc,
-                        point=None,
+                        point=point,
                         provider="nominatim",
                         raw=item,
                     )
@@ -200,5 +182,4 @@ class CitySuggestView(APIView):
                 if len(results) >= limit:
                     break
 
-        serializer = CitySuggestResponseSerializer({"results": results[:limit]})
-        return Response(serializer.data)
+        return Response(CitySuggestResponseSerializer({"results": results[:limit]}).data)

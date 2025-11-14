@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import time
 from typing import Literal
 
 import requests
@@ -10,6 +9,7 @@ from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle
 from rest_framework.views import APIView
 from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema
+
 from .serializers import CitySuggestResponseSerializer, CountrySuggestResponseSerializer
 
 # --- Страны ---
@@ -49,7 +49,6 @@ class SuggestThrottle(AnonRateThrottle):
 
 
 def _lang_pref(lang: str) -> str:
-    """Accept-Language предпочтения."""
     lang = (lang or "ru").lower()
     if lang.startswith("uz"):
         return "uz,uz-Latn,ru,en"
@@ -58,7 +57,7 @@ def _lang_pref(lang: str) -> str:
     return "ru,uz,uz-Latn,en"
 
 
-# ------------------ СТРАНЫ ------------------
+# ---------------- Countries ----------------
 class CountrySuggestView(APIView):
     permission_classes = [AllowAny]
     throttle_classes = [SuggestThrottle]
@@ -67,14 +66,14 @@ class CountrySuggestView(APIView):
         summary="Подсказки по странам",
         parameters=[
             OpenApiParameter(
-                name="q",
+                "q",
                 description="Код страны (ISO-2) или часть названия",
                 required=False,
                 type=OpenApiTypes.STR,
                 location=Literal["query"],
             ),
             OpenApiParameter(
-                name="limit",
+                "limit",
                 description="Максимум результатов (1..50, по умолчанию 10)",
                 required=False,
                 type=OpenApiTypes.INT,
@@ -92,17 +91,16 @@ class CountrySuggestView(APIView):
             limit = 10
         limit = max(1, min(50, limit))
 
-        if not q:
-            data = ISO_COUNTRIES[:limit]
-        else:
-            data = [c for c in ISO_COUNTRIES if q in c["name"].lower() or q in c["code"].lower()][
-                :limit
-            ]
+        results = (
+            [c for c in ISO_COUNTRIES if q in c["name"].lower() or q in c["code"].lower()]
+            if q
+            else ISO_COUNTRIES
+        )
 
-        return Response({"results": data})
+        return Response({"results": results[:limit]})
 
 
-# ------------------ ГОРОДА ------------------
+# ---------------- Cities ----------------
 class CitySuggestView(APIView):
     permission_classes = [AllowAny]
     throttle_classes = [SuggestThrottle]
@@ -111,28 +109,28 @@ class CitySuggestView(APIView):
         summary="Подсказки по городам",
         parameters=[
             OpenApiParameter(
-                name="q",
+                "q",
                 description="Строка поиска (минимум 2 символа)",
                 required=True,
                 type=OpenApiTypes.STR,
                 location=Literal["query"],
             ),
             OpenApiParameter(
-                name="country",
+                "country",
                 description="ISO-2 код страны для фильтра (необязательно)",
                 required=False,
                 type=OpenApiTypes.STR,
                 location=Literal["query"],
             ),
             OpenApiParameter(
-                name="lang",
+                "lang",
                 description="Язык результата: ru | uz | en (по умолчанию ru)",
                 required=False,
                 type=OpenApiTypes.STR,
                 location=Literal["query"],
             ),
             OpenApiParameter(
-                name="limit",
+                "limit",
                 description="Максимум результатов (1..50, по умолчанию 10)",
                 required=False,
                 type=OpenApiTypes.INT,
@@ -145,7 +143,7 @@ class CitySuggestView(APIView):
     def get(self, request):
         q = (request.query_params.get("q") or "").strip()
         country = (request.query_params.get("country") or "").upper().strip()
-        lang = (request.query_params.get("lang") or "ru").strip().lower()
+        lang = (request.query_params.get("lang") or "ru").strip()
         try:
             limit = int(request.query_params.get("limit") or 10)
         except ValueError:
@@ -155,26 +153,22 @@ class CitySuggestView(APIView):
         if len(q) < 2 or (country and country not in ALLOWED_COUNTRY_CODES):
             return Response({"results": []})
 
+        params = {
+            "q": q,
+            "format": "json",
+            "addressdetails": 1,
+            "namedetails": 1,
+            "limit": limit,
+        }
+        if country:
+            params["countrycodes"] = country.lower()
+
+        headers = {
+            "User-Agent": getattr(settings, "GEO_NOMINATIM_USER_AGENT", "workxplorer/geo-suggest"),
+            "Accept-Language": _lang_pref(lang),
+        }
+
         try:
-            params = {
-                "q": q,
-                "format": "json",
-                "addressdetails": 1,
-                "namedetails": 1,
-                "limit": limit,
-                "countrycodes": country.lower()
-                if country
-                else ",".join(code.lower() for code in ALLOWED_COUNTRY_CODES),
-            }
-
-            ua = getattr(settings, "GEO_NOMINATIM_USER_AGENT", "workxplorer/geo-suggest")
-            headers = {
-                "User-Agent": ua,
-                "Accept-Language": _lang_pref(lang),
-            }
-
-            # лёгкий бэк-офф против rate-limit
-            time.sleep(1.0)
             r = requests.get(
                 "https://nominatim.openstreetmap.org/search",
                 params=params,
@@ -192,23 +186,21 @@ class CitySuggestView(APIView):
                     continue
 
                 cc = (item.get("address", {}).get("country_code") or "").upper()
-                if country and cc != country:
-                    continue
-
-                nd = item.get("namedetails") or {}
-                name = (
-                    nd.get(f"name:{lang}")
-                    or nd.get("name:ru")
-                    or nd.get("name:uz")
-                    or nd.get("name:en")
-                    or item.get("display_name", "").split(",")[0].strip()
-                )
-
+                name_candidates = [
+                    item.get("namedetails", {}).get(f"name:{lang}"),
+                    item.get("namedetails", {}).get("name:ru"),
+                    item.get("namedetails", {}).get("name:uz-Latn"),
+                    item.get("namedetails", {}).get("name:uz"),
+                    item.get("namedetails", {}).get("name:en"),
+                    (item.get("display_name") or "").split(",")[0].strip(),
+                ]
+                name = next((n for n in name_candidates if n), None)
                 if not name or (name, cc) in seen:
                     continue
                 seen.add((name, cc))
-                country_name = item.get("address", {}).get("country") or cc
-                out.append({"name": name, "country": country_name, "country_code": cc})
+
+                country_label = item.get("address", {}).get("country") or cc
+                out.append({"name": name, "country": country_label, "country_code": cc})
 
                 if len(out) >= limit:
                     break

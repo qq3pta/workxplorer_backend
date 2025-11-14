@@ -33,7 +33,7 @@ def _lang_pref(lang: str) -> str:
     return "ru,uz,uz-Latn,en"
 
 
-def _search_nominatim_city(q: str, country: Optional[str], lang: str, limit: int = 10):
+def _search_nominatim_city(q: str, country: str | None, lang: str, limit: int = 10):
     """
     Поиск города через Nominatim с фильтром по стране и локализацией.
     """

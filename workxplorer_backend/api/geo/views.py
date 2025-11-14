@@ -1,8 +1,8 @@
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework.permissions import AllowAny
-from rest_framework.throttling import AnonRateThrottle
 from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
+from rest_framework.throttling import AnonRateThrottle
+from rest_framework.views import APIView
 
 from .models import GeoPlace
 from .serializers import CitySuggestResponseSerializer, CountrySuggestResponseSerializer

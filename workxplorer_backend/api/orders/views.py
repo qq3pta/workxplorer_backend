@@ -14,8 +14,8 @@ from .serializers import (
     OrderDetailSerializer,
     OrderDocumentSerializer,
     OrderListSerializer,
-    OrderStatusUpdateSerializer,
     OrderStatusHistorySerializer,
+    OrderStatusUpdateSerializer,
 )
 
 

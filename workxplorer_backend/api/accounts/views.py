@@ -16,6 +16,7 @@ from rest_framework_simplejwt.tokens import (
 )
 
 from api.orders.models import Order
+
 from .models import Profile, UserRole
 from .permissions import IsAuthenticatedAndVerified
 from .serializers import (

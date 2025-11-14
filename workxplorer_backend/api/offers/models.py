@@ -2,14 +2,15 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from api.loads.choices import Currency
-from api.loads.models import Cargo, CargoStatus
 from django.apps import apps
 from django.conf import settings
 from django.core.exceptions import AppRegistryNotReady, PermissionDenied, ValidationError
 from django.core.validators import MinValueValidator
 from django.db import models, transaction
 from django.db.models import Q, UniqueConstraint
+
+from api.loads.choices import Currency
+from api.loads.models import Cargo, CargoStatus
 
 
 class Offer(models.Model):

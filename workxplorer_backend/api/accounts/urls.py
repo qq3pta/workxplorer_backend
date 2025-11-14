@@ -1,6 +1,7 @@
 from django.urls import path
 
 from .views import (
+    AnalyticsView,
     ChangeRoleView,
     ForgotPasswordView,
     LoginView,
@@ -14,7 +15,6 @@ from .views import (
     UpdateMeView,
     VerifyEmailView,
     VerifyPhoneOTPView,
-    AnalyticsView,
 )
 
 urlpatterns = [

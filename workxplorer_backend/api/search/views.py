@@ -1,4 +1,3 @@
-from api.geo.services import geocode_city
 from django.contrib.gis.measure import D
 from django.db.models import F, FloatField
 from django.db.models.expressions import Func
@@ -6,6 +5,8 @@ from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema
 from rest_framework import generics, permissions
 from rest_framework.exceptions import ValidationError
+
+from api.geo.services import geocode_city
 
 from ..accounts.permissions import IsCarrier
 from ..loads.models import Cargo, CargoStatus

@@ -1,9 +1,10 @@
 import os
 from collections.abc import Iterable
 
-from api.loads.choices import Currency
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
+
+from api.loads.choices import Currency
 
 from .models import Order, OrderDocument, OrderStatusHistory
 

@@ -1,12 +1,13 @@
 import os
 
-from api.loads.choices import Currency
-from api.loads.models import Cargo
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import FileExtensionValidator, MinValueValidator
 from django.db import models
 from django.utils.translation import gettext_lazy as _
+
+from api.loads.choices import Currency
+from api.loads.models import Cargo
 
 
 def order_upload_to(instance, filename: str) -> str:

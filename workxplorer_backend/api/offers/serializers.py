@@ -3,10 +3,11 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any
 
-from api.loads.choices import Currency, ModerationStatus
-from api.loads.models import Cargo, CargoStatus
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
+
+from api.loads.choices import Currency, ModerationStatus
+from api.loads.models import Cargo, CargoStatus
 
 from .models import Offer
 

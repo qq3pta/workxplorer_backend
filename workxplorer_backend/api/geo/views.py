@@ -3,6 +3,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle
 from rest_framework.views import APIView
+from django.db.models import Q
 
 from .models import GeoPlace
 from .serializers import CitySuggestResponseSerializer, CountrySuggestResponseSerializer
@@ -60,7 +61,7 @@ class CitySuggestView(APIView):
         parameters=[
             OpenApiParameter(
                 "q",
-                description="Часть названия города",
+                description="Часть названия города или страны",
                 required=True,
                 type=OpenApiTypes.STR,
                 location="query",
@@ -83,7 +84,11 @@ class CitySuggestView(APIView):
         if not q:
             return Response({"results": []})
 
-        qs = GeoPlace.objects.filter(name__icontains=q)[:limit]
+        # Поиск по городу или стране
+        qs = GeoPlace.objects.filter(Q(name__icontains=q) | Q(country__icontains=q)).distinct()[
+            :limit
+        ]
+
         results = [
             {"name": x.name, "country": x.country, "country_code": x.country_code} for x in qs
         ]

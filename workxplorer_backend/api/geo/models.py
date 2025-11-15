@@ -13,7 +13,7 @@ class GeoPlace(models.Model):
         max_length=2,
         validators=[RegexValidator(r"^[A-Z]{2}$", message="ISO-2 код страны, например UZ, KZ")],
     )
-    point = gis_models.PointField(geography=True, srid=4326, null=True, blank=True)
+    point = gis_models.PointField(null=True, blank=True)
     provider = models.CharField(max_length=32, default="nominatim")
     raw = models.JSONField(null=True, blank=True)
     last_verified_at = models.DateTimeField(auto_now=True)

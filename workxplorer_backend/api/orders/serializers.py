@@ -76,10 +76,34 @@ class OrderDocumentSerializer(serializers.ModelSerializer):
 
 
 class OrderListSerializer(serializers.ModelSerializer):
+    # агрегаты / вычисляемые поля
     price_per_km = serializers.FloatField(read_only=True)
     cargo_id = serializers.IntegerField(read_only=True)
+
     status = serializers.ChoiceField(choices=_order_status_choices())
     currency = serializers.ChoiceField(choices=_currency_choices())
+    currency_display = serializers.CharField(
+        source="get_currency_display",
+        read_only=True,
+    )
+
+    # участники сделки
+    customer_name = serializers.SerializerMethodField()
+    carrier_name = serializers.SerializerMethodField()
+    logistic_name = serializers.SerializerMethodField()
+
+    # Откуда / Куда / Даты (из Cargo)
+    origin_city = serializers.CharField(source="cargo.origin_city", read_only=True)
+    destination_city = serializers.CharField(source="cargo.destination_city", read_only=True)
+    load_date = serializers.DateField(source="cargo.load_date", read_only=True)
+    delivery_date = serializers.DateField(
+        source="cargo.delivery_date",
+        read_only=True,
+        allow_null=True,
+    )
+
+    # Документы (кол-во)
+    documents_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Order
@@ -88,15 +112,70 @@ class OrderListSerializer(serializers.ModelSerializer):
             "cargo",
             "cargo_id",
             "customer",
+            "customer_name",
             "carrier",
+            "carrier_name",
+            "logistic_name",
             "status",
             "currency",
+            "currency_display",
             "price_total",
             "route_distance_km",
             "price_per_km",
+            "origin_city",
+            "load_date",
+            "destination_city",
+            "delivery_date",
+            "documents_count",
             "created_at",
         )
-        read_only_fields = ("id", "created_at", "price_per_km")
+        read_only_fields = (
+            "id",
+            "created_at",
+            "price_per_km",
+            "cargo_id",
+            "customer",
+            "carrier",
+        )
+
+    # ----- helpers для имён участников -----
+
+    def _user_display_name(self, u):
+        if not u:
+            return ""
+        return (
+            getattr(u, "company_name", None)
+            or getattr(u, "company", None)
+            or getattr(u, "name", None)
+            or getattr(u, "username", "")
+        )
+
+    def get_customer_name(self, obj):
+        return self._user_display_name(getattr(obj, "customer", None))
+
+    def get_carrier_name(self, obj):
+        return self._user_display_name(getattr(obj, "carrier", None))
+
+    def get_logistic_name(self, obj):
+        """
+        Посредник = пользователь, создавший заказ, если он логист.
+        """
+        u = getattr(obj, "created_by", None)
+        if not u:
+            return ""
+        if getattr(u, "is_logistic", False) or getattr(u, "role", None) == "LOGISTIC":
+            return self._user_display_name(u)
+        return ""
+
+    # ----- документы -----
+
+    @extend_schema_field(serializers.IntegerField(allow_null=False, min_value=0))
+    def get_documents_count(self, obj) -> int:
+        rel = getattr(obj, "documents", None)
+        try:
+            return rel.count() if rel is not None else 0
+        except Exception:
+            return 0
 
 
 class OrderDetailSerializer(OrderListSerializer):

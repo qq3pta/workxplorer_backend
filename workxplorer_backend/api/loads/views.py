@@ -2,7 +2,17 @@ from django.contrib.gis.db.models.functions import Distance
 from django.contrib.gis.geos import Point
 from django.contrib.gis.measure import D
 from django.core.exceptions import ValidationError
-from django.db.models import Count, DecimalField, ExpressionWrapper, F, FloatField, Func, Q
+from django.db.models import (
+    Avg,
+    Count,
+    DecimalField,
+    ExpressionWrapper,
+    F,
+    FloatField,
+    Func,
+    Q,
+    Value,
+)
 from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -142,6 +152,7 @@ class MyCargosView(generics.ListAPIView):
                     F("price_value"),
                     output_field=DecimalField(max_digits=14, decimal_places=2),
                 ),
+                company_rating=Avg("customer__ratings_received__score"),
             )
             .select_related("customer")
         )
@@ -179,16 +190,20 @@ class MyCargosView(generics.ListAPIView):
             qs = qs.filter(volume_m3__lte=p["volume_max"])
         if p.get("min_price_uzs"):
             qs = qs.filter(price_uzs_anno__gte=p["min_price_uzs"])
-        if p.get("max_price_узs"):
-            qs = qs.filter(price_uzs_anno__lte=p["max_price_uzs"])
+        if p.get("max_price_uzs"):
+            qs = qs.filter(price_uzs_anno__lte=p["max_price_узs"])
 
         # Радиусные фильтры (как на публичной)
         o_lat, o_lng, o_r = p.get("origin_lat"), p.get("origin_lng"), p.get("origin_radius_km")
         if o_lat and o_lng and o_r:
             try:
                 origin_point = Point(float(o_lng), float(o_lat), srid=4326)
-                qs = qs.filter(origin_point__distance_lte=(origin_point, D(km=float(o_r))))
-                qs = qs.annotate(origin_dist_km=Distance("origin_point", origin_point) / 1000.0)
+                radius_km = float(o_r)
+                qs = qs.filter(origin_point__distance_lte=(origin_point, D(km=radius_km)))
+                qs = qs.annotate(
+                    origin_dist_km=Distance("origin_point", origin_point) / 1000.0,
+                    origin_radius_km=Value(radius_km, output_field=FloatField()),
+                )
             except (TypeError, ValueError):
                 pass
 
@@ -196,7 +211,11 @@ class MyCargosView(generics.ListAPIView):
         if d_lat and d_lng and d_r:
             try:
                 dest_point = Point(float(d_lng), float(d_lat), srid=4326)
-                qs = qs.filter(dest_point__distance_lte=(dest_point, D(km=float(d_r))))
+                radius_km2 = float(d_r)
+                qs = qs.filter(dest_point__distance_lte=(dest_point, D(km=radius_km2)))
+                qs = qs.annotate(
+                    dest_radius_km=Value(radius_km2, output_field=FloatField()),
+                )
             except (TypeError, ValueError):
                 pass
 
@@ -284,6 +303,7 @@ class PublicLoadsView(generics.ListAPIView):
                     output_field=DecimalField(max_digits=14, decimal_places=2),
                 ),
                 route_km_anno=Coalesce(F("route_km_cached"), F("path_km")),
+                company_rating=Avg("customer__ratings_received__score"),
             )
             .select_related("customer")
         )
@@ -324,7 +344,7 @@ class PublicLoadsView(generics.ListAPIView):
 
         # --- Цена (в суммах) ---
         if p.get("min_price_uzs"):
-            qs = qs.filter(price_узs_anno__gte=p["min_price_uzs"])
+            qs = qs.filter(price_uzs_anno__gte=p["min_price_uzs"])
         if p.get("max_price_uzs"):
             qs = qs.filter(price_uzs_anno__lte=p["max_price_uzs"])
 
@@ -333,8 +353,12 @@ class PublicLoadsView(generics.ListAPIView):
         if o_lat and o_lng and o_r:
             try:
                 origin_point = Point(float(o_lng), float(o_lat), srid=4326)
-                qs = qs.filter(origin_point__distance_lte=(origin_point, D(km=float(o_r))))
-                qs = qs.annotate(origin_dist_km=Distance("origin_point", origin_point) / 1000.0)
+                radius_km = float(o_r)
+                qs = qs.filter(origin_point__distance_lte=(origin_point, D(km=radius_km)))
+                qs = qs.annotate(
+                    origin_dist_km=Distance("origin_point", origin_point) / 1000.0,
+                    origin_radius_km=Value(radius_km, output_field=FloatField()),
+                )
             except (TypeError, ValueError):
                 pass
 
@@ -342,7 +366,11 @@ class PublicLoadsView(generics.ListAPIView):
         if d_lat and d_lng and d_r:
             try:
                 dest_point = Point(float(d_lng), float(d_lat), srid=4326)
-                qs = qs.filter(dest_point__distance_lte=(dest_point, D(km=float(d_r))))
+                radius_km2 = float(d_r)
+                qs = qs.filter(dest_point__distance_lte=(dest_point, D(km=radius_km2)))
+                qs = qs.annotate(
+                    dest_radius_km=Value(radius_km2, output_field=FloatField()),
+                )
             except (TypeError, ValueError):
                 pass
 
@@ -423,5 +451,6 @@ class CargoCancelView(generics.GenericAPIView):
 
         cargo.status = CargoStatus.CANCELLED
         cargo.save(update_fields=["status"])
+
         cargo.offers.update(is_active=False)
         return Response({"detail": "Перевозка отменена"}, status=status.HTTP_200_OK)

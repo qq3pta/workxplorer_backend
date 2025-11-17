@@ -244,21 +244,36 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
 
 
 class CargoListSerializer(RouteKmMixin, serializers.ModelSerializer):
+    id = serializers.IntegerField(read_only=True)
     price_uzs = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
     uuid = serializers.UUIDField(read_only=True)
     age_minutes = serializers.IntegerField(read_only=True)
+
     path_km = serializers.FloatField(read_only=True, required=False)
     origin_dist_km = serializers.FloatField(read_only=True, required=False)
+
+    # новые поля радиуса
+    origin_radius_km = serializers.FloatField(read_only=True, required=False)
+    dest_radius_km = serializers.FloatField(read_only=True, required=False)
+
     has_offers = serializers.SerializerMethodField()
     offers_count = serializers.SerializerMethodField()
     company_name = serializers.SerializerMethodField()
-    contact_value = serializers.SerializerMethodField()
+
+    # новый рейтинг компании
+    company_rating = serializers.FloatField(read_only=True, required=False)
+
+    # вместо contact_value
+    phone = serializers.SerializerMethodField()
+    email = serializers.SerializerMethodField()
+
     weight_t = serializers.SerializerMethodField()
     price_per_km = serializers.SerializerMethodField()
 
     class Meta:
         model = Cargo
         fields = (
+            "id",
             "uuid",
             "product",
             "description",
@@ -279,9 +294,11 @@ class CargoListSerializer(RouteKmMixin, serializers.ModelSerializer):
             "price_currency",
             "price_uzs",
             "contact_pref",
-            "contact_value",
             "is_hidden",
             "company_name",
+            "company_rating",
+            "phone",
+            "email",
             "moderation_status",
             "status",
             "age_minutes",
@@ -293,6 +310,8 @@ class CargoListSerializer(RouteKmMixin, serializers.ModelSerializer):
             "route_km",
             "price_per_km",
             "origin_dist_km",
+            "origin_radius_km",
+            "dest_radius_km",
         )
         read_only_fields = fields
 
@@ -305,7 +324,7 @@ class CargoListSerializer(RouteKmMixin, serializers.ModelSerializer):
         )
 
     @extend_schema_field(int)
-    def get_offers_count(self, obj):
+    def get_offers_count(self, obj: Cargo) -> int:
         oa = getattr(obj, "offers_active", None)
         return int(oa or 0) if oa is not None else obj.offers.filter(is_active=True).count()
 
@@ -320,14 +339,19 @@ class CargoListSerializer(RouteKmMixin, serializers.ModelSerializer):
             or getattr(u, "username", "")
         )
 
-    def get_contact_value(self, obj: Cargo) -> str:
+    def get_phone(self, obj: Cargo) -> str:
         u = getattr(obj, "customer", None)
         if not u:
             return ""
-        pref = str(obj.contact_pref).lower() if obj.contact_pref else ""
         phone = getattr(u, "phone", None) or getattr(u, "phone_number", None)
+        return phone or ""
+
+    def get_email(self, obj: Cargo) -> str:
+        u = getattr(obj, "customer", None)
+        if not u:
+            return ""
         email = getattr(u, "email", None)
-        return phone if pref == "phone" else email if pref == "email" else phone or email or ""
+        return email or ""
 
     @extend_schema_field(float)
     def get_weight_t(self, obj: Cargo) -> float | None:

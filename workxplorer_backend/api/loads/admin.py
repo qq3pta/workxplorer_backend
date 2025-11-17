@@ -1,5 +1,5 @@
 from django.contrib import admin, messages
-from django.db.models import F, FloatField
+from django.db.models import F, FloatField, Avg
 from django.db.models.expressions import Func
 from django.utils.html import format_html
 
@@ -34,9 +34,12 @@ class CargoAdmin(admin.ModelAdmin):
         "price_currency",
         "price_uzs_display",
         "contact_pref",
+        "customer_contact_phone",
+        "customer_contact_email",
         "is_hidden",
         "status",
         "moderation_status",
+        "company_rating_display",
         "path_km_display",
         "route_km_cached_display",
         "route_duration_min_cached_display",
@@ -87,7 +90,10 @@ class CargoAdmin(admin.ModelAdmin):
     # --------- аннотации / вычисления ----------
     def get_queryset(self, request):
         qs = super().get_queryset(request)
-        return qs.annotate(path_m=GeoDistance(F("origin_point"), F("dest_point")))
+        return qs.annotate(
+            path_m=GeoDistance(F("origin_point"), F("dest_point")),
+            company_rating=Avg("customer__ratings_received__score"),
+        )
 
     def path_km_display(self, obj):
         m = getattr(obj, "path_m", None)
@@ -136,6 +142,35 @@ class CargoAdmin(admin.ModelAdmin):
             return "-"
 
     weight_t_display.short_description = "Вес (т)"
+
+    def company_rating_display(self, obj):
+        v = getattr(obj, "company_rating", None)
+        if v is None:
+            return "-"
+        try:
+            return f"{float(v):.2f}"
+        except (TypeError, ValueError):
+            return v
+
+    company_rating_display.short_description = "Рейтинг компании"
+    company_rating_display.admin_order_field = "company_rating"
+
+    def customer_contact_phone(self, obj):
+        u = getattr(obj, "customer", None)
+        if not u:
+            return "-"
+        phone = getattr(u, "phone", None) or getattr(u, "phone_number", None)
+        return phone or "-"
+
+    customer_contact_phone.short_description = "Телефон заказчика"
+
+    def customer_contact_email(self, obj):
+        u = getattr(obj, "customer", None)
+        if not u:
+            return "-"
+        return getattr(u, "email", "") or "-"
+
+    customer_contact_email.short_description = "Email заказчика"
 
     # --------- экшны ----------
     def recalculate_route_km(self, request, queryset):

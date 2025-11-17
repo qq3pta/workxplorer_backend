@@ -20,11 +20,9 @@ class UserRatingSerializer(serializers.ModelSerializer):
             "comment",
             "created_at",
         ]
-
-    read_only_fields = ["id", "rated_by", "created_at"]
+        read_only_fields = ["id", "rated_by", "created_at"]
 
     def validate(self, attrs):
-        """Проверка: только участники заказа могут оценивать."""
         user = self.context["request"].user
         order = attrs["order"]
 
@@ -37,14 +35,13 @@ class UserRatingSerializer(serializers.ModelSerializer):
 
 class RatingUserListSerializer(serializers.ModelSerializer):
     """
-    Сводная строка для списка рейтинга (экран с вкладками
-    'Грузовладельцы / Логисты / Перевозчики').
+    Строка для списка рейтинга (вкладки: Грузовладельцы / Логисты / Перевозчики).
     """
 
     display_name = serializers.SerializerMethodField()
-    avg_rating = serializers.FloatField(source="avg_rating", read_only=True)
-    rating_count = serializers.IntegerField(source="rating_count", read_only=True)
-    completed_orders = serializers.IntegerField(source="completed_orders", read_only=True)
+    avg_rating = serializers.FloatField(read_only=True)
+    rating_count = serializers.IntegerField(read_only=True)
+    completed_orders = serializers.IntegerField(read_only=True)
     registered_at = serializers.DateTimeField(source="date_joined", read_only=True)
 
     class Meta:

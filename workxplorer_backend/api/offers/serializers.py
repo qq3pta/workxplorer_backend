@@ -5,6 +5,7 @@ from typing import Any
 
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
 
 from api.loads.choices import Currency, ModerationStatus
 from api.loads.models import Cargo, CargoStatus
@@ -136,9 +137,15 @@ class OfferShortSerializer(serializers.ModelSerializer):
     transport_type_display = serializers.SerializerMethodField()
     weight_t = serializers.SerializerMethodField()
 
-    # --- Перевозчик / контакты ---
+    # --- Перевозчик / рейтинг / контакты ---
     carrier_name = serializers.SerializerMethodField()
-    carrier_contact = serializers.SerializerMethodField()
+    carrier_rating = serializers.FloatField(read_only=True)
+    phone = serializers.SerializerMethodField()
+    email = serializers.SerializerMethodField()
+
+    # --- Оплата и источник предложения ---
+    payment_method = serializers.SerializerMethodField()
+    source_status = serializers.SerializerMethodField()
 
     # --- Статус для цветных “чипсов” ---
     status_display = serializers.SerializerMethodField()
@@ -162,16 +169,20 @@ class OfferShortSerializer(serializers.ModelSerializer):
             "weight_t",
             # перевозчик
             "carrier_name",
-            "carrier_contact",
+            "carrier_rating",
+            "phone",
+            "email",
             # деньги
             "price_value",
             "price_currency",
+            "payment_method",
             # статус оффера
             "accepted_by_customer",
             "accepted_by_carrier",
             "is_active",
             "status_display",
             "is_handshake",
+            "source_status",
             # доп. инфо
             "message",
             "created_at",
@@ -218,16 +229,72 @@ class OfferShortSerializer(serializers.ModelSerializer):
             or getattr(u, "username", "")
         )
 
-    def get_carrier_contact(self, obj: Offer) -> str:
+    def get_phone(self, obj: Offer) -> str:
         """
-        Телефон / email для колонки «Контакты».
+        Телефон перевозчика (вместо contact_value).
         """
         u = obj.carrier
         if not u:
             return ""
         phone = getattr(u, "phone", None) or getattr(u, "phone_number", None)
-        email = getattr(u, "email", None)
-        return phone or email or ""
+        return phone or ""
+
+    def get_email(self, obj: Offer) -> str:
+        """
+        Email перевозчика (вместо contact_value).
+        """
+        u = obj.carrier
+        if not u:
+            return ""
+        return getattr(u, "email", "") or ""
+
+    @extend_schema_field(str)
+    def get_payment_method(self, obj: Offer) -> str:
+        """
+        Способ оплаты: «Картой» / «Наличными».
+
+        Ожидается, что в модели Offer есть поле payment_method или payment_type
+        с кодами вида: CARD / CASH / BY_CARD / BY_CASH.
+        Если поля нет — вернётся пустая строка (getattr с default).
+        """
+        code = getattr(obj, "payment_method", None) or getattr(obj, "payment_type", None)
+        if not code:
+            return ""
+        code = str(code).upper()
+        if code in ("CARD", "BY_CARD"):
+            return "Картой"
+        if code in ("CASH", "BY_CASH"):
+            return "Наличными"
+        return ""
+
+    @extend_schema_field(str)
+    def get_source_status(self, obj: Offer) -> str:
+        """
+        Статусы:
+        - «Предложение от заказчика» (инициатор CUSTOMER)
+        - «Предложение от посредника» (инициатор CARRIER)
+        """
+        init = getattr(obj, "initiator", None)
+        # если есть enum Offer.Initiator, используем его
+        try:
+            from .models import Offer as OfferModel  # избегаем цикличного импорта типов
+
+            if init == OfferModel.Initiator.CUSTOMER:
+                return "Предложение от заказчика"
+            if init == OfferModel.Initiator.CARRIER:
+                return "Предложение от посредника"
+        except Exception:
+            pass
+
+        # fallback по строковому коду
+        if not init:
+            return ""
+        code = str(init).upper()
+        if code in ("CUSTOMER", "FROM_CUSTOMER"):
+            return "Предложение от заказчика"
+        if code in ("CARRIER", "BROKER", "INTERMEDIARY", "FROM_BROKER"):
+            return "Предложение от посредника"
+        return ""
 
     def get_is_handshake(self, obj: Offer) -> bool:
         """
@@ -248,7 +315,7 @@ class OfferShortSerializer(serializers.ModelSerializer):
             # Для вкладки «Я предложил» это и есть тот самый "Ответ получен"
             return "Ответ получен"
 
-        # Если перевозчик уже подтвердил свою ставку, но ждём клиента
+        # Если одна из сторон уже приняла, а другая ещё нет — ждём ответа
         if obj.accepted_by_carrier and not obj.accepted_by_customer:
             return "Ожидает ответа"
 

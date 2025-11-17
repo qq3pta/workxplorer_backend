@@ -1,6 +1,6 @@
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Q, Avg
 from drf_spectacular.utils import (
     OpenApiParameter,
     OpenApiResponse,
@@ -123,6 +123,9 @@ def _apply_common_filters(qs, params):
         "-cargo__load_date",
         "cargo__delivery_date",
         "-cargo__delivery_date",
+        # сортировка по рейтингу перевозчика
+        "carrier_rating",
+        "-carrier_rating",
     }
     order = p.get("order")
     if order in allowed:
@@ -147,7 +150,8 @@ def _apply_common_filters(qs, params):
             "Доп. query: cargo_id, cargo_uuid, carrier_id, customer_id, initiator, "
             "is_active, accepted_by_customer, accepted_by_carrier, "
             "created_from/to, load_date_from/to, delivery_date_from/to, "
-            "origin_city, destination_city, company|q, customer_email/phone, carrier_email/phone, order"
+            "origin_city, destination_city, company|q, customer_email/phone, "
+            "carrier_email/phone, order (в т.ч. carrier_rating / -carrier_rating)"
         ),
         parameters=[
             OpenApiParameter(
@@ -214,7 +218,9 @@ class OfferViewSet(ModelViewSet):
       POST   /api/offers/invite/           — инвайт (Заказчик → Перевозчик)
     """
 
-    queryset = Offer.objects.select_related("cargo", "carrier")
+    queryset = Offer.objects.select_related("cargo", "carrier").annotate(
+        carrier_rating=Avg("carrier__ratings_received__score"),
+    )
     permission_classes = [IsAuthenticatedAndVerified]
     serializer_class = OfferDetailSerializer
 

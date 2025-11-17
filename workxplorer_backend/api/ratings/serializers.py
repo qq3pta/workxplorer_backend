@@ -1,6 +1,9 @@
+from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
 from .models import UserRating
+
+User = get_user_model()
 
 
 class UserRatingSerializer(serializers.ModelSerializer):
@@ -17,7 +20,8 @@ class UserRatingSerializer(serializers.ModelSerializer):
             "comment",
             "created_at",
         ]
-        read_only_fields = ["id", "rated_by", "created_at"]
+
+    read_only_fields = ["id", "rated_by", "created_at"]
 
     def validate(self, attrs):
         """Проверка: только участники заказа могут оценивать."""
@@ -29,3 +33,33 @@ class UserRatingSerializer(serializers.ModelSerializer):
         if attrs["rated_user"] == user:
             raise serializers.ValidationError("Нельзя оценить самого себя.")
         return attrs
+
+
+class RatingUserListSerializer(serializers.ModelSerializer):
+    """
+    Сводная строка для списка рейтинга (экран с вкладками
+    'Грузовладельцы / Логисты / Перевозчики').
+    """
+
+    display_name = serializers.SerializerMethodField()
+    avg_rating = serializers.FloatField(source="avg_rating", read_only=True)
+    rating_count = serializers.IntegerField(source="rating_count", read_only=True)
+    completed_orders = serializers.IntegerField(source="completed_orders", read_only=True)
+    registered_at = serializers.DateTimeField(source="date_joined", read_only=True)
+
+    class Meta:
+        model = User
+        fields = (
+            "id",
+            "role",
+            "company_name",
+            "display_name",
+            "avg_rating",
+            "rating_count",
+            "completed_orders",
+            "registered_at",
+        )
+        read_only_fields = fields
+
+    def get_display_name(self, obj):
+        return obj.company_name or obj.username or obj.email

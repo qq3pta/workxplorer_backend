@@ -27,7 +27,7 @@ services:
     working_dir: /app/workxplorer_backend
     volumes:
       - ./workxplorer_backend:/app/workxplorer_backend
-      - media_data:/app/workxplorer_backend/media  # общий volume для медиа
+      - /srv/workxplorer/volumes/media:/app/workxplorer_backend/media
     depends_on:
       db:
         condition: service_healthy

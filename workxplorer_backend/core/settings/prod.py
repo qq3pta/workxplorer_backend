@@ -59,3 +59,7 @@ LOGGING = {
         "django.security": {"handlers": ["console"], "level": "WARNING", "propagate": False},
     },
 }
+
+# --- статика и медиа для проды ---
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"

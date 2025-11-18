@@ -83,8 +83,17 @@ class OrderDocumentAdmin(admin.ModelAdmin):
     file_name.short_description = "Имя файла"
 
     def file_size(self, obj):
-        if obj.file and hasattr(obj.file, "size"):
-            return f"{obj.file.size / 1024:.1f} KB"
+        """
+        Безопасно считаем размер: если файла нет или storage.size падает – возвращаем "-".
+        """
+        try:
+            if obj.file and obj.file.name:
+                storage = obj.file.storage
+                name = obj.file.name
+                if storage.exists(name):
+                    return f"{obj.file.size / 1024:.1f} KB"
+        except Exception:
+            pass
         return "-"
 
     file_size.short_description = "Размер файла"

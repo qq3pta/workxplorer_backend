@@ -255,7 +255,6 @@ class CargoListSerializer(RouteKmMixin, serializers.ModelSerializer):
     path_km = serializers.FloatField(read_only=True, required=False)
     origin_dist_km = serializers.FloatField(read_only=True, required=False)
 
-    # новые поля радиуса
     origin_radius_km = serializers.FloatField(read_only=True, required=False)
     dest_radius_km = serializers.FloatField(read_only=True, required=False)
 
@@ -263,10 +262,7 @@ class CargoListSerializer(RouteKmMixin, serializers.ModelSerializer):
     offers_count = serializers.SerializerMethodField()
     company_name = serializers.SerializerMethodField()
 
-    # новый рейтинг компании
     company_rating = serializers.FloatField(read_only=True, required=False)
-
-    # вместо contact_value
     phone = serializers.SerializerMethodField()
     email = serializers.SerializerMethodField()
 

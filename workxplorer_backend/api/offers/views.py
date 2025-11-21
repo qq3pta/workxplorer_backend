@@ -12,7 +12,11 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
-from ..accounts.permissions import IsAuthenticatedAndVerified, IsCarrier, IsCustomer
+from ..accounts.permissions import (
+    IsAuthenticatedAndVerified,
+    IsCustomer,
+    IsCustomerOrCarrierOrLogistic,
+)
 from .models import Offer
 from .serializers import (
     OfferAcceptResponseSerializer,
@@ -239,7 +243,7 @@ class OfferViewSet(ModelViewSet):
     # Права по action
     def get_permissions(self):
         if self.action in {"create", "my"}:
-            classes = [IsAuthenticatedAndVerified, IsCarrier]
+            classes = [IsAuthenticatedAndVerified, IsCustomerOrCarrierOrLogistic]
         elif self.action == "incoming":
             classes = [IsAuthenticatedAndVerified]  # доступно всем ролям внутри системы
         elif self.action == "invite":

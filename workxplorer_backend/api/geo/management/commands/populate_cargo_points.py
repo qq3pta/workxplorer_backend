@@ -1,7 +1,7 @@
 from django.core.management.base import BaseCommand
 from api.loads.models import Cargo
 from django.contrib.gis.geos import Point  # noqa: F401
-from api.geo.models import GeoPlace         # noqa: F401
+from api.geo.models import GeoPlace  # noqa: F401
 from api.loads.serializers import CargoPublishSerializer
 
 

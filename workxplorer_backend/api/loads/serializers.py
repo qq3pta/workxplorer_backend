@@ -114,9 +114,13 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
         try:
             return geocode_city(country=country, city=city, country_code=None)
         except GeocodingError:
-            raise serializers.ValidationError(
-                {"origin_city": "Не удалось геокодировать город"}
-            ) from None
+            # Если не удалось геокодировать, берём GeoPlace или возвращаем точку 0,0
+            from api.geo.models import GeoPlace
+
+            gp = GeoPlace.objects.filter(country=country, name__iexact=city).first()
+            if gp:
+                return gp.point
+            return Point(0.0, 0.0)
 
     def _geocode_dest(self, attrs: dict[str, Any]) -> Point:
         country = (
@@ -132,9 +136,12 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
         try:
             return geocode_city(country=country, city=city, country_code=None)
         except GeocodingError:
-            raise serializers.ValidationError(
-                {"destination_city": "Не удалось геокодировать город"}
-            ) from None
+            from api.geo.models import GeoPlace
+
+            gp = GeoPlace.objects.filter(country=country, name__iexact=city).first()
+            if gp:
+                return gp.point
+            return Point(0.0, 0.0)
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
         required = [

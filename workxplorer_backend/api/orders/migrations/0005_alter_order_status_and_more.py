@@ -4,25 +4,54 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('orders', '0004_order_driver_status_alter_order_status_and_more'),
+        ("orders", "0004_order_driver_status_alter_order_status_and_more"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='order',
-            name='status',
-            field=models.CharField(choices=[('pending', 'В ожидании'), ('in_process', 'В процессе'), ('delivered', 'Доставлен'), ('no_driver', 'Без водителя'), ('paid', 'Оплачено')], default='pending', max_length=20),
+            model_name="order",
+            name="status",
+            field=models.CharField(
+                choices=[
+                    ("pending", "В ожидании"),
+                    ("in_process", "В процессе"),
+                    ("delivered", "Доставлен"),
+                    ("no_driver", "Без водителя"),
+                    ("paid", "Оплачено"),
+                ],
+                default="pending",
+                max_length=20,
+            ),
         ),
         migrations.AlterField(
-            model_name='orderstatushistory',
-            name='new_status',
-            field=models.CharField(choices=[('pending', 'В ожидании'), ('in_process', 'В процессе'), ('delivered', 'Доставлен'), ('no_driver', 'Без водителя'), ('paid', 'Оплачено')], max_length=20),
+            model_name="orderstatushistory",
+            name="new_status",
+            field=models.CharField(
+                choices=[
+                    ("pending", "В ожидании"),
+                    ("in_process", "В процессе"),
+                    ("delivered", "Доставлен"),
+                    ("no_driver", "Без водителя"),
+                    ("paid", "Оплачено"),
+                ],
+                max_length=20,
+            ),
         ),
         migrations.AlterField(
-            model_name='orderstatushistory',
-            name='old_status',
-            field=models.CharField(blank=True, choices=[('pending', 'В ожидании'), ('in_process', 'В процессе'), ('delivered', 'Доставлен'), ('no_driver', 'Без водителя'), ('paid', 'Оплачено')], max_length=20, null=True),
+            model_name="orderstatushistory",
+            name="old_status",
+            field=models.CharField(
+                blank=True,
+                choices=[
+                    ("pending", "В ожидании"),
+                    ("in_process", "В процессе"),
+                    ("delivered", "Доставлен"),
+                    ("no_driver", "Без водителя"),
+                    ("paid", "Оплачено"),
+                ],
+                max_length=20,
+                null=True,
+            ),
         ),
     ]

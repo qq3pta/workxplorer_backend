@@ -15,10 +15,17 @@ def _field_choices(model, field_name: str) -> Iterable[tuple[str, str]]:
 
 
 def _order_status_choices() -> Iterable[tuple[str, str]]:
-    Status = getattr(Order, "Status", None)
+    Status = getattr(Order, "OrderStatus", None)
     if Status is not None and hasattr(Status, "choices"):
         return Status.choices
     return _field_choices(Order, "status")
+
+
+def _driver_status_choices() -> Iterable[tuple[str, str]]:
+    DriverStatus = getattr(Order, "DriverStatus", None)
+    if DriverStatus is not None and hasattr(DriverStatus, "choices"):
+        return DriverStatus.choices
+    return _field_choices(Order, "driver_status")
 
 
 def _currency_choices() -> Iterable[tuple[str, str]]:
@@ -32,7 +39,6 @@ class OrderDocumentSerializer(serializers.ModelSerializer):
     file_name = serializers.SerializerMethodField(read_only=True)
     file_size = serializers.SerializerMethodField(read_only=True)
 
-    # (licenses / contracts / loading / unloading / other)
     category = serializers.ChoiceField(
         choices=OrderDocument.Category.choices,
         required=False,
@@ -72,7 +78,7 @@ class OrderDocumentSerializer(serializers.ModelSerializer):
             size = getattr(obj.file, "size", None)
             return int(size) if size is not None else None
         except Exception:
-            return None
+            return 0
 
 
 class OrderListSerializer(serializers.ModelSerializer):
@@ -81,18 +87,17 @@ class OrderListSerializer(serializers.ModelSerializer):
     cargo_id = serializers.IntegerField(read_only=True)
 
     status = serializers.ChoiceField(choices=_order_status_choices())
+    driver_status = serializers.ChoiceField(choices=_driver_status_choices(), read_only=True)
     currency = serializers.ChoiceField(choices=_currency_choices())
     currency_display = serializers.CharField(
         source="get_currency_display",
         read_only=True,
     )
 
-    # участники сделки
     customer_name = serializers.SerializerMethodField()
     carrier_name = serializers.SerializerMethodField()
     logistic_name = serializers.SerializerMethodField()
 
-    # Откуда / Куда / Даты (из Cargo)
     origin_city = serializers.CharField(source="cargo.origin_city", read_only=True)
     destination_city = serializers.CharField(source="cargo.destination_city", read_only=True)
     load_date = serializers.DateField(source="cargo.load_date", read_only=True)
@@ -102,7 +107,6 @@ class OrderListSerializer(serializers.ModelSerializer):
         allow_null=True,
     )
 
-    # Документы (кол-во)
     documents_count = serializers.SerializerMethodField()
 
     class Meta:
@@ -117,6 +121,7 @@ class OrderListSerializer(serializers.ModelSerializer):
             "carrier_name",
             "logistic_name",
             "status",
+            "driver_status",
             "currency",
             "currency_display",
             "price_total",
@@ -136,9 +141,8 @@ class OrderListSerializer(serializers.ModelSerializer):
             "cargo_id",
             "customer",
             "carrier",
+            "driver_status",
         )
-
-    # ----- helpers для имён участников -----
 
     def _user_display_name(self, u):
         if not u:
@@ -157,17 +161,12 @@ class OrderListSerializer(serializers.ModelSerializer):
         return self._user_display_name(getattr(obj, "carrier", None))
 
     def get_logistic_name(self, obj):
-        """
-        Посредник = пользователь, создавший заказ, если он логист.
-        """
         u = getattr(obj, "created_by", None)
         if not u:
             return ""
         if getattr(u, "is_logistic", False) or getattr(u, "role", None) == "LOGISTIC":
             return self._user_display_name(u)
         return ""
-
-    # ----- документы -----
 
     @extend_schema_field(serializers.IntegerField(allow_null=False, min_value=0))
     def get_documents_count(self, obj) -> int:
@@ -185,12 +184,12 @@ class OrderDetailSerializer(OrderListSerializer):
         fields = OrderListSerializer.Meta.fields + ("documents",)
 
 
-class OrderStatusUpdateSerializer(serializers.ModelSerializer):
-    status = serializers.ChoiceField(choices=_order_status_choices())
+class OrderDriverStatusUpdateSerializer(serializers.ModelSerializer):
+    driver_status = serializers.ChoiceField(choices=_driver_status_choices())
 
     class Meta:
         model = Order
-        fields = ("status",)
+        fields = ("driver_status",)
 
 
 class OrderStatusHistorySerializer(serializers.ModelSerializer):

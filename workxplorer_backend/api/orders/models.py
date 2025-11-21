@@ -27,6 +27,12 @@ class Order(models.Model):
         EN_ROUTE = "en_route", _("В пути")
         DELIVERED = "delivered", _("Доставлен")
         NO_DRIVER = "no_driver", _("Без водителя")
+        PAID = "paid", _("Оплачено")
+
+    class DriverStatus(models.TextChoices):
+        STOPPED = "stopped", _("Остановился")
+        EN_ROUTE = "en_route", _("В пути")
+        PROBLEM = "problem", _("Проблема")
 
     cargo = models.ForeignKey(Cargo, on_delete=models.CASCADE, related_name="orders")
 
@@ -45,6 +51,9 @@ class Order(models.Model):
 
     status = models.CharField(
         max_length=20, choices=OrderStatus.choices, default=OrderStatus.PENDING
+    )
+    driver_status = models.CharField(
+        max_length=20, choices=DriverStatus.choices, default=DriverStatus.EN_ROUTE
     )
     currency = models.CharField(max_length=3, choices=Currency.choices, default=Currency.UZS)
 

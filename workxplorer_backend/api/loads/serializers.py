@@ -11,7 +11,7 @@ from rest_framework import serializers
 from api.geo.services import GeocodingError, geocode_city
 
 from .choices import ModerationStatus
-from .models import Cargo
+from .models import Cargo, PaymentMethod
 
 
 class RouteKmMixin(serializers.Serializer):
@@ -54,6 +54,9 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
         max_digits=14, decimal_places=2, read_only=True, required=False
     )
     weight_tons = serializers.FloatField(required=False, write_only=True, min_value=0.001)
+    payment_method = serializers.ChoiceField(
+        choices=PaymentMethod.choices, default=PaymentMethod.TRANSFER
+    )
 
     class Meta:
         model = Cargo
@@ -79,7 +82,7 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
             "price_uzs",
             "contact_pref",
             "is_hidden",
-            "route_km",
+            "payment_method",
         )
         read_only_fields = ("route_km", "price_uzs", "uuid")
 

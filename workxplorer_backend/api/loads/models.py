@@ -20,6 +20,12 @@ class CargoStatus(models.TextChoices):
     CANCELLED = "CANCELLED", "Отменена"
 
 
+class PaymentMethod(models.TextChoices):
+    TRANSFER = "transfer", "Перечисление"
+    CASH = "cash", "Наличными"
+    BOTH = "both", "Оба варианта"
+
+
 class Cargo(models.Model):
     uuid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
 
@@ -52,18 +58,13 @@ class Cargo(models.Model):
     # Транспорт / габариты
     transport_type = models.CharField(max_length=10, choices=TransportType.choices)
 
-    # вес храним в кг (Decimal)
     weight_kg = models.DecimalField(max_digits=12, decimal_places=2)
-
-    # количество осей (3–10)
     axles = models.PositiveSmallIntegerField(
         null=True,
         blank=True,
         validators=[MinValueValidator(3), MaxValueValidator(10)],
         help_text="Количество осей (3–10)",
     )
-
-    # объём кузова/груза, м³
     volume_m3 = models.DecimalField(
         max_digits=7,
         decimal_places=2,
@@ -87,11 +88,19 @@ class Cargo(models.Model):
         choices=ModerationStatus.choices,
         default=ModerationStatus.PENDING,
     )
-    refreshed_at = models.DateTimeField(auto_now_add=True)
     status = models.CharField(
         max_length=20, choices=CargoStatus.choices, default=CargoStatus.POSTED
     )
+    refreshed_at = models.DateTimeField(auto_now_add=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    # Новый параметр: способ оплаты
+    payment_method = models.CharField(
+        max_length=10,
+        choices=PaymentMethod.choices,
+        default=PaymentMethod.TRANSFER,
+        verbose_name="Способ оплаты",
+    )
 
     # Назначения
     assigned_carrier = models.ForeignKey(
@@ -153,7 +162,6 @@ class Cargo(models.Model):
             raise ValidationError(
                 {"delivery_date": "Дата доставки не может быть раньше даты загрузки."}
             )
-
         if self.axles is not None and not (3 <= self.axles <= 10):
             raise ValidationError({"axles": "Оси должны быть в диапазоне 3–10."})
         if self.volume_m3 is not None and self.volume_m3 <= 0:
@@ -165,7 +173,6 @@ class Cargo(models.Model):
         return int((timezone.now() - base).total_seconds() // 60)
 
     def can_bump(self) -> bool:
-        """Можно нажать 'Обновить' — не чаще, чем раз в 15 минут."""
         return self.age_minutes >= 15
 
     def bump(self):
@@ -193,7 +200,6 @@ class Cargo(models.Model):
         return None
 
     def update_price_uzs(self):
-        """Конвертирует цену в сумах при создании/обновлении груза."""
         try:
             from common.utils import convert_to_uzs
 

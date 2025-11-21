@@ -8,6 +8,7 @@ __all__ = [
     "IsAuthenticatedAndVerified",
     "IsCarrierOrLogistic",
     "IsCustomerOrLogistic",
+    "IsCustomerOrCarrierOrLogistic",
 ]
 
 
@@ -61,3 +62,15 @@ class IsCustomerOrLogistic(BasePermission):
         return IsCustomer().has_permission(request, view) or IsLogistic().has_permission(
             request, view
         )
+
+
+class IsCustomerOrCarrierOrLogistic(BasePermission):
+    """
+    Разрешает доступ пользователю, если он Customer, Carrier или Logistic.
+    """
+
+    message = "Доступ только для Заказчика, Перевозчика или Логиста."
+
+    def has_permission(self, request, view) -> bool:
+        role = getattr(request.user, "role", None)
+        return role in ["customer", "carrier", "logistic"]

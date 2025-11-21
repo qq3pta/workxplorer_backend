@@ -23,10 +23,11 @@ from rest_framework.response import Response
 
 from ..accounts.permissions import (
     IsAuthenticatedAndVerified,
-    IsCarrierOrLogistic,
     IsCustomer,
     IsCustomerOrLogistic,
+    IsCustomerOrCarrierOrLogistic,
 )
+
 from .choices import ModerationStatus
 from .models import Cargo, CargoStatus
 from .serializers import CargoListSerializer, CargoPublishSerializer
@@ -87,20 +88,23 @@ class PublishCargoView(generics.CreateAPIView):
 # ------------------ Детали груза ------------------
 @extend_schema(tags=["loads"])
 class CargoDetailView(generics.RetrieveUpdateAPIView):
-    permission_classes = [IsAuthenticatedAndVerified, IsCustomer]
+    permission_classes = [IsAuthenticatedAndVerified, IsCustomerOrLogistic]
     serializer_class = CargoPublishSerializer
     queryset = Cargo.objects.all()
 
     def get_queryset(self):
         if _swagger(self):
             return Cargo.objects.none()
-        return Cargo.objects.filter(customer=self.request.user)
+        user = self.request.user
+        if user.role == "customer":
+            return Cargo.objects.filter(customer=user)
+        # Logistic видит все
+        return Cargo.objects.all()
 
     def get_object(self):
         uuid = self.kwargs.get("uuid")
-        if uuid:
-            return get_object_or_404(Cargo, uuid=uuid, customer=self.request.user)
-        return super().get_object()
+        obj = get_object_or_404(self.get_queryset(), uuid=uuid)
+        return obj
 
     def perform_update(self, serializer):
         obj = serializer.save()
@@ -279,7 +283,7 @@ class MyCargosBoardView(MyCargosView):
 # ------------------ Публичная доска ------------------
 @extend_schema(tags=["loads"])
 class PublicLoadsView(generics.ListAPIView):
-    permission_classes = [IsAuthenticatedAndVerified, IsCarrierOrLogistic]
+    permission_classes = [IsAuthenticatedAndVerified, IsCustomerOrCarrierOrLogistic]
     serializer_class = CargoListSerializer
     queryset = Cargo.objects.all()
 

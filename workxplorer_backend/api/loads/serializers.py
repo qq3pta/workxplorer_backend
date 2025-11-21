@@ -109,17 +109,18 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
         city = (
             attrs.get("origin_city") or self._val_or_instance(attrs, "origin_city") or ""
         ).strip()
+        from api.geo.models import GeoPlace
+
         if not city:
-            raise serializers.ValidationError({"origin_city": "Укажите город погрузки"})
+            return Point(0.0, 0.0)
+
+        gp = GeoPlace.objects.filter(country=country, name__iexact=city).first()
+        if gp:
+            return gp.point
+
         try:
             return geocode_city(country=country, city=city, country_code=None)
         except GeocodingError:
-            # Если не удалось геокодировать, берём GeoPlace или возвращаем точку 0,0
-            from api.geo.models import GeoPlace
-
-            gp = GeoPlace.objects.filter(country=country, name__iexact=city).first()
-            if gp:
-                return gp.point
             return Point(0.0, 0.0)
 
     def _geocode_dest(self, attrs: dict[str, Any]) -> Point:
@@ -131,16 +132,18 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
         city = (
             attrs.get("destination_city") or self._val_or_instance(attrs, "destination_city") or ""
         ).strip()
+        from api.geo.models import GeoPlace
+
         if not city:
-            raise serializers.ValidationError({"destination_city": "Укажите город разгрузки"})
+            return Point(0.0, 0.0)
+
+        gp = GeoPlace.objects.filter(country=country, name__iexact=city).first()
+        if gp:
+            return gp.point
+
         try:
             return geocode_city(country=country, city=city, country_code=None)
         except GeocodingError:
-            from api.geo.models import GeoPlace
-
-            gp = GeoPlace.objects.filter(country=country, name__iexact=city).first()
-            if gp:
-                return gp.point
             return Point(0.0, 0.0)
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
@@ -151,7 +154,6 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
             "transport_type",
             "contact_pref",
         ]
-
         wt = attrs.get("weight_tons")
         if wt is not None:
             attrs["weight_kg"] = Decimal(str(wt)) * Decimal("1000")
@@ -196,9 +198,7 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
             try:
                 dv = Decimal(str(vol))
             except (InvalidOperation, TypeError, ValueError):
-                raise serializers.ValidationError(
-                    {"volume_m3": "Некорректное значение объёма."}
-                ) from None
+                raise serializers.ValidationError({"volume_m3": "Некорректное значение объёма."})
             if dv <= 0:
                 raise serializers.ValidationError({"volume_m3": "Объём должен быть больше нуля."})
 

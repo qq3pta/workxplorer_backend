@@ -24,7 +24,7 @@ def validate_file_size(f):
 class Order(models.Model):
     class OrderStatus(models.TextChoices):
         PENDING = "pending", _("В ожидании")
-        EN_ROUTE = "en_route", _("В пути")
+        EN_ROUTE = "in_process", _("В процессе")
         DELIVERED = "delivered", _("Доставлен")
         NO_DRIVER = "no_driver", _("Без водителя")
         PAID = "paid", _("Оплачено")

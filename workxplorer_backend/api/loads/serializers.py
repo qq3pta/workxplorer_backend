@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
-from django.contrib.gis.geos import Point
-from django.db.models import Q
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
@@ -18,13 +16,16 @@ from .choices import ModerationStatus
 from .models import Cargo, PaymentMethod
 
 
-# ============================================
-# Расстояние и расчет route_km
-# ============================================
+# ==============================================================================
+# Route distance mixin
+# ==============================================================================
 class RouteKmMixin(serializers.Serializer):
     route_km = serializers.SerializerMethodField()
 
     def get_route_km(self, obj: Cargo) -> float | None:
+        """Returns route_km, falling back to cached values or path_km."""
+
+        # direct (calculated)
         val = getattr(obj, "route_km", None)
         if val is not None:
             try:
@@ -32,6 +33,7 @@ class RouteKmMixin(serializers.Serializer):
             except Exception:
                 pass
 
+        # cached
         cached = getattr(obj, "route_km_cached", None)
         if cached is not None:
             try:
@@ -39,8 +41,9 @@ class RouteKmMixin(serializers.Serializer):
             except Exception:
                 pass
 
+        # live routing
         try:
-            if getattr(obj, "origin_point", None) and getattr(obj, "dest_point", None):
+            if obj.origin_point and obj.dest_point:
                 from api.routing.services import get_route
 
                 rc = get_route(obj.origin_point, obj.dest_point)
@@ -49,6 +52,7 @@ class RouteKmMixin(serializers.Serializer):
         except Exception:
             pass
 
+        # fallback
         pk = getattr(obj, "path_km", None)
         try:
             return round(float(pk), 1) if pk is not None else None
@@ -56,16 +60,15 @@ class RouteKmMixin(serializers.Serializer):
             return None
 
 
-# ============================================
-# Публикация грузов
-# ============================================
+# ==============================================================================
+# Publish Cargo
+# ==============================================================================
 class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
-    price_uzs = serializers.DecimalField(
-        max_digits=14, decimal_places=2, read_only=True, required=False
-    )
+    price_uzs = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
     weight_tons = serializers.FloatField(required=False, write_only=True, min_value=0.001)
     payment_method = serializers.ChoiceField(
-        choices=PaymentMethod.choices, default=PaymentMethod.TRANSFER
+        choices=PaymentMethod.choices,
+        default=PaymentMethod.TRANSFER,
     )
 
     class Meta:
@@ -96,93 +99,90 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
         )
         read_only_fields = ("route_km", "price_uzs", "uuid")
 
-    # ======================================================
-    # Вспомогательные методы
-    # ======================================================
-    def _val_or_instance(self, attrs: dict[str, Any], name: str) -> Any:
+    # --------------------------------------------------------------------------
+    # helpers
+    # --------------------------------------------------------------------------
+    def _val_or_instance(self, attrs: dict[str, Any], name: str):
         if name in attrs:
             return attrs[name]
-        if self.instance is not None:
+        if self.instance:
             return getattr(self.instance, name, None)
         return None
 
-    def _need_regeocode(self, attrs: dict[str, Any]) -> tuple[bool, bool]:
-        o_fields = {"origin_country", "origin_city", "origin_address"}
-        d_fields = {"destination_country", "destination_city", "destination_address"}
-        origin_changed = any(f in attrs for f in o_fields)
-        dest_changed = any(f in attrs for f in d_fields)
+    def _need_regeocode(self, attrs: dict[str, Any]):
+        changed_origin = any(
+            k in attrs for k in ("origin_city", "origin_country", "origin_address")
+        )
+        changed_dest = any(
+            k in attrs for k in ("destination_city", "destination_country", "destination_address")
+        )
         if self.instance is None:
             return True, True
-        return origin_changed, dest_changed
+        return changed_origin, changed_dest
 
-    # ======================================================
-    # Поиск GeoPlace с нормализацией стран
-    # ======================================================
-    def _find_place(self, country: str, city: str):
-        country = COUNTRY_NORMALIZATION.get(country, country)
-        city_latin = unidecode(city).lower()
+    # --------------------------------------------------------------------------
+    # smart find place
+    # --------------------------------------------------------------------------
+    def _smart_find_place(self, country: str, city: str) -> GeoPlace | None:
+        country = COUNTRY_NORMALIZATION.get(country, country).strip()
+        city_norm = city.strip().lower()
+        city_trans = unidecode(city_norm).lower()
 
-        return GeoPlace.objects.filter(
-            Q(country__iexact=country), Q(name__iexact=city) | Q(name_latin__iexact=city_latin)
-        ).first()
+        qs = GeoPlace.objects.filter(country__iexact=country)
 
-    # ======================================================
-    # Геокодинг — отправка точки
-    # ======================================================
-    def _geocode_origin(self, attrs: dict[str, Any]) -> Point:
-        country = (
-            attrs.get("origin_country") or self._val_or_instance(attrs, "origin_country") or ""
-        ).strip()
-        country = COUNTRY_NORMALIZATION.get(country, country)
+        return (
+            qs.filter(name__iexact=city).first()
+            or qs.filter(name_latin__iexact=city_trans).first()
+            or qs.filter(name__icontains=city_norm).first()
+            or qs.filter(name_latin__icontains=city_trans).first()
+        )
 
-        city = (
-            attrs.get("origin_city") or self._val_or_instance(attrs, "origin_city") or ""
-        ).strip()
+    # --------------------------------------------------------------------------
+    # geocode origin
+    # --------------------------------------------------------------------------
+    def _geocode_origin(self, attrs):
+        country = (attrs.get("origin_country") or "").strip()
+        city = (attrs.get("origin_city") or "").strip()
 
         if not city:
             raise serializers.ValidationError({"origin_city": "Укажите город отправления."})
 
-        gp = self._find_place(country, city)
-        if gp and gp.point:
+        gp = self._smart_find_place(country, city)
+        if gp:
             return gp.point
 
         try:
-            return geocode_city(country=country, city=city, country_code=None)
+            return geocode_city(country=country, city=city)
         except GeocodingError:
             raise serializers.ValidationError(
                 {"origin_city": f"Город '{city}' не найден. Проверьте написание."}
-            ) from None
+            )
 
-    def _geocode_dest(self, attrs: dict[str, Any]) -> Point:
-        country = (
-            attrs.get("destination_country")
-            or self._val_or_instance(attrs, "destination_country")
-            or ""
-        ).strip()
-        country = COUNTRY_NORMALIZATION.get(country, country)
-
-        city = (
-            attrs.get("destination_city") or self._val_or_instance(attrs, "destination_city") or ""
-        ).strip()
+    # --------------------------------------------------------------------------
+    # geocode destination
+    # --------------------------------------------------------------------------
+    def _geocode_dest(self, attrs):
+        country = (attrs.get("destination_country") or "").strip()
+        city = (attrs.get("destination_city") or "").strip()
 
         if not city:
             raise serializers.ValidationError({"destination_city": "Укажите город доставки."})
 
-        gp = self._find_place(country, city)
-        if gp and gp.point:
+        gp = self._smart_find_place(country, city)
+        if gp:
             return gp.point
 
         try:
-            return geocode_city(country=country, city=city, country_code=None)
+            return geocode_city(country=country, city=city)
         except GeocodingError:
             raise serializers.ValidationError(
                 {"destination_city": f"Город '{city}' не найден. Проверьте написание."}
-            ) from None
+            )
 
-    # ======================================================
-    # Валидация
-    # ======================================================
-    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+    # --------------------------------------------------------------------------
+    # VALIDATION
+    # --------------------------------------------------------------------------
+    def validate(self, attrs):
         required = [
             "origin_address",
             "destination_address",
@@ -190,21 +190,21 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
             "transport_type",
             "contact_pref",
         ]
-        wt = attrs.get("weight_tons")
-        if wt is not None:
-            attrs["weight_kg"] = Decimal(str(wt)) * Decimal("1000")
 
+        # required on create
         if self.instance is None:
-            missing = [f for f in required if attrs.get(f) in (None, "", [])]
+            missing = [f for f in required if attrs.get(f) in ("", None)]
             if missing:
                 raise serializers.ValidationError(
                     {f: "Обязательное поле по ТЗ 2.6.13" for f in missing}
                 )
-            if attrs.get("weight_kg") in (None, ""):
-                raise serializers.ValidationError(
-                    {"weight_kg": "Укажите вес (в кг) или weight_tons (в тоннах)."}
-                )
 
+        # convert tons → kg
+        wt = attrs.get("weight_tons")
+        if wt is not None:
+            attrs["weight_kg"] = Decimal(str(wt)) * Decimal("1000")
+
+        # date checks
         ld = self._val_or_instance(attrs, "load_date")
         if ld and ld < timezone.now().date():
             raise serializers.ValidationError(
@@ -217,39 +217,43 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
                 {"delivery_date": "Дата доставки не может быть раньше даты загрузки."}
             )
 
-        wk = attrs.get("weight_kg", self._val_or_instance(attrs, "weight_kg"))
+        # weight
+        wk = attrs.get("weight_kg")
         if wk is not None and Decimal(str(wk)) <= 0:
             raise serializers.ValidationError({"weight_kg": "Вес должен быть больше нуля."})
 
-        price = self._val_or_instance(attrs, "price_value")
+        # price
+        price = attrs.get("price_value")
         if price is not None and price < 0:
             raise serializers.ValidationError({"price_value": "Цена не может быть отрицательной."})
 
-        ax = attrs.get("axles", self._val_or_instance(attrs, "axles"))
+        # axles
+        ax = attrs.get("axles")
         if ax is not None and not (3 <= int(ax) <= 10):
             raise serializers.ValidationError({"axles": "Оси должны быть в диапазоне 3–10."})
 
-        vol = attrs.get("volume_m3", self._val_or_instance(attrs, "volume_m3"))
+        # volume
+        vol = attrs.get("volume_m3")
         if vol is not None:
             try:
-                dv = Decimal(str(vol))
-            except (InvalidOperation, TypeError, ValueError):
-                raise serializers.ValidationError(
-                    {"volume_m3": "Некорректное значение объёма."}
-                ) from None
-            if dv <= 0:
-                raise serializers.ValidationError({"volume_m3": "Объём должен быть больше нуля."})
+                if Decimal(str(vol)) <= 0:
+                    raise serializers.ValidationError(
+                        {"volume_m3": "Объём должен быть больше нуля."}
+                    )
+            except Exception:
+                raise serializers.ValidationError({"volume_m3": "Некорректное значение объёма."})
 
         return attrs
 
-    # ======================================================
-    # Создание груза
-    # ======================================================
-    def create(self, validated_data: dict[str, Any]) -> Cargo:
+    # --------------------------------------------------------------------------
+    # CREATE
+    # --------------------------------------------------------------------------
+    def create(self, validated_data):
         user = self.context["request"].user
 
+        # convert tons → kg
         wt = validated_data.pop("weight_tons", None)
-        if wt is not None and "weight_kg" not in validated_data:
+        if wt is not None:
             validated_data["weight_kg"] = Decimal(str(wt)) * Decimal("1000")
 
         origin_point = self._geocode_origin(validated_data)
@@ -264,21 +268,19 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
         )
 
         cargo.update_route_cache(save=True)
-        if cargo.route_km_cached is not None:
-            cargo.route_km = cargo.route_km_cached
-
         cargo.update_price_uzs()
         return cargo
 
-    # ======================================================
-    # Обновление груза
-    # ======================================================
-    def update(self, instance: Cargo, validated_data: dict[str, Any]) -> Cargo:
+    # --------------------------------------------------------------------------
+    # UPDATE
+    # --------------------------------------------------------------------------
+    def update(self, instance, validated_data):
         wt = validated_data.pop("weight_tons", None)
         if wt is not None:
             validated_data["weight_kg"] = Decimal(str(wt)) * Decimal("1000")
 
         need_origin, need_dest = self._need_regeocode(validated_data)
+
         if need_origin:
             instance.origin_point = self._geocode_origin(validated_data)
         if need_dest:
@@ -286,37 +288,35 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
 
         for field, value in validated_data.items():
             setattr(instance, field, value)
+
         instance.save()
 
         if need_origin or need_dest:
             instance.update_route_cache(save=True)
-            if instance.route_km_cached is not None:
-                instance.route_km = instance.route_km_cached
 
         instance.update_price_uzs()
         return instance
 
 
-# ============================================
-# Список грузов
-# ============================================
+# ==============================================================================
+# List serializer
+# ==============================================================================
 class CargoListSerializer(RouteKmMixin, serializers.ModelSerializer):
     id = serializers.IntegerField(read_only=True)
     price_uzs = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
     uuid = serializers.UUIDField(read_only=True)
     age_minutes = serializers.IntegerField(read_only=True)
 
-    path_km = serializers.FloatField(read_only=True, required=False)
-    origin_dist_km = serializers.FloatField(read_only=True, required=False)
-
-    origin_radius_km = serializers.FloatField(read_only=True, required=False)
-    dest_radius_km = serializers.FloatField(read_only=True, required=False)
+    path_km = serializers.FloatField(read_only=True)
+    origin_dist_km = serializers.FloatField(read_only=True)
+    origin_radius_km = serializers.FloatField(read_only=True)
+    dest_radius_km = serializers.FloatField(read_only=True)
 
     has_offers = serializers.SerializerMethodField()
     offers_count = serializers.SerializerMethodField()
     company_name = serializers.SerializerMethodField()
 
-    company_rating = serializers.FloatField(read_only=True, required=False)
+    company_rating = serializers.FloatField(read_only=True)
     phone = serializers.SerializerMethodField()
     email = serializers.SerializerMethodField()
 
@@ -368,20 +368,19 @@ class CargoListSerializer(RouteKmMixin, serializers.ModelSerializer):
         )
         read_only_fields = fields
 
-    def get_has_offers(self, obj: Cargo) -> bool:
-        offers_active = getattr(obj, "offers_active", None)
-        return (
-            offers_active > 0
-            if offers_active is not None
-            else obj.offers.filter(is_active=True).exists()
-        )
+    # ----------------------------------------------------------------------
+    def get_has_offers(self, obj):
+        oa = getattr(obj, "offers_active", None)
+        if oa is not None:
+            return oa > 0
+        return obj.offers.filter(is_active=True).exists()
 
     @extend_schema_field(int)
-    def get_offers_count(self, obj: Cargo) -> int:
+    def get_offers_count(self, obj):
         oa = getattr(obj, "offers_active", None)
-        return int(oa or 0) if oa is not None else (obj.offers.filter(is_active=True).count())
+        return int(oa or 0)
 
-    def get_company_name(self, obj: Cargo) -> str:
+    def get_company_name(self, obj):
         u = getattr(obj, "customer", None)
         if not u:
             return ""
@@ -392,43 +391,29 @@ class CargoListSerializer(RouteKmMixin, serializers.ModelSerializer):
             or getattr(u, "username", "")
         )
 
-    def get_phone(self, obj: Cargo) -> str:
-        u = getattr(obj, "customer", None)
-        if not u:
-            return ""
-        phone = getattr(u, "phone", None) or getattr(u, "phone_number", None)
-        return phone or ""
+    def get_phone(self, obj):
+        u = obj.customer
+        return getattr(u, "phone", "") or getattr(u, "phone_number", "")
 
-    def get_email(self, obj: Cargo) -> str:
-        u = getattr(obj, "customer", None)
-        if not u:
-            return ""
-        email = getattr(u, "email", None)
-        return email or ""
+    def get_email(self, obj):
+        return getattr(obj.customer, "email", "") or ""
 
     @extend_schema_field(float)
-    def get_weight_t(self, obj: Cargo) -> float | None:
-        if obj.weight_kg is None:
-            return None
+    def get_weight_t(self, obj):
         try:
-            return round(float(obj.weight_kg) / 1000.0, 3)
+            return round(float(obj.weight_kg) / 1000, 3)
         except Exception:
             return None
 
     @extend_schema_field(Decimal)
-    def get_price_per_km(self, obj: Cargo) -> Decimal | None:
-        price = getattr(obj, "price_value", None)
-        dist = (
-            getattr(obj, "route_km", None)
-            or getattr(obj, "route_km_cached", None)
-            or getattr(obj, "path_km", None)
-        )
+    def get_price_per_km(self, obj):
+        price = obj.price_value
+        dist = obj.route_km or obj.route_km_cached or obj.path_km
+        if not price or not dist:
+            return None
         try:
-            if not price or not dist:
-                return None
-            per_km = (Decimal(str(price)) / Decimal(str(dist))).quantize(
+            return (Decimal(str(price)) / Decimal(str(dist))).quantize(
                 Decimal("0.01"), rounding=ROUND_HALF_UP
             )
-            return per_km
         except Exception:
             return None

@@ -50,8 +50,7 @@ class DistanceGeography(ExpressionWrapper):
 
 
 class ExtractMinutes(Func):
-    """Django 4.2-совместимо: EXTRACT(EPOCH FROM (NOW() - field)) / 60.0"""
-
+    """Django 4.2 — EXTRACT(EPOCH FROM (NOW() - field)) / 60"""
     template = "EXTRACT(EPOCH FROM (NOW() - %(expressions)s)) / 60.0"
     output_field = FloatField()
 
@@ -73,6 +72,7 @@ class PublishCargoView(generics.CreateAPIView):
         serializer.is_valid(raise_exception=True)
         cargo = self.perform_create(serializer)
         data = self.get_serializer(cargo).data
+
         return Response(
             {
                 "message": "Заявка опубликована и отправлена на модерацию",
@@ -94,16 +94,16 @@ class CargoDetailView(generics.RetrieveUpdateAPIView):
     def get_queryset(self):
         if _swagger(self):
             return Cargo.objects.none()
+
         user = self.request.user
         if user.role == "customer":
             return Cargo.objects.filter(customer=user)
-        # Logistic видит все
+
         return Cargo.objects.all()
 
     def get_object(self):
         uuid = self.kwargs.get("uuid")
-        obj = get_object_or_404(self.get_queryset(), uuid=uuid)
-        return obj
+        return get_object_or_404(self.get_queryset(), uuid=uuid)
 
     def perform_update(self, serializer):
         obj = serializer.save()
@@ -124,10 +124,12 @@ class CargoRefreshView(generics.GenericAPIView):
             return Response({"detail": "schema"}, status=status.HTTP_200_OK)
 
         obj = get_object_or_404(Cargo, uuid=uuid, customer=request.user)
+
         try:
             obj.bump()
         except ValidationError as e:
             return Response({"detail": str(e)}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+
         return Response({"detail": "Обновлено"}, status=status.HTTP_200_OK)
 
 
@@ -150,6 +152,7 @@ class MyCargosView(generics.ListAPIView):
             )
             .annotate(
                 path_km=F("path_m") / 1000.0,
+                route_km=Coalesce(F("route_km_cached"), F("path_km")),
                 price_uzs_anno=Coalesce(
                     F("price_uzs"),
                     F("price_value"),
@@ -176,7 +179,7 @@ class MyCargosView(generics.ListAPIView):
         if p.get("load_date_to"):
             qs = qs.filter(load_date__lte=p["load_date_to"])
 
-        # Симметрия с публичной: транспорт / вес / оси / объём / цена
+        # Транспорт / габариты
         if p.get("transport_type"):
             qs = qs.filter(transport_type=p["transport_type"])
         if p.get("min_weight"):
@@ -191,17 +194,20 @@ class MyCargosView(generics.ListAPIView):
             qs = qs.filter(volume_m3__gte=p["volume_min"])
         if p.get("volume_max"):
             qs = qs.filter(volume_m3__lte=p["volume_max"])
+
+        # Цена
         if p.get("min_price_uzs"):
             qs = qs.filter(price_uzs_anno__gte=p["min_price_uzs"])
         if p.get("max_price_uzs"):
-            qs = qs.filter(price_uzs_anno__lte=p["max_price_узs"])
+            qs = qs.filter(price_узs_anno__lte=p["max_price_uzs"])
 
-        # Радиусные фильтры (как на публичной)
+        # Радиус по origin
         o_lat, o_lng, o_r = p.get("origin_lat"), p.get("origin_lng"), p.get("origin_radius_km")
         if o_lat and o_lng and o_r:
             try:
                 origin_point = Point(float(o_lng), float(o_lat), srid=4326)
                 radius_km = float(o_r)
+
                 qs = qs.filter(origin_point__distance_lte=(origin_point, D(km=radius_km)))
                 qs = qs.annotate(
                     origin_dist_km=Distance("origin_point", origin_point) / 1000.0,
@@ -210,19 +216,19 @@ class MyCargosView(generics.ListAPIView):
             except (TypeError, ValueError):
                 pass
 
+        # Радиус по destination
         d_lat, d_lng, d_r = p.get("dest_lat"), p.get("dest_lng"), p.get("dest_radius_km")
         if d_lat and d_lng and d_r:
             try:
                 dest_point = Point(float(d_lng), float(d_lat), srid=4326)
                 radius_km2 = float(d_r)
+
                 qs = qs.filter(dest_point__distance_lte=(dest_point, D(km=radius_km2)))
-                qs = qs.annotate(
-                    dest_radius_km=Value(radius_km2, output_field=FloatField()),
-                )
+                qs = qs.annotate(dest_radius_km=Value(radius_km2, output_field=FloatField()))
             except (TypeError, ValueError):
                 pass
 
-        # Поиск по компании/аккаунту
+        # Поиск по компании
         q = p.get("company") or p.get("q")
         if q:
             qs = qs.filter(
@@ -240,10 +246,12 @@ class MyCargosView(generics.ListAPIView):
                 | Q(customer__phone_number__icontains=p["customer_phone"])
             )
 
-        # Сортировки
+        # Сортировка
         allowed = {
             "path_km",
             "-path_km",
+            "route_km",
+            "-route_km",
             "origin_dist_km",
             "-origin_dist_km",
             "price_uzs_anno",
@@ -258,6 +266,7 @@ class MyCargosView(generics.ListAPIView):
         order = p.get("order")
         if order in allowed:
             return qs.order_by(order)
+
         return qs.order_by("-refreshed_at", "-created_at")
 
 
@@ -267,7 +276,7 @@ class MyCargosBoardView(MyCargosView):
     permission_classes = [IsAuthenticatedAndVerified, IsCustomerOrLogistic]
 
     def get_queryset(self):
-        qs = (
+        return (
             super()
             .get_queryset()
             .filter(
@@ -276,7 +285,6 @@ class MyCargosBoardView(MyCargosView):
                 moderation_status=ModerationStatus.APPROVED,
             )
         )
-        return qs
 
 
 # ------------------ Публичная доска ------------------
@@ -300,12 +308,12 @@ class PublicLoadsView(generics.ListAPIView):
             )
             .annotate(
                 path_km=F("path_m") / 1000.0,
+                route_km=Coalesce(F("route_km_cached"), F("path_km")),
                 price_uzs_anno=Coalesce(
                     F("price_uzs"),
                     F("price_value"),
                     output_field=DecimalField(max_digits=14, decimal_places=2),
                 ),
-                route_km_anno=Coalesce(F("route_km_cached"), F("path_km")),
                 company_rating=Avg("customer__ratings_received__score"),
             )
             .select_related("customer")
@@ -335,7 +343,7 @@ class PublicLoadsView(generics.ListAPIView):
         if p.get("max_weight"):
             qs = qs.filter(weight_kg__lte=p["max_weight"])
 
-        # --- Новые фильтры: оси и объём ---
+        # --- Оси и объём ---
         if p.get("axles_min"):
             qs = qs.filter(axles__gte=p["axles_min"])
         if p.get("axles_max"):
@@ -351,12 +359,13 @@ class PublicLoadsView(generics.ListAPIView):
         if p.get("max_price_uzs"):
             qs = qs.filter(price_uzs_anno__lte=p["max_price_uzs"])
 
-        # --- Радиусные фильтры ---
+        # --- Радиус origin ---
         o_lat, o_lng, o_r = p.get("origin_lat"), p.get("origin_lng"), p.get("origin_radius_km")
         if o_lat and o_lng and o_r:
             try:
                 origin_point = Point(float(o_lng), float(o_lat), srid=4326)
                 radius_km = float(o_r)
+
                 qs = qs.filter(origin_point__distance_lte=(origin_point, D(km=radius_km)))
                 qs = qs.annotate(
                     origin_dist_km=Distance("origin_point", origin_point) / 1000.0,
@@ -365,11 +374,13 @@ class PublicLoadsView(generics.ListAPIView):
             except (TypeError, ValueError):
                 pass
 
+        # --- Радиус destination ---
         d_lat, d_lng, d_r = p.get("dest_lat"), p.get("dest_lng"), p.get("dest_radius_km")
         if d_lat and d_lng and d_r:
             try:
                 dest_point = Point(float(d_lng), float(d_lat), srid=4326)
                 radius_km2 = float(d_r)
+
                 qs = qs.filter(dest_point__distance_lte=(dest_point, D(km=radius_km2)))
                 qs = qs.annotate(
                     dest_radius_km=Value(radius_km2, output_field=FloatField()),
@@ -377,7 +388,7 @@ class PublicLoadsView(generics.ListAPIView):
             except (TypeError, ValueError):
                 pass
 
-        # 🔎 Поиск по компании / аккаунту
+        # --- Поиск по компании / аккаунту ---
         q = p.get("company") or p.get("q")
         if q:
             qs = qs.filter(
@@ -386,7 +397,7 @@ class PublicLoadsView(generics.ListAPIView):
                 | Q(customer__email__icontains=q)
             )
 
-        # 👤 Фильтры по контактам владельца
+        # --- Фильтры по контакту ---
         if p.get("customer_id"):
             qs = qs.filter(customer_id=p["customer_id"])
         if p.get("customer_email"):
@@ -401,8 +412,8 @@ class PublicLoadsView(generics.ListAPIView):
         allowed = {
             "path_km",
             "-path_km",
-            "route_km_anno",
-            "-route_km_anno",
+            "route_km",
+            "-route_km",
             "origin_dist_km",
             "-origin_dist_km",
             "price_uzs_anno",
@@ -417,13 +428,15 @@ class PublicLoadsView(generics.ListAPIView):
             "-age_minutes_anno",
         }
         order_alias = {
-            "route_km": "route_km_anno",
-            "-route_km": "-route_km_anno",
+            "route_km": "route_km",
+            "-route_km": "-route_km",
             "age_minutes": "age_minutes_anno",
             "-age_minutes": "-age_minutes_anno",
         }
+
         order = p.get("order")
         ordexpr = order_alias.get(order, order)
+
         if ordexpr in allowed:
             qs = qs.order_by(ordexpr)
         else:
@@ -449,7 +462,11 @@ class CargoCancelView(generics.GenericAPIView):
         if user_id not in (cargo.customer_id, getattr(cargo, "assigned_carrier_id", None)):
             return Response({"detail": "Нет доступа"}, status=status.HTTP_403_FORBIDDEN)
 
-        if cargo.status in (CargoStatus.DELIVERED, CargoStatus.COMPLETED, CargoStatus.CANCELLED):
+        if cargo.status in (
+            CargoStatus.DELIVERED,
+            CargoStatus.COMPLETED,
+            CargoStatus.CANCELLED,
+        ):
             return Response({"detail": "Статус уже финальный"}, status=status.HTTP_400_BAD_REQUEST)
 
         cargo.status = CargoStatus.CANCELLED

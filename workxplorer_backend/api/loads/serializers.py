@@ -123,9 +123,7 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
         city_latin = unidecode(city).lower()
 
         return GeoPlace.objects.filter(
-            Q(country__iexact=country),
-            Q(name__iexact=city) |
-            Q(name_latin__iexact=city_latin)
+            Q(country__iexact=country), Q(name__iexact=city) | Q(name_latin__iexact=city_latin)
         ).first()
 
     # ======================================================

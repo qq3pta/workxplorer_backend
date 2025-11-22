@@ -1,6 +1,6 @@
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
-from django.db.models import Q, Avg
+from django.db.models import Avg, Q
 from drf_spectacular.utils import (
     OpenApiParameter,
     OpenApiResponse,

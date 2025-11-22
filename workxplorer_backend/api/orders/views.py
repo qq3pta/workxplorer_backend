@@ -13,9 +13,9 @@ from .permissions import IsOrderParticipant
 from .serializers import (
     OrderDetailSerializer,
     OrderDocumentSerializer,
+    OrderDriverStatusUpdateSerializer,
     OrderListSerializer,
     OrderStatusHistorySerializer,
-    OrderDriverStatusUpdateSerializer,
 )
 
 

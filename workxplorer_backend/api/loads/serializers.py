@@ -4,14 +4,14 @@ from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any
 
 from django.contrib.gis.geos import Point
-from django.utils import timezone
 from django.db.models import Q
+from django.utils import timezone
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 from unidecode import unidecode
 
-from api.geo.services import GeocodingError, geocode_city
 from api.geo.models import GeoPlace
+from api.geo.services import GeocodingError, geocode_city
 
 from .choices import ModerationStatus
 from .models import Cargo, PaymentMethod

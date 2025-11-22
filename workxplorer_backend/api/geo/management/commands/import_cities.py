@@ -1,5 +1,5 @@
-from django.core.management.base import BaseCommand
 from django.contrib.gis.geos import Point
+from django.core.management.base import BaseCommand
 from unidecode import unidecode
 
 from api.geo.models import GeoPlace
@@ -779,7 +779,6 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         created = 0
         updated = 0
-        skipped_duplicates = 0
 
         for country, cc, city, lat, lon in CITIES:
             # Нормализация

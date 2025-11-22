@@ -12,11 +12,15 @@ from unidecode import unidecode
 
 from api.geo.models import GeoPlace
 from api.geo.services import GeocodingError, geocode_city
+from api.geo.management.commands.import_cities import COUNTRY_NORMALIZATION
 
 from .choices import ModerationStatus
 from .models import Cargo, PaymentMethod
 
 
+# ============================================
+# Расстояние и расчет route_km
+# ============================================
 class RouteKmMixin(serializers.Serializer):
     route_km = serializers.SerializerMethodField()
 
@@ -52,6 +56,9 @@ class RouteKmMixin(serializers.Serializer):
             return None
 
 
+# ============================================
+# Публикация грузов
+# ============================================
 class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
     price_uzs = serializers.DecimalField(
         max_digits=14, decimal_places=2, read_only=True, required=False
@@ -89,6 +96,9 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
         )
         read_only_fields = ("route_km", "price_uzs", "uuid")
 
+    # ======================================================
+    # Вспомогательные методы
+    # ======================================================
     def _val_or_instance(self, attrs: dict[str, Any], name: str) -> Any:
         if name in attrs:
             return attrs[name]
@@ -105,34 +115,34 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
             return True, True
         return origin_changed, dest_changed
 
-    # ---------------------------------------------------
-    # Новая логика геокодинга: кириллица, латиница, транслит
-    # ---------------------------------------------------
+    # ======================================================
+    # Поиск GeoPlace с нормализацией стран
+    # ======================================================
     def _find_place(self, country: str, city: str):
-        city_norm = city.lower()
-        city_latin = unidecode(city_norm).lower()
+        country = COUNTRY_NORMALIZATION.get(country, country)
+        city_latin = unidecode(city).lower()
 
         return GeoPlace.objects.filter(
             Q(country__iexact=country),
-            Q(name__iexact=city_norm)
-            | Q(name_latin__iexact=city_norm)
-            | Q(name_latin__iexact=city_latin)
-            | Q(name__icontains=city_norm)
-            | Q(name_latin__icontains=city_norm)
-            | Q(name_latin__icontains=city_latin),
+            Q(name__iexact=city) |
+            Q(name_latin__iexact=city_latin)
         ).first()
 
+    # ======================================================
+    # Геокодинг — отправка точки
+    # ======================================================
     def _geocode_origin(self, attrs: dict[str, Any]) -> Point:
         country = (
             attrs.get("origin_country") or self._val_or_instance(attrs, "origin_country") or ""
         ).strip()
+        country = COUNTRY_NORMALIZATION.get(country, country)
 
         city = (
             attrs.get("origin_city") or self._val_or_instance(attrs, "origin_city") or ""
         ).strip()
 
         if not city:
-            return Point(0, 0)
+            raise serializers.ValidationError({"origin_city": "Укажите город отправления."})
 
         gp = self._find_place(country, city)
         if gp and gp.point:
@@ -141,7 +151,9 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
         try:
             return geocode_city(country=country, city=city, country_code=None)
         except GeocodingError:
-            return Point(0, 0)
+            raise serializers.ValidationError(
+                {"origin_city": f"Город '{city}' не найден. Проверьте написание."}
+            )
 
     def _geocode_dest(self, attrs: dict[str, Any]) -> Point:
         country = (
@@ -149,13 +161,14 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
             or self._val_or_instance(attrs, "destination_country")
             or ""
         ).strip()
+        country = COUNTRY_NORMALIZATION.get(country, country)
 
         city = (
             attrs.get("destination_city") or self._val_or_instance(attrs, "destination_city") or ""
         ).strip()
 
         if not city:
-            return Point(0, 0)
+            raise serializers.ValidationError({"destination_city": "Укажите город доставки."})
 
         gp = self._find_place(country, city)
         if gp and gp.point:
@@ -164,10 +177,13 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
         try:
             return geocode_city(country=country, city=city, country_code=None)
         except GeocodingError:
-            return Point(0, 0)
+            raise serializers.ValidationError(
+                {"destination_city": f"Город '{city}' не найден. Проверьте написание."}
+            )
 
-    # ---------------------------------------------------
-
+    # ======================================================
+    # Валидация
+    # ======================================================
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
         required = [
             "origin_address",
@@ -224,10 +240,13 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
                     {"volume_m3": "Некорректное значение объёма."}
                 ) from None
             if dv <= 0:
-                raise (serializers.ValidationError({"volume_m3": "Объём должен быть больше нуля."}))
+                raise serializers.ValidationError({"volume_m3": "Объём должен быть больше нуля."})
 
         return attrs
 
+    # ======================================================
+    # Создание груза
+    # ======================================================
     def create(self, validated_data: dict[str, Any]) -> Cargo:
         user = self.context["request"].user
 
@@ -253,6 +272,9 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
         cargo.update_price_uzs()
         return cargo
 
+    # ======================================================
+    # Обновление груза
+    # ======================================================
     def update(self, instance: Cargo, validated_data: dict[str, Any]) -> Cargo:
         wt = validated_data.pop("weight_tons", None)
         if wt is not None:
@@ -273,16 +295,16 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
             if instance.route_km_cached is not None:
                 instance.route_km = instance.route_km_cached
 
-        instance.update_price_узs()
+        instance.update_price_uzs()
         return instance
 
 
-# ============================
-# Список грузов — оставлено без изменений
-# ============================
+# ============================================
+# Список грузов
+# ============================================
 class CargoListSerializer(RouteKmMixin, serializers.ModelSerializer):
     id = serializers.IntegerField(read_only=True)
-    price_узs = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
+    price_uzs = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
     uuid = serializers.UUIDField(read_only=True)
     age_minutes = serializers.IntegerField(read_only=True)
 
@@ -325,7 +347,7 @@ class CargoListSerializer(RouteKmMixin, serializers.ModelSerializer):
             "volume_m3",
             "price_value",
             "price_currency",
-            "price_узs",
+            "price_uzs",
             "contact_pref",
             "is_hidden",
             "company_name",

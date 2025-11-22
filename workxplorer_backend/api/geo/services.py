@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+
 import requests
 from django.conf import settings
 from django.contrib.gis.geos import Point

@@ -3,7 +3,7 @@ from django.db.models import Q
 from rest_framework import permissions, viewsets
 
 from .models import UserRating
-from .serializers import UserRatingSerializer, RatingUserListSerializer
+from .serializers import RatingUserListSerializer, UserRatingSerializer
 
 User = get_user_model()
 

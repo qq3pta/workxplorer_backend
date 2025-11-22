@@ -2,7 +2,6 @@ from django.contrib.gis.db.models.functions import Distance
 from django.contrib.gis.geos import Point
 from django.contrib.gis.measure import D
 from django.core.exceptions import ValidationError
-from unidecode import unidecode
 from django.db.models import (
     Avg,
     Count,
@@ -25,10 +24,9 @@ from rest_framework.response import Response
 from ..accounts.permissions import (
     IsAuthenticatedAndVerified,
     IsCustomer,
-    IsCustomerOrLogistic,
     IsCustomerOrCarrierOrLogistic,
+    IsCustomerOrLogistic,
 )
-
 from .choices import ModerationStatus
 from .models import Cargo, CargoStatus
 from .serializers import CargoListSerializer, CargoPublishSerializer

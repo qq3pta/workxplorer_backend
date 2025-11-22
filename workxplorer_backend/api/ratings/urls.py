@@ -1,6 +1,6 @@
 from rest_framework.routers import DefaultRouter
 
-from .views import UserRatingViewSet, RatingUserViewSet
+from .views import RatingUserViewSet, UserRatingViewSet
 
 app_name = "ratings"
 

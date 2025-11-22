@@ -4,8 +4,8 @@ from decimal import Decimal
 from typing import Any
 
 from django.contrib.auth import get_user_model
-from rest_framework import serializers
 from drf_spectacular.utils import extend_schema_field
+from rest_framework import serializers
 
 from api.loads.choices import Currency, ModerationStatus
 from api.loads.models import Cargo, CargoStatus

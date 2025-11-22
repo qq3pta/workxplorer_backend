@@ -5,20 +5,21 @@ import django.db.models.functions.text
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('geo', '0004_alter_geoplace_point'),
+        ("geo", "0004_alter_geoplace_point"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='geoplace',
-            name='name_latin',
-            field=models.CharField(db_index=True, default='', max_length=128),
+            model_name="geoplace",
+            name="name_latin",
+            field=models.CharField(db_index=True, default="", max_length=128),
             preserve_default=False,
         ),
         migrations.AddIndex(
-            model_name='geoplace',
-            index=models.Index(django.db.models.functions.text.Lower('name_latin'), name='geoplace_lower_latin_idx'),
+            model_name="geoplace",
+            index=models.Index(
+                django.db.models.functions.text.Lower("name_latin"), name="geoplace_lower_latin_idx"
+            ),
         ),
     ]

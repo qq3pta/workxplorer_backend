@@ -4,28 +4,29 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('loads', '0010_cargo_payment_method'),
+        ("loads", "0010_cargo_payment_method"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='cargo',
-            name='destination_city_latin',
+            model_name="cargo",
+            name="destination_city_latin",
             field=models.CharField(blank=True, max_length=120, null=True),
         ),
         migrations.AddField(
-            model_name='cargo',
-            name='origin_city_latin',
+            model_name="cargo",
+            name="origin_city_latin",
             field=models.CharField(blank=True, max_length=120, null=True),
         ),
         migrations.AddIndex(
-            model_name='cargo',
-            index=models.Index(fields=['origin_city_latin'], name='loads_cargo_origin__ed5071_idx'),
+            model_name="cargo",
+            index=models.Index(fields=["origin_city_latin"], name="loads_cargo_origin__ed5071_idx"),
         ),
         migrations.AddIndex(
-            model_name='cargo',
-            index=models.Index(fields=['destination_city_latin'], name='loads_cargo_destina_ac8eec_idx'),
+            model_name="cargo",
+            index=models.Index(
+                fields=["destination_city_latin"], name="loads_cargo_destina_ac8eec_idx"
+            ),
         ),
     ]

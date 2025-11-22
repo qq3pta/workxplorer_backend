@@ -8,6 +8,7 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db.models.manager import Manager as DjangoManager
 from django.utils import timezone
+from unidecode import unidecode
 
 from .choices import ContactPref, Currency, ModerationStatus, TransportType
 
@@ -44,10 +45,12 @@ class Cargo(models.Model):
     origin_country = models.CharField(max_length=100, default="", blank=True)
     origin_address = models.CharField(max_length=255)
     origin_city = models.CharField(max_length=100)
+    origin_city_latin = models.CharField(max_length=120, blank=True, null=True)
 
     destination_country = models.CharField(max_length=100, default="", blank=True)
     destination_address = models.CharField(max_length=255)
     destination_city = models.CharField(max_length=100)
+    destination_city_latin = models.CharField(max_length=120, blank=True, null=True)
 
     origin_point = gis_models.PointField(geography=True, srid=4326, null=True, blank=True)
     dest_point = gis_models.PointField(geography=True, srid=4326, null=True, blank=True)
@@ -94,7 +97,7 @@ class Cargo(models.Model):
     refreshed_at = models.DateTimeField(auto_now_add=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
-    # Новый параметр: способ оплаты
+    # Способ оплаты
     payment_method = models.CharField(
         max_length=10,
         choices=PaymentMethod.choices,
@@ -131,6 +134,8 @@ class Cargo(models.Model):
         indexes = [
             models.Index(fields=["moderation_status", "transport_type", "load_date"]),
             models.Index(fields=["origin_city", "destination_city"]),
+            models.Index(fields=["origin_city_latin"]),
+            models.Index(fields=["destination_city_latin"]),
             models.Index(fields=["is_hidden"]),
             models.Index(fields=["status"]),
             models.Index(fields=["refreshed_at"]),
@@ -142,6 +147,16 @@ class Cargo(models.Model):
 
     def __str__(self):
         return f"{self.product} ({self.origin_city} → {self.destination_city})"
+
+    # --- Автоконверсия в латиницу ---
+    def save(self, *args, **kwargs):
+        if self.origin_city:
+            self.origin_city_latin = unidecode(self.origin_city).lower()
+
+        if self.destination_city:
+            self.destination_city_latin = unidecode(self.destination_city).lower()
+
+        super().save(*args, **kwargs)
 
     @property
     def weight_tons(self):

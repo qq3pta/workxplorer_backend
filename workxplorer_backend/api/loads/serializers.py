@@ -10,9 +10,9 @@ from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 from unidecode import unidecode
 
+from api.geo.management.commands.import_cities import COUNTRY_NORMALIZATION
 from api.geo.models import GeoPlace
 from api.geo.services import GeocodingError, geocode_city
-from api.geo.management.commands.import_cities import COUNTRY_NORMALIZATION
 
 from .choices import ModerationStatus
 from .models import Cargo, PaymentMethod
@@ -151,7 +151,7 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
         except GeocodingError:
             raise serializers.ValidationError(
                 {"origin_city": f"Город '{city}' не найден. Проверьте написание."}
-            )
+            ) from None
 
     def _geocode_dest(self, attrs: dict[str, Any]) -> Point:
         country = (
@@ -177,7 +177,7 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
         except GeocodingError:
             raise serializers.ValidationError(
                 {"destination_city": f"Город '{city}' не найден. Проверьте написание."}
-            )
+            ) from None
 
     # ======================================================
     # Валидация

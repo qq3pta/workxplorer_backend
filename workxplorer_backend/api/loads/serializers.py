@@ -119,7 +119,7 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
             | Q(name_latin__iexact=city_latin)
             | Q(name__icontains=city_norm)
             | Q(name_latin__icontains=city_norm)
-            | Q(name_latin__icontains=city_latin)
+            | Q(name_latin__icontains=city_latin),
         ).first()
 
     def _geocode_origin(self, attrs: dict[str, Any]) -> Point:
@@ -224,7 +224,7 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
                     {"volume_m3": "Некорректное значение объёма."}
                 ) from None
             if dv <= 0:
-                raise(serializers.ValidationError({"volume_m3":"Объём должен быть больше нуля."}))
+                raise (serializers.ValidationError({"volume_m3": "Объём должен быть больше нуля."}))
 
         return attrs
 
@@ -274,7 +274,8 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
                 instance.route_km = instance.route_km_cached
 
         instance.update_price_узs()
-        return(instance)
+        return instance
+
 
 # ============================
 # Список грузов — оставлено без изменений
@@ -283,24 +284,24 @@ class CargoListSerializer(RouteKmMixin, serializers.ModelSerializer):
     id = serializers.IntegerField(read_only=True)
     price_узs = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
     uuid = serializers.UUIDField(read_only=True)
-    age_minutes =(serializers.IntegerField(read_only=True))
+    age_minutes = serializers.IntegerField(read_only=True)
 
-    path_km =(serializers.FloatField(read_only=True, required=False))
-    origin_dist_km =(serializers.FloatField(read_only=True, required=False))
+    path_km = serializers.FloatField(read_only=True, required=False)
+    origin_dist_km = serializers.FloatField(read_only=True, required=False)
 
-    origin_radius_km =(serializers.FloatField(read_only=True, required=False))
-    dest_radius_km =(serializers.FloatField(read_only=True, required=False))
+    origin_radius_km = serializers.FloatField(read_only=True, required=False)
+    dest_radius_km = serializers.FloatField(read_only=True, required=False)
 
-    has_offers =(serializers.SerializerMethodField())
-    offers_count =(serializers.SerializerMethodField())
-    company_name =(serializers.SerializerMethodField())
+    has_offers = serializers.SerializerMethodField()
+    offers_count = serializers.SerializerMethodField()
+    company_name = serializers.SerializerMethodField()
 
-    company_rating =(serializers.FloatField(read_only=True, required=False))
-    phone =(serializers.SerializerMethodField())
-    email =(serializers.SerializerMethodField())
+    company_rating = serializers.FloatField(read_only=True, required=False)
+    phone = serializers.SerializerMethodField()
+    email = serializers.SerializerMethodField()
 
-    weight_t =(serializers.SerializerMethodField())
-    price_per_km =(serializers.SerializerMethodField())
+    weight_t = serializers.SerializerMethodField()
+    price_per_km = serializers.SerializerMethodField()
 
     class Meta:
         model = Cargo
@@ -358,13 +359,13 @@ class CargoListSerializer(RouteKmMixin, serializers.ModelSerializer):
     @extend_schema_field(int)
     def get_offers_count(self, obj: Cargo) -> int:
         oa = getattr(obj, "offers_active", None)
-        return(int(oa or 0) if oa is not None else(obj.offers.filter(is_active=True).count()))
+        return int(oa or 0) if oa is not None else (obj.offers.filter(is_active=True).count())
 
     def get_company_name(self, obj: Cargo) -> str:
         u = getattr(obj, "customer", None)
         if not u:
-            return("")
-        return(
+            return ""
+        return (
             getattr(u, "company_name", None)
             or getattr(u, "company", None)
             or getattr(u, "name", None)
@@ -374,25 +375,25 @@ class CargoListSerializer(RouteKmMixin, serializers.ModelSerializer):
     def get_phone(self, obj: Cargo) -> str:
         u = getattr(obj, "customer", None)
         if not u:
-            return("")
+            return ""
         phone = getattr(u, "phone", None) or getattr(u, "phone_number", None)
-        return(phone or "")
+        return phone or ""
 
     def get_email(self, obj: Cargo) -> str:
         u = getattr(obj, "customer", None)
         if not u:
-            return("")
+            return ""
         email = getattr(u, "email", None)
-        return(email or "")
+        return email or ""
 
     @extend_schema_field(float)
     def get_weight_t(self, obj: Cargo) -> float | None:
         if obj.weight_kg is None:
-            return(None)
+            return None
         try:
-            return(round(float(obj.weight_kg) / 1000.0, 3))
-        except(Exception):
-            return(None)
+            return round(float(obj.weight_kg) / 1000.0, 3)
+        except Exception:
+            return None
 
     @extend_schema_field(Decimal)
     def get_price_per_km(self, obj: Cargo) -> Decimal | None:
@@ -404,10 +405,10 @@ class CargoListSerializer(RouteKmMixin, serializers.ModelSerializer):
         )
         try:
             if not price or not dist:
-                return(None)
+                return None
             per_km = (Decimal(str(price)) / Decimal(str(dist))).quantize(
                 Decimal("0.01"), rounding=ROUND_HALF_UP
             )
-            return(per_km)
-        except(Exception):
-            return(None)
+            return per_km
+        except Exception:
+            return None

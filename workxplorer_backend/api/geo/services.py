@@ -52,12 +52,12 @@ def geocode_city(
     city_latin = unidecode(city_norm).lower()
 
     qs = GeoPlace.objects.filter(
-        Q(name__iexact=city_norm) |
-        Q(name_latin__iexact=city_norm) |
-        Q(name_latin__iexact=city_latin) |
-        Q(name__icontains=city_norm) |
-        Q(name_latin__icontains=city_norm) |
-        Q(name_latin__icontains=city_latin)
+        Q(name__iexact=city_norm)
+        | Q(name_latin__iexact=city_norm)
+        | Q(name_latin__iexact=city_latin)
+        | Q(name__icontains=city_norm)
+        | Q(name_latin__icontains=city_norm)
+        | Q(name_latin__icontains=city_latin)
     )
 
     if key_cc:
@@ -116,10 +116,7 @@ def geocode_city(
         )
 
     candidates.sort(
-        key=lambda x: (
-            _TYPE_ORDER.get(x.get("type"), 99),
-            -float(x.get("importance") or 0.0)
-        )
+        key=lambda x: (_TYPE_ORDER.get(x.get("type"), 99), -float(x.get("importance") or 0.0))
     )
 
     rec = candidates[0]

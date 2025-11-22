@@ -156,7 +156,7 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
         except GeocodingError:
             raise serializers.ValidationError(
                 {"origin_city": f"Город '{city}' не найден. Проверьте написание."}
-            )
+            ) from None
 
     # --------------------------------------------------------------------------
     # geocode destination
@@ -177,7 +177,7 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
         except GeocodingError:
             raise serializers.ValidationError(
                 {"destination_city": f"Город '{city}' не найден. Проверьте написание."}
-            )
+            ) from None
 
     # --------------------------------------------------------------------------
     # VALIDATION
@@ -241,7 +241,9 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
                         {"volume_m3": "Объём должен быть больше нуля."}
                     )
             except Exception:
-                raise serializers.ValidationError({"volume_m3": "Некорректное значение объёма."})
+                raise serializers.ValidationError(
+                    {"volume_m3": "Некорректное значение объёма."}
+                ) from None
 
         return attrs
 

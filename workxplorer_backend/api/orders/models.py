@@ -67,6 +67,9 @@ class Order(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    loading_datetime = models.DateTimeField(null=True, blank=True)
+    unloading_datetime = models.DateTimeField(null=True, blank=True)
+
     class Meta:
         ordering = ["-created_at"]
         indexes = [
@@ -128,6 +131,20 @@ class OrderDocument(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
 
+    def __str__(self):
+        return self.title or f"Document#{self.pk}"
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+
+        if self.category == self.Category.LOADING:
+            self.order.loading_datetime = self.created_at
+            self.order.save(update_fields=["loading_datetime"])
+
+        if self.category == self.Category.UNLOADING:
+            self.order.unloading_datetime = self.created_at
+            self.order.save(update_fields=["unloading_datetime"])
+
     class Meta:
         ordering = ["-created_at"]
         verbose_name = _("Документ заказа")
@@ -138,9 +155,6 @@ class OrderDocument(models.Model):
             models.Index(fields=["uploaded_by"], name="orderdoc_uploader_idx"),
             models.Index(fields=["category"], name="orderdoc_category_idx"),
         ]
-
-    def __str__(self) -> str:
-        return self.title or f"Document#{self.pk}"
 
 
 class OrderStatusHistory(models.Model):

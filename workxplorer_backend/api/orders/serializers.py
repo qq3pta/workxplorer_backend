@@ -181,7 +181,11 @@ class OrderDetailSerializer(OrderListSerializer):
     documents = OrderDocumentSerializer(many=True, read_only=True)
 
     class Meta(OrderListSerializer.Meta):
-        fields = OrderListSerializer.Meta.fields + ("documents",)
+        fields = OrderListSerializer.Meta.fields + (
+            "loading_datetime",
+            "unloading_datetime",
+            "documents",
+        )
 
 
 class OrderDriverStatusUpdateSerializer(serializers.ModelSerializer):

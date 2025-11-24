@@ -1,6 +1,7 @@
 from django.contrib.gis.measure import D
-from django.db.models import F, FloatField
+from django.db.models import F, FloatField, Avg
 from django.db.models.expressions import Func
+from django.db.models.functions import Coalesce
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema
 from rest_framework import generics, permissions
@@ -41,7 +42,6 @@ class CargoSearchView(generics.ListAPIView):
 
         qp = self.request.query_params
 
-        # Фильтры по весу
         min_w = qp.get("min_weight")
         max_w = qp.get("max_weight")
         if min_w:
@@ -49,7 +49,6 @@ class CargoSearchView(generics.ListAPIView):
         if max_w:
             qs = qs.filter(weight_kg__lte=max_w)
 
-        # Фильтр "Откуда" по радиусу
         oc = qp.get("origin_city")
         occ = qp.get("origin_country") or ""
         r1 = qp.get("origin_radius_km")
@@ -59,13 +58,10 @@ class CargoSearchView(generics.ListAPIView):
                 radius_km = float(r1)
                 qs = qs.filter(origin_point__dwithin=(center, D(km=radius_km)))
             except ValueError as err:
-                # Радиус введён не числом
                 raise ValidationError({"origin_radius_km": "Должен быть числом (км)."}) from err
             except Exception:
-                # Геокод не удался — фильтр не применяем
                 pass
 
-        # Фильтр "Куда" по радиусу
         dc = qp.get("destination_city")
         dcc = qp.get("destination_country") or ""
         r2 = qp.get("destination_radius_km")
@@ -81,7 +77,6 @@ class CargoSearchView(generics.ListAPIView):
             except Exception:
                 pass
 
-        # Фильтр по типу транспорта (если передан — валидируем по enum и применяем)
         tt = qp.get("transport_type")
         if tt:
             try:
@@ -96,20 +91,68 @@ class CargoSearchView(generics.ListAPIView):
             except ValidationError:
                 raise
             except Exception:
-                # если поле без choices — просто применим фильтр
                 pass
             qs = qs.filter(transport_type=tt)
 
-        # Расстояние (метры → км)
+        price_currency = qp.get("price_currency")
+        if price_currency:
+            qs = qs.filter(price_currency=price_currency)
+
+        qs = qs.annotate(price_total_uzs=Coalesce("price_uzs", "price_value"))
+
+        price_min = qp.get("price_min")
+        price_max = qp.get("price_max")
+
+        if price_min:
+            qs = qs.filter(price_total_uzs__gte=price_min)
+        if price_max:
+            qs = qs.filter(price_total_uzs__lte=price_max)
+
+        qs = qs.annotate(customer_rating=Avg("customer__ratings_received__score"))
+
+        rating_min = qp.get("rating_min")
+        rating_max = qp.get("rating_max")
+
+        if rating_min:
+            qs = qs.filter(customer_rating__gte=rating_min)
+        if rating_max:
+            qs = qs.filter(customer_rating__lte=rating_max)
+
+        volume_min = qp.get("volume_min")
+        volume_max = qp.get("volume_max")
+
+        if volume_min:
+            qs = qs.filter(volume_m3__gte=volume_min)
+        if volume_max:
+            qs = qs.filter(volume_m3__lte=volume_max)
+
+        axles_min = qp.get("axles_min")
+        axles_max = qp.get("axles_max")
+
+        if axles_min:
+            qs = qs.filter(axles__gte=axles_min)
+        if axles_max:
+            qs = qs.filter(axles__lte=axles_max)
+
         qs = qs.annotate(path_m=DistanceGeography(F("origin_point"), F("dest_point")))
         qs = qs.annotate(path_km=F("path_m") / 1000.0)
 
-        # Сортировка
         order = qp.get("order")
-        if order == "path_km":
-            qs = qs.order_by("path_m")
-        elif order == "-path_km":
-            qs = qs.order_by("-path_m")
+        if order in [
+            "price_total_uzs",
+            "-price_total_uzs",
+            "customer_rating",
+            "-customer_rating",
+            "volume_m3",
+            "-volume_m3",
+            "axles",
+            "-axles",
+            "path_km",
+            "-path_km",
+            "created_at",
+            "-created_at",
+        ]:
+            qs = qs.order_by(order)
         else:
             qs = qs.order_by("-created_at")
 

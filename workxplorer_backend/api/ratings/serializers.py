@@ -26,23 +26,37 @@ class UserRatingSerializer(serializers.ModelSerializer):
         user = self.context["request"].user
         order = attrs["order"]
 
+        # Проверка: участвует ли пользователь в заказе
         if user not in [order.customer, order.carrier]:
             raise serializers.ValidationError("Вы не участвуете в этом заказе.")
+
+        # Проверка: нельзя оценить самого себя
         if attrs["rated_user"] == user:
             raise serializers.ValidationError("Нельзя оценить самого себя.")
+
         return attrs
 
 
 class RatingUserListSerializer(serializers.ModelSerializer):
     """
-    Строка для списка рейтинга (вкладки: Грузовладельцы / Логисты / Перевозчики).
+    Строка списка рейтингов (вкладки: Грузовладельцы / Логисты / Перевозчики).
     """
 
     display_name = serializers.SerializerMethodField()
+
+    # приходят из аннотаций:
     avg_rating = serializers.FloatField(read_only=True)
     rating_count = serializers.IntegerField(read_only=True)
     completed_orders = serializers.IntegerField(read_only=True)
+
+    # показываем дату регистрации
     registered_at = serializers.DateTimeField(source="date_joined", read_only=True)
+
+    # страна пользователя
+    country = serializers.CharField(read_only=True)
+
+    # только для перевозчиков
+    total_distance = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -51,12 +65,30 @@ class RatingUserListSerializer(serializers.ModelSerializer):
             "role",
             "company_name",
             "display_name",
+            "country",
             "avg_rating",
             "rating_count",
             "completed_orders",
+            "total_distance",
             "registered_at",
         )
         read_only_fields = fields
 
     def get_display_name(self, obj):
+        """
+        Отображаем:
+        - company_name (если есть)
+        - или username
+        - или email
+        """
         return obj.company_name or obj.username or obj.email
+
+    def get_total_distance(self, obj):
+        """
+        total_distance приходит как аннотация.
+        Для ролей LOGISTIC / CUSTOMER не показываем.
+        """
+        if getattr(obj, "role", None) != "CARRIER":
+            return None
+
+        return getattr(obj, "total_distance", 0)

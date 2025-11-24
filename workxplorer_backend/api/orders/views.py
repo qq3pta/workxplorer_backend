@@ -1,4 +1,3 @@
-from django.db.models import Q
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import status as http_status
 from rest_framework import viewsets
@@ -13,7 +12,6 @@ from .permissions import IsOrderParticipant
 from .serializers import (
     OrderDetailSerializer,
     OrderDocumentSerializer,
-    OrderDriverStatusUpdateSerializer,
     OrderListSerializer,
     OrderStatusHistorySerializer,
 )
@@ -28,18 +26,30 @@ class OrdersViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = super().get_queryset()
-        u = getattr(self.request, "user", None)
-        if not u or (not getattr(u, "is_staff", False) and not getattr(u, "is_superuser", False)):
-            qs = qs.filter(Q(customer_id=u.id) | Q(carrier_id=u.id))
-        return qs
+        user = self.request.user
+
+        if user.is_staff or user.is_superuser:
+            return qs
+
+        if getattr(user, "role", None) == "LOGISTIC":
+            return qs.filter(created_by=user)
+
+        if getattr(user, "role", None) == "CUSTOMER":
+            return qs.filter(customer=user)
+
+        if getattr(user, "role", None) == "CARRIER":
+            return qs.filter(carrier=user)
+
+        return qs.none()
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
 
     def get_serializer_class(self):
         if self.action == "list":
             return OrderListSerializer
         if self.action in {"retrieve", "create", "update", "partial_update"}:
             return OrderDetailSerializer
-        if self.action == "set_driver_status":
-            return OrderDriverStatusUpdateSerializer
         if self.action == "status_history":
             return OrderStatusHistorySerializer
         if self.action == "documents" and self.request.method == "POST":
@@ -51,14 +61,31 @@ class OrdersViewSet(viewsets.ModelViewSet):
         ctx.setdefault("request", self.request)
         return ctx
 
-    @action(detail=True, methods=["patch"], url_path="driver-status")
-    def set_driver_status(self, request, pk=None):
+    @action(detail=True, methods=["get", "patch"], url_path="driver-status")
+    def driver_status(self, request, pk=None):
         """
-        Водитель может обновлять только driver_status: "stopped", "en_route", "problem"
+        GET  -> вернуть текущий статус водителя (для главного экрана)
+        PATCH -> водитель обновляет driver_status
         """
+
         order = self.get_object()
         user = request.user
 
+        if request.method == "GET":
+            return Response(
+                {
+                    "order_id": order.id,
+                    "driver_status": order.driver_status,
+                    "order_status": order.status,
+                    "loading_datetime": order.loading_datetime,
+                    "unloading_datetime": order.unloading_datetime,
+                },
+                status=http_status.HTTP_200_OK,
+            )
+
+        # ---------------------------------------------------
+        # PATCH — обновить статус водителя
+        # ---------------------------------------------------
         if order.carrier_id != user.id:
             return Response(
                 {"detail": "Только водитель может менять статус."},
@@ -80,6 +107,7 @@ class OrdersViewSet(viewsets.ModelViewSet):
         old_status = order.driver_status
         ser.save()
 
+        # Логирование
         if new_status != old_status:
             OrderStatusHistory.objects.create(
                 order=order,
@@ -88,7 +116,14 @@ class OrdersViewSet(viewsets.ModelViewSet):
                 user=user,
             )
 
-        return Response(ser.data, status=http_status.HTTP_200_OK)
+        return Response(
+            {
+                "order_id": order.id,
+                "old_status": old_status,
+                "new_status": new_status,
+            },
+            status=http_status.HTTP_200_OK,
+        )
 
     @action(detail=True, methods=["get", "post"], url_path="documents")
     def documents(self, request, pk=None):

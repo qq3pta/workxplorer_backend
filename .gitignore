@@ -14,5 +14,3 @@ media/
 *.sqlite3
 .ruff_cache/
 static/
-core/firebase.json
-*.json

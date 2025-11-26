@@ -135,7 +135,7 @@ class OrderListSerializer(serializers.ModelSerializer):
             "price_per_km",
         )
 
-    def _user_display_name(self, u):
+    def _user_display_name(self, u) -> str:
         if not u:
             return ""
         return (
@@ -145,20 +145,20 @@ class OrderListSerializer(serializers.ModelSerializer):
             or getattr(u, "username", "")
         )
 
-    def get_customer_name(self, obj):
+    def get_customer_name(self, obj) -> str:
         return self._user_display_name(obj.customer)
 
-    def get_carrier_name(self, obj):
+    def get_carrier_name(self, obj) -> str:
         return self._user_display_name(obj.carrier)
 
-    def get_logistic_name(self, obj):
+    def get_logistic_name(self, obj) -> str:
         u = obj.created_by
         if u and (getattr(u, "is_logistic", False) or getattr(u, "role", "") == "LOGISTIC"):
             return self._user_display_name(u)
         return ""
 
     @extend_schema_field(serializers.IntegerField())
-    def get_documents_count(self, obj):
+    def get_documents_count(self, obj) -> int:
         try:
             return obj.documents.count()
         except Exception:
@@ -201,7 +201,7 @@ class OrderStatusHistorySerializer(serializers.ModelSerializer):
             "created_at",
         )
 
-    def get_user_name(self, obj):
+    def get_user_name(self, obj) -> str:
         u = obj.user
         if not u:
             return ""

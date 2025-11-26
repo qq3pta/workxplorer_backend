@@ -79,10 +79,10 @@ class RatingUserListSerializer(serializers.ModelSerializer):
         )
         read_only_fields = fields
 
-    def get_display_name(self, obj):
+    def get_display_name(self, obj) -> str:
         return obj.company_name or obj.username or obj.email
 
-    def get_total_distance(self, obj):
+    def get_total_distance(self, obj) -> int | None:
         if getattr(obj, "role", None) != "CARRIER":
             return None
-        return getattr(obj, "total_distance", 0)
+        return int(getattr(obj, "total_distance", 0) or 0)

@@ -352,18 +352,18 @@ class CargoListSerializer(RouteKmMixin, serializers.ModelSerializer):
         )
         read_only_fields = fields
 
-    def get_has_offers(self, obj):
+    def get_has_offers(self, obj) -> bool:
         oa = getattr(obj, "offers_active", None)
         if oa is not None:
             return oa > 0
         return obj.offers.filter(is_active=True).exists()
 
     @extend_schema_field(int)
-    def get_offers_count(self, obj):
+    def get_offers_count(self, obj) -> int:
         oa = getattr(obj, "offers_active", None)
         return int(oa or 0)
 
-    def get_company_name(self, obj):
+    def get_company_name(self, obj) -> str:
         u = getattr(obj, "customer", None)
         if not u:
             return ""
@@ -374,11 +374,11 @@ class CargoListSerializer(RouteKmMixin, serializers.ModelSerializer):
             or getattr(u, "username", "")
         )
 
-    def get_phone(self, obj):
+    def get_phone(self, obj) -> str:
         u = obj.customer
         return getattr(u, "phone", "") or getattr(u, "phone_number", "")
 
-    def get_email(self, obj):
+    def get_email(self, obj) -> str:
         return getattr(obj.customer, "email", "") or ""
 
     @extend_schema_field(float)

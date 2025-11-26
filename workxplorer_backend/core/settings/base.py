@@ -3,10 +3,9 @@ from os import getenv
 from pathlib import Path
 
 import firebase_admin
-from firebase_admin import credentials
-
 from corsheaders.defaults import default_headers
 from dotenv import load_dotenv
+from firebase_admin import credentials
 
 # Paths & env
 BASE_DIR = Path(__file__).resolve().parents[2]

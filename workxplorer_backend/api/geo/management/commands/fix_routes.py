@@ -1,11 +1,11 @@
-from django.core.management.base import BaseCommand
 from django.contrib.gis.geos import Point
+from django.core.management.base import BaseCommand
 from django.db.models import Q
 from unidecode import unidecode
 
+from api.geo.management.commands.import_cities import COUNTRY_NORMALIZATION
 from api.geo.models import GeoPlace
 from api.loads.models import Cargo
-from api.geo.management.commands.import_cities import COUNTRY_NORMALIZATION
 
 
 class Command(BaseCommand):

@@ -10,9 +10,9 @@ from django.db.models.manager import Manager as DjangoManager
 from django.utils import timezone
 from unidecode import unidecode
 
-from .choices import ContactPref, Currency, ModerationStatus, TransportType
-
 from api.notifications.services import notify
+
+from .choices import ContactPref, Currency, ModerationStatus, TransportType
 
 
 class CargoStatus(models.TextChoices):

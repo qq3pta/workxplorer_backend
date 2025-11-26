@@ -1,5 +1,5 @@
 from django.contrib.gis.measure import D
-from django.db.models import F, FloatField, Avg
+from django.db.models import Avg, F, FloatField
 from django.db.models.expressions import Func
 from django.db.models.functions import Coalesce
 from django_filters.rest_framework import DjangoFilterBackend

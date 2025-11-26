@@ -5,7 +5,7 @@ from django.contrib.auth import get_user_model
 from django.db.models import Q, Sum
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema, inline_serializer
-from rest_framework import generics, serializers, status
+from rest_framework import generics, serializers
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView

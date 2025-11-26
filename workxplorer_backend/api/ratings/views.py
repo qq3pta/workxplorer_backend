@@ -1,5 +1,5 @@
 from django.contrib.auth import get_user_model
-from django.db.models import Q, Count, Avg, Sum
+from django.db.models import Avg, Count, Q, Sum
 from rest_framework import permissions, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response

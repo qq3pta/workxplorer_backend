@@ -2,8 +2,8 @@ from django.urls import path
 
 from .views import (
     NotificationListView,
-    NotificationMarkReadView,
     NotificationMarkAllReadView,
+    NotificationMarkReadView,
 )
 
 app_name = "notifications"

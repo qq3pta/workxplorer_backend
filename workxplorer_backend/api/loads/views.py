@@ -6,7 +6,6 @@ from django.db.models import (
     Avg,
     Count,
     DecimalField,
-    ExpressionWrapper,
     F,
     FloatField,
     Func,

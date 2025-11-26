@@ -12,10 +12,10 @@ from .views import (
     ResendVerifyView,
     ResetPasswordView,
     SendPhoneOTPView,
+    UpdateFCMTokenView,
     UpdateMeView,
     VerifyEmailView,
     VerifyPhoneOTPView,
-    UpdateFCMTokenView,
 )
 
 urlpatterns = [

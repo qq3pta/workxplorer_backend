@@ -2,6 +2,9 @@ from datetime import timedelta
 from os import getenv
 from pathlib import Path
 
+import firebase_admin
+from firebase_admin import credentials
+
 from corsheaders.defaults import default_headers
 from dotenv import load_dotenv
 
@@ -57,6 +60,7 @@ INSTALLED_APPS = [
     "api.routing",
     "api.orders",
     "api.ratings",
+    "api.notifications",
 ]
 
 MIDDLEWARE = [
@@ -246,3 +250,12 @@ OTP_MAX_ATTEMPTS = int(getenv("OTP_MAX_ATTEMPTS", "5"))
 OTP_RECENT_MINUTES = int(getenv("OTP_RECENT_MINUTES", "10"))
 
 DEV_FAKE_WHATSAPP = getenv("DEV_FAKE_WHATSAPP", "false").lower() == "true"
+
+FIREBASE_CREDENTIAL_FILE = BASE_DIR / "core" / "firebase.json"
+
+try:
+    if FIREBASE_CREDENTIAL_FILE.exists() and not firebase_admin._apps:
+        cred = credentials.Certificate(FIREBASE_CREDENTIAL_FILE)
+        firebase_admin.initialize_app(cred)
+except Exception as e:
+    print("Firebase init error:", e)

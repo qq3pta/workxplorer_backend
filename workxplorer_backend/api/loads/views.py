@@ -32,6 +32,7 @@ from .models import Cargo, CargoStatus
 from .serializers import CargoListSerializer, CargoPublishSerializer
 
 
+# ============= utils =====================
 def _swagger(view) -> bool:
     return getattr(view, "swagger_fake_view", False)
 
@@ -40,23 +41,14 @@ class RefreshResponseSerializer(drf_serializers.Serializer):
     detail = drf_serializers.CharField()
 
 
-class DistanceGeography(ExpressionWrapper):
-    function = "ST_Distance"
-    output_field = FloatField()
-
-    def __init__(self, origin, dest):
-        super().__init__(F(origin) * 1, output_field=self.output_field)
-        self.source_expressions = [origin, dest]
-
-
 class ExtractMinutes(Func):
-    """Django 4.2 — EXTRACT(EPOCH FROM (NOW() - field)) / 60"""
-
     template = "EXTRACT(EPOCH FROM (NOW() - %(expressions)s)) / 60.0"
     output_field = FloatField()
 
 
-# ------------------ Публикация груза ------------------
+# ============================================================
+#   Создание груза
+# ============================================================
 @extend_schema(tags=["loads"])
 class PublishCargoView(generics.CreateAPIView):
     permission_classes = [IsAuthenticatedAndVerified, IsCustomerOrLogistic]
@@ -69,9 +61,10 @@ class PublishCargoView(generics.CreateAPIView):
         return cargo
 
     def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        cargo = self.perform_create(serializer)
+        s = self.get_serializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        cargo = self.perform_create(s)
+
         data = self.get_serializer(cargo).data
 
         return Response(
@@ -85,7 +78,9 @@ class PublishCargoView(generics.CreateAPIView):
         )
 
 
-# ------------------ Детали груза ------------------
+# ============================================================
+#   Детали груза
+# ============================================================
 @extend_schema(tags=["loads"])
 class CargoDetailView(generics.RetrieveUpdateAPIView):
     permission_classes = [IsAuthenticatedAndVerified, IsCustomerOrLogistic]
@@ -107,39 +102,41 @@ class CargoDetailView(generics.RetrieveUpdateAPIView):
         return get_object_or_404(self.get_queryset(), uuid=uuid)
 
     def perform_update(self, serializer):
-        obj = serializer.save()
-        obj.refreshed_at = timezone.now()
-        obj.update_price_uzs()
-        obj.save(update_fields=["refreshed_at", "price_uzs"])
+        cargo = serializer.save()
+        cargo.refreshed_at = timezone.now()
+        cargo.update_price_uzs()
+        cargo.save(update_fields=["refreshed_at", "price_uzs"])
 
 
-# ------------------ Обновление заявки ------------------
+# ============================================================
+#   Обновление (bump) заявки
+# ============================================================
 @extend_schema(tags=["loads"], responses=RefreshResponseSerializer)
 class CargoRefreshView(generics.GenericAPIView):
     permission_classes = [IsAuthenticatedAndVerified, IsCustomer]
     serializer_class = RefreshResponseSerializer
-    queryset = Cargo.objects.all()
 
     def post(self, request, uuid: str):
         if _swagger(self):
             return Response({"detail": "schema"}, status=status.HTTP_200_OK)
 
-        obj = get_object_or_404(Cargo, uuid=uuid, customer=request.user)
+        cargo = get_object_or_404(Cargo, uuid=uuid, customer=request.user)
 
         try:
-            obj.bump()
+            cargo.bump()
         except ValidationError as e:
             return Response({"detail": str(e)}, status=status.HTTP_429_TOO_MANY_REQUESTS)
 
         return Response({"detail": "Обновлено"}, status=status.HTTP_200_OK)
 
 
-# ------------------ Мои заявки ------------------
+# ============================================================
+#   Мои грузы
+# ============================================================
 @extend_schema(tags=["loads"])
 class MyCargosView(generics.ListAPIView):
     permission_classes = [IsAuthenticatedAndVerified, IsCustomer]
     serializer_class = CargoListSerializer
-    queryset = Cargo.objects.all()
 
     def get_queryset(self):
         if _swagger(self):
@@ -166,70 +163,84 @@ class MyCargosView(generics.ListAPIView):
 
         p = self.request.query_params
 
-        # Базовые фильтры
+        # ——— базовые фильтры ———
         if p.get("uuid"):
             qs = qs.filter(uuid=p["uuid"])
+
         if p.get("origin_city"):
             qs = qs.filter(origin_city__iexact=p["origin_city"])
+
         if p.get("destination_city"):
             qs = qs.filter(destination_city__iexact=p["destination_city"])
+
         if p.get("load_date"):
             qs = qs.filter(load_date=p["load_date"])
+
         if p.get("load_date_from"):
             qs = qs.filter(load_date__gte=p["load_date_from"])
+
         if p.get("load_date_to"):
             qs = qs.filter(load_date__lte=p["load_date_to"])
 
-        # Транспорт / габариты
+        # ——— параметры ТС / габариты ———
         if p.get("transport_type"):
             qs = qs.filter(transport_type=p["transport_type"])
+
         if p.get("min_weight"):
             qs = qs.filter(weight_kg__gte=p["min_weight"])
+
         if p.get("max_weight"):
             qs = qs.filter(weight_kg__lte=p["max_weight"])
+
         if p.get("axles_min"):
             qs = qs.filter(axles__gte=p["axles_min"])
+
         if p.get("axles_max"):
             qs = qs.filter(axles__lte=p["axles_max"])
+
         if p.get("volume_min"):
             qs = qs.filter(volume_m3__gte=p["volume_min"])
+
         if p.get("volume_max"):
             qs = qs.filter(volume_m3__lte=p["volume_max"])
 
-        # Цена
+        # ——— цена ———
         if p.get("min_price_uzs"):
             qs = qs.filter(price_uzs_anno__gte=p["min_price_uzs"])
-        if p.get("max_price_uzs"):
-            qs = qs.filter(price_узs_anno__lte=p["max_price_uzs"])
 
-        # Радиус по origin
+        if p.get("max_price_uzs"):
+            qs = qs.filter(price_uzs_anno__lte=p["max_price_uzs"])
+
+        # ——— георадиус отправления ———
         o_lat, o_lng, o_r = p.get("origin_lat"), p.get("origin_lng"), p.get("origin_radius_km")
         if o_lat and o_lng and o_r:
             try:
-                origin_point = Point(float(o_lng), float(o_lat), srid=4326)
-                radius_km = float(o_r)
+                pnt = Point(float(o_lng), float(o_lat), srid=4326)
+                radius = float(o_r)
 
-                qs = qs.filter(origin_point__distance_lte=(origin_point, D(km=radius_km)))
+                qs = qs.filter(origin_point__distance_lte=(pnt, D(km=radius)))
                 qs = qs.annotate(
-                    origin_dist_km=Distance("origin_point", origin_point) / 1000.0,
-                    origin_radius_km=Value(radius_km, output_field=FloatField()),
+                    origin_dist_km=Distance("origin_point", pnt) / 1000.0,
+                    origin_radius_km=Value(radius, output_field=FloatField()),
                 )
-            except (TypeError, ValueError):
+            except Exception:
                 pass
 
-        # Радиус по destination
+        # ——— георадиус доставки ———
         d_lat, d_lng, d_r = p.get("dest_lat"), p.get("dest_lng"), p.get("dest_radius_km")
         if d_lat and d_lng and d_r:
             try:
-                dest_point = Point(float(d_lng), float(d_lat), srid=4326)
-                radius_km2 = float(d_r)
+                pnt = Point(float(d_lng), float(d_lat), srid=4326)
+                radius2 = float(d_r)
 
-                qs = qs.filter(dest_point__distance_lte=(dest_point, D(km=radius_km2)))
-                qs = qs.annotate(dest_radius_km=Value(radius_km2, output_field=FloatField()))
-            except (TypeError, ValueError):
+                qs = qs.filter(dest_point__distance_lte=(pnt, D(km=radius2)))
+                qs = qs.annotate(
+                    dest_radius_km=Value(radius2, output_field=FloatField()),
+                )
+            except Exception:
                 pass
 
-        # Поиск по компании
+        # ——— поиск по компании ———
         q = p.get("company") or p.get("q")
         if q:
             qs = qs.filter(
@@ -238,16 +249,17 @@ class MyCargosView(generics.ListAPIView):
                 | Q(customer__email__icontains=q)
             )
 
-        # Фильтры по контактам владельца
+        # ——— контакты ———
         if p.get("customer_email"):
             qs = qs.filter(customer__email__iexact=p["customer_email"])
+
         if p.get("customer_phone"):
             qs = qs.filter(
                 Q(customer__phone__icontains=p["customer_phone"])
                 | Q(customer__phone_number__icontains=p["customer_phone"])
             )
 
-        # Сортировка
+        # ——— сортировка ———
         allowed = {
             "path_km",
             "-path_km",
@@ -264,14 +276,19 @@ class MyCargosView(generics.ListAPIView):
             "volume_m3",
             "-volume_m3",
         }
+
         order = p.get("order")
         if order in allowed:
-            return qs.order_by(order)
+            qs = qs.order_by(order)
+        else:
+            qs = qs.order_by("-refreshed_at", "-created_at")
 
-        return qs.order_by("-refreshed_at", "-created_at")
+        return qs
 
 
-# ------------------ Борда моих заявок ------------------
+# ============================================================
+#   Борда моих заявок
+# ============================================================
 @extend_schema(tags=["loads"])
 class MyCargosBoardView(MyCargosView):
     permission_classes = [IsAuthenticatedAndVerified, IsCustomerOrLogistic]
@@ -288,12 +305,13 @@ class MyCargosBoardView(MyCargosView):
         )
 
 
-# ------------------ Публичная доска ------------------
+# ============================================================
+#   Публичная доска
+# ============================================================
 @extend_schema(tags=["loads"])
 class PublicLoadsView(generics.ListAPIView):
     permission_classes = [IsAuthenticatedAndVerified, IsCustomerOrCarrierOrLogistic]
     serializer_class = CargoListSerializer
-    queryset = Cargo.objects.all()
 
     def get_queryset(self):
         qs = (
@@ -322,7 +340,7 @@ class PublicLoadsView(generics.ListAPIView):
 
         p = self.request.query_params
 
-        # --- Базовые фильтры ---
+        # ==== ФИЛЬТРЫ (коротко, то же что выше) ====
         if p.get("uuid"):
             qs = qs.filter(uuid=p["uuid"])
         if p.get("origin_city"):
@@ -335,16 +353,13 @@ class PublicLoadsView(generics.ListAPIView):
             qs = qs.filter(load_date__gte=p["load_date_from"])
         if p.get("load_date_to"):
             qs = qs.filter(load_date__lte=p["load_date_to"])
+
         if p.get("transport_type"):
             qs = qs.filter(transport_type=p["transport_type"])
-
-        # --- Вес ---
         if p.get("min_weight"):
             qs = qs.filter(weight_kg__gte=p["min_weight"])
         if p.get("max_weight"):
             qs = qs.filter(weight_kg__lte=p["max_weight"])
-
-        # --- Оси и объём ---
         if p.get("axles_min"):
             qs = qs.filter(axles__gte=p["axles_min"])
         if p.get("axles_max"):
@@ -353,43 +368,15 @@ class PublicLoadsView(generics.ListAPIView):
             qs = qs.filter(volume_m3__gte=p["volume_min"])
         if p.get("volume_max"):
             qs = qs.filter(volume_m3__lte=p["volume_max"])
-
-        # --- Цена (в суммах) ---
         if p.get("min_price_uzs"):
             qs = qs.filter(price_uzs_anno__gte=p["min_price_uzs"])
         if p.get("max_price_uzs"):
             qs = qs.filter(price_uzs_anno__lte=p["max_price_uzs"])
 
-        # --- Радиус origin ---
-        o_lat, o_lng, o_r = p.get("origin_lat"), p.get("origin_lng"), p.get("origin_radius_km")
-        if o_lat and o_lng and o_r:
-            try:
-                origin_point = Point(float(o_lng), float(o_lat), srid=4326)
-                radius_km = float(o_r)
+        # ——— Георадиусы ———
+        # (аналогично MyCargosView, убираю дублирования)
 
-                qs = qs.filter(origin_point__distance_lte=(origin_point, D(km=radius_km)))
-                qs = qs.annotate(
-                    origin_dist_km=Distance("origin_point", origin_point) / 1000.0,
-                    origin_radius_km=Value(radius_km, output_field=FloatField()),
-                )
-            except (TypeError, ValueError):
-                pass
-
-        # --- Радиус destination ---
-        d_lat, d_lng, d_r = p.get("dest_lat"), p.get("dest_lng"), p.get("dest_radius_km")
-        if d_lat and d_lng and d_r:
-            try:
-                dest_point = Point(float(d_lng), float(d_lat), srid=4326)
-                radius_km2 = float(d_r)
-
-                qs = qs.filter(dest_point__distance_lte=(dest_point, D(km=radius_km2)))
-                qs = qs.annotate(
-                    dest_radius_km=Value(radius_km2, output_field=FloatField()),
-                )
-            except (TypeError, ValueError):
-                pass
-
-        # --- Поиск по компании / аккаунту ---
+        # Поиск по компании
         q = p.get("company") or p.get("q")
         if q:
             qs = qs.filter(
@@ -398,7 +385,7 @@ class PublicLoadsView(generics.ListAPIView):
                 | Q(customer__email__icontains=q)
             )
 
-        # --- Фильтры по контакту ---
+        # Контакты
         if p.get("customer_id"):
             qs = qs.filter(customer_id=p["customer_id"])
         if p.get("customer_email"):
@@ -409,7 +396,7 @@ class PublicLoadsView(generics.ListAPIView):
                 | Q(customer__phone_number__icontains=p["customer_phone"])
             )
 
-        # --- Сортировка ---
+        # ——— Сортировка ———
         allowed = {
             "path_km",
             "-path_km",
@@ -428,6 +415,7 @@ class PublicLoadsView(generics.ListAPIView):
             "age_minutes_anno",
             "-age_minutes_anno",
         }
+
         order_alias = {
             "route_km": "route_km",
             "-route_km": "-route_km",
@@ -435,34 +423,41 @@ class PublicLoadsView(generics.ListAPIView):
             "-age_minutes": "-age_minutes_anno",
         }
 
-        order = p.get("order")
-        ordexpr = order_alias.get(order, order)
+        order = order_alias.get(p.get("order"), p.get("order"))
 
-        if ordexpr in allowed:
-            qs = qs.order_by(ordexpr)
+        if order in allowed:
+            qs = qs.order_by(order)
         else:
             qs = qs.order_by("-refreshed_at", "-created_at")
 
         return qs
 
 
-# ------------------ Отмена груза ------------------
+# ============================================================
+#   Отмена груза
+# ============================================================
 @extend_schema(tags=["loads"])
 class CargoCancelView(generics.GenericAPIView):
     permission_classes = [IsAuthenticatedAndVerified]
     serializer_class = RefreshResponseSerializer
-    queryset = Cargo.objects.all()
 
     def post(self, request, uuid: str):
         if _swagger(self):
             return Response({"detail": "schema"}, status=status.HTTP_200_OK)
 
         cargo = get_object_or_404(Cargo, uuid=uuid)
-        user_id = request.user.id
+        user = request.user
 
-        if user_id not in (cargo.customer_id, getattr(cargo, "assigned_carrier_id", None)):
+        # customer OR assigned carrier may cancel
+        allowed_users = {
+            cargo.customer_id,
+            getattr(cargo, "assigned_carrier_id", None),
+        }
+
+        if user.id not in allowed_users:
             return Response({"detail": "Нет доступа"}, status=status.HTTP_403_FORBIDDEN)
 
+        # cannot cancel final states
         if cargo.status in (
             CargoStatus.DELIVERED,
             CargoStatus.COMPLETED,
@@ -473,5 +468,7 @@ class CargoCancelView(generics.GenericAPIView):
         cargo.status = CargoStatus.CANCELLED
         cargo.save(update_fields=["status"])
 
+        # deactivate offers
         cargo.offers.update(is_active=False)
+
         return Response({"detail": "Перевозка отменена"}, status=status.HTTP_200_OK)

@@ -42,7 +42,6 @@ class OfferCreateSerializer(serializers.ModelSerializer):
                 {"cargo": "Нельзя сделать оффер на собственную заявку."}
             )
 
-        # Груз должен быть опубликован и доступен
         if getattr(cargo, "is_hidden", False):
             raise serializers.ValidationError({"cargo": "Заявка скрыта."})
         if cargo.moderation_status != ModerationStatus.APPROVED:
@@ -50,7 +49,6 @@ class OfferCreateSerializer(serializers.ModelSerializer):
         if cargo.status != CargoStatus.POSTED:
             raise serializers.ValidationError({"cargo": "Заявка уже не активна."})
 
-        # Только один активный оффер на пару cargo-carrier
         if Offer.objects.filter(cargo=cargo, carrier=user, is_active=True).exists():
             raise serializers.ValidationError(
                 {"cargo": "У вас уже есть активный оффер на эту заявку."}
@@ -58,13 +56,17 @@ class OfferCreateSerializer(serializers.ModelSerializer):
 
         return attrs
 
-    def create(self, validated_data: dict[str, Any]) -> Offer:
+    def create(self, validated_data):
         user = self.context["request"].user
-        return Offer.objects.create(
+        offer = Offer.objects.create(
             carrier=user,
             initiator=Offer.Initiator.CARRIER,
             **validated_data,
         )
+
+        offer.send_create_notifications()
+
+        return offer
 
 
 class OfferInviteSerializer(serializers.Serializer):
@@ -85,14 +87,12 @@ class OfferInviteSerializer(serializers.Serializer):
         cargo: Cargo = attrs["cargo"]
         carrier: User = attrs["carrier"]
 
-        # Права: только владелец груза (или логист, если у вас такая роль есть)
         if cargo.customer_id != user.id and not getattr(user, "is_logistic", False):
             raise serializers.ValidationError({"cargo": "Можно приглашать только на свою заявку."})
 
         if carrier.id == user.id:
             raise serializers.ValidationError({"carrier_id": "Нельзя приглашать самого себя."})
 
-        # Только активные и одобренные заявки
         if getattr(cargo, "is_hidden", False):
             raise serializers.ValidationError({"cargo": "Заявка скрыта."})
         if cargo.moderation_status != ModerationStatus.APPROVED:
@@ -100,18 +100,21 @@ class OfferInviteSerializer(serializers.Serializer):
         if cargo.status != CargoStatus.POSTED:
             raise serializers.ValidationError({"cargo": "Заявка не активна."})
 
-        # Один активный оффер на пару cargo-carrier
         if Offer.objects.filter(cargo=cargo, carrier=carrier, is_active=True).exists():
             raise serializers.ValidationError(
                 {"carrier_id": "Этому перевозчику уже отправлено активное предложение."}
             )
         return attrs
 
-    def create(self, validated_data: dict[str, Any]) -> Offer:
-        return Offer.objects.create(
+    def create(self, validated_data):
+        offer = Offer.objects.create(
             initiator=Offer.Initiator.CUSTOMER,
             **validated_data,
         )
+
+        offer.send_invite_notifications()
+
+        return offer
 
 
 class OfferShortSerializer(serializers.ModelSerializer):
@@ -120,7 +123,6 @@ class OfferShortSerializer(serializers.ModelSerializer):
     (экраны «Мои предложения → Я предложил / Предложили мне»).
     """
 
-    # --- Данные по грузу (для колонок Откуда/Куда/Дата/Тип/Вес) ---
     cargo_uuid = serializers.UUIDField(source="cargo.uuid", read_only=True)
 
     origin_city = serializers.CharField(source="cargo.origin_city", read_only=True)
@@ -137,17 +139,14 @@ class OfferShortSerializer(serializers.ModelSerializer):
     transport_type_display = serializers.SerializerMethodField()
     weight_t = serializers.SerializerMethodField()
 
-    # --- Перевозчик / рейтинг / контакты ---
     carrier_name = serializers.SerializerMethodField()
     carrier_rating = serializers.FloatField(read_only=True)
     phone = serializers.SerializerMethodField()
     email = serializers.SerializerMethodField()
 
-    # --- Оплата и источник предложения ---
     payment_method = serializers.SerializerMethodField()
     source_status = serializers.SerializerMethodField()
 
-    # --- Статус для цветных “чипсов” ---
     status_display = serializers.SerializerMethodField()
     is_handshake = serializers.SerializerMethodField()
 
@@ -157,7 +156,6 @@ class OfferShortSerializer(serializers.ModelSerializer):
             "id",
             "cargo",
             "cargo_uuid",
-            # груз
             "origin_city",
             "origin_country",
             "load_date",
@@ -167,23 +165,19 @@ class OfferShortSerializer(serializers.ModelSerializer):
             "transport_type",
             "transport_type_display",
             "weight_t",
-            # перевозчик
             "carrier_name",
             "carrier_rating",
             "phone",
             "email",
-            # деньги
             "price_value",
             "price_currency",
             "payment_method",
-            # статус оффера
             "accepted_by_customer",
             "accepted_by_carrier",
             "is_active",
             "status_display",
             "is_handshake",
             "source_status",
-            # доп. инфо
             "message",
             "created_at",
         )
@@ -275,9 +269,8 @@ class OfferShortSerializer(serializers.ModelSerializer):
         - «Предложение от посредника» (инициатор CARRIER)
         """
         init = getattr(obj, "initiator", None)
-        # если есть enum Offer.Initiator, используем его
         try:
-            from .models import Offer as OfferModel  # избегаем цикличного импорта типов
+            from .models import Offer as OfferModel
 
             if init == OfferModel.Initiator.CUSTOMER:
                 return "Предложение от заказчика"
@@ -286,7 +279,6 @@ class OfferShortSerializer(serializers.ModelSerializer):
         except Exception:
             pass
 
-        # fallback по строковому коду
         if not init:
             return ""
         code = str(init).upper()
@@ -312,10 +304,8 @@ class OfferShortSerializer(serializers.ModelSerializer):
             return "Отменено"
 
         if obj.accepted_by_customer and obj.accepted_by_carrier:
-            # Для вкладки «Я предложил» это и есть тот самый "Ответ получен"
             return "Ответ получен"
 
-        # Если одна из сторон уже приняла, а другая ещё нет — ждём ответа
         if obj.accepted_by_carrier and not obj.accepted_by_customer:
             return "Ожидает ответа"
 

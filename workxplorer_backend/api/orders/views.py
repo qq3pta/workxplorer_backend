@@ -2,13 +2,14 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import status as http_status
 from rest_framework import viewsets
 from rest_framework.decorators import action
-from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
+from rest_framework.parsers import JSONParser, MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from .filters import OrderFilter
 from .models import Order, OrderStatusHistory
 from .permissions import IsOrderParticipant
+
 from .serializers import (
     OrderDetailSerializer,
     OrderDocumentSerializer,
@@ -16,9 +17,11 @@ from .serializers import (
     OrderStatusHistorySerializer,
 )
 
+from api.notifications.services import notify
+
 
 class OrdersViewSet(viewsets.ModelViewSet):
-    queryset = Order.objects.all().select_related("cargo", "customer", "carrier")
+    queryset = Order.objects.all().select_related("cargo", "customer", "carrier", "created_by")
     permission_classes = [IsAuthenticated, IsOrderParticipant]
     filter_backends = [DjangoFilterBackend]
     filterset_class = OrderFilter
@@ -31,13 +34,15 @@ class OrdersViewSet(viewsets.ModelViewSet):
         if user.is_staff or user.is_superuser:
             return qs
 
-        if getattr(user, "role", None) == "LOGISTIC":
+        role = getattr(user, "role", None)
+
+        if role == "LOGISTIC":
             return qs.filter(created_by=user)
 
-        if getattr(user, "role", None) == "CUSTOMER":
+        if role == "CUSTOMER":
             return qs.filter(customer=user)
 
-        if getattr(user, "role", None) == "CARRIER":
+        if role == "CARRIER":
             return qs.filter(carrier=user)
 
         return qs.none()
@@ -56,18 +61,8 @@ class OrdersViewSet(viewsets.ModelViewSet):
             return OrderDocumentSerializer
         return OrderDetailSerializer
 
-    def get_serializer_context(self):
-        ctx = super().get_serializer_context()
-        ctx.setdefault("request", self.request)
-        return ctx
-
     @action(detail=True, methods=["get", "patch"], url_path="driver-status")
     def driver_status(self, request, pk=None):
-        """
-        GET  -> вернуть текущий статус водителя (для главного экрана)
-        PATCH -> водитель обновляет driver_status
-        """
-
         order = self.get_object()
         user = request.user
 
@@ -83,31 +78,27 @@ class OrdersViewSet(viewsets.ModelViewSet):
                 status=http_status.HTTP_200_OK,
             )
 
-        # ---------------------------------------------------
-        # PATCH — обновить статус водителя
-        # ---------------------------------------------------
-        if order.carrier_id != user.id:
+        if user.id != order.carrier_id:
             return Response(
-                {"detail": "Только водитель может менять статус."},
+                {"detail": "Только перевозчик может менять статус водителя."},
                 status=http_status.HTTP_403_FORBIDDEN,
             )
 
-        allowed_statuses = ["stopped", "en_route", "problem"]
+        allowed = ["stopped", "en_route", "problem"]
 
         ser = self.get_serializer(order, data=request.data, partial=True)
         ser.is_valid(raise_exception=True)
         new_status = ser.validated_data.get("driver_status")
 
-        if new_status not in allowed_statuses:
+        if new_status not in allowed:
             return Response(
-                {"detail": f"Недопустимый статус. Разрешено: {', '.join(allowed_statuses)}"},
+                {"detail": f"Недопустимый статус. Разрешено: {', '.join(allowed)}"},
                 status=http_status.HTTP_400_BAD_REQUEST,
             )
 
         old_status = order.driver_status
         ser.save()
 
-        # Логирование
         if new_status != old_status:
             OrderStatusHistory.objects.create(
                 order=order,
@@ -116,36 +107,80 @@ class OrdersViewSet(viewsets.ModelViewSet):
                 user=user,
             )
 
-        return Response(
-            {
+            msg = f"Статус водителя: {old_status} → {new_status}"
+
+            payload = {
                 "order_id": order.id,
                 "old_status": old_status,
                 "new_status": new_status,
-            },
+            }
+
+            for u in (order.customer, order.carrier):
+                if u:
+                    notify(
+                        user=u,
+                        type="driver_status_changed",
+                        title="Driver status updated",
+                        message=msg,
+                        payload=payload,
+                        cargo=order.cargo,
+                    )
+
+        return Response(
+            {"order_id": order.id, "old_status": old_status, "new_status": new_status},
             status=http_status.HTTP_200_OK,
         )
 
     @action(detail=True, methods=["get", "post"], url_path="documents")
     def documents(self, request, pk=None):
         order = self.get_object()
+
         if request.method == "GET":
             qs = order.documents.all()
             category = request.query_params.get("category")
             if category:
                 qs = qs.filter(category=category)
-            data = OrderDocumentSerializer(
-                qs, many=True, context=self.get_serializer_context()
-            ).data
-            return Response(data, status=http_status.HTTP_200_OK)
+
+            ser = OrderDocumentSerializer(qs, many=True, context=self.get_serializer_context())
+            return Response(ser.data, http_status.HTTP_200_OK)
 
         ser = self.get_serializer(data=request.data, context=self.get_serializer_context())
         ser.is_valid(raise_exception=True)
-        ser.save(order=order, uploaded_by=request.user)
-        return Response(ser.data, status=http_status.HTTP_201_CREATED)
+        document = ser.save(order=order, uploaded_by=request.user)
+
+        category_label = {
+            "licenses": "Лицензии",
+            "contracts": "Договор",
+            "loading": "Документ о погрузке",
+            "unloading": "Документ о разгрузке",
+            "other": "Документ",
+        }.get(document.category, "Документ")
+
+        msg = f"{category_label} загружен"
+
+        payload = {
+            "order_id": order.id,
+            "document_id": document.id,
+            "category": document.category,
+            "title": document.title,
+        }
+
+        for u in (order.customer, order.carrier):
+            if u:
+                notify(
+                    user=u,
+                    type="document_added",
+                    title="Document added",
+                    message=msg,
+                    payload=payload,
+                    cargo=order.cargo,
+                )
+
+        return Response(ser.data, http_status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["get"], url_path="status-history")
     def status_history(self, request, pk=None):
         order = self.get_object()
         qs = order.status_history.all()
         ser = self.get_serializer(qs, many=True)
-        return Response(ser.data, status=http_status.HTTP_200_OK)
+        return Response(ser.data, http_status.HTTP_200_OK)

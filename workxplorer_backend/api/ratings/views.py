@@ -11,34 +11,38 @@ User = get_user_model()
 
 
 class UserRatingViewSet(viewsets.ModelViewSet):
-    """CRUD API для оценок пользователей (рейтингов)."""
+    """CRUD API для оценок пользователей."""
 
     queryset = UserRating.objects.select_related("rated_user", "rated_by", "order")
     serializer_class = UserRatingSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        qs = super().get_queryset()
         user = self.request.user
 
-        # фильтрация по кому / кем
+        qs = super().get_queryset()
+
         rated_user = self.request.query_params.get("rated_user")
         rated_by = self.request.query_params.get("rated_by")
+
         if rated_user:
             qs = qs.filter(rated_user_id=rated_user)
         if rated_by:
             qs = qs.filter(rated_by_id=rated_by)
 
-        return qs.filter(Q(order__carrier=user) | Q(order__customer=user))
+        return qs.filter(Q(order__customer=user) | Q(order__carrier=user))
 
     def perform_create(self, serializer):
-        serializer.save(rated_by=self.request.user)
+        serializer.save()
 
 
 class RatingUserViewSet(viewsets.ReadOnlyModelViewSet):
     """
-    Список пользователей с рейтингами
-    (вкладки 'Грузовладельцы / Логисты / Перевозчики').
+    Список пользователей с рейтингами (каталог).
+    Вкладки:
+    - Грузовладельцы
+    - Логисты
+    - Перевозчики
     """
 
     queryset = User.objects.all()
@@ -58,24 +62,33 @@ class RatingUserViewSet(viewsets.ReadOnlyModelViewSet):
 
         search = self.request.query_params.get("search")
         if search:
-            qs = qs.filter(Q(display_name__icontains=search) | Q(company_name__icontains=search))
+            qs = qs.filter(
+                Q(username__icontains=search)
+                | Q(email__icontains=search)
+                | Q(company_name__icontains=search)
+            )
 
         qs = qs.annotate(
-            avg_rating=Avg("ratings_received__rating"),
+            avg_rating=Avg("ratings_received__score"),
             rating_count=Count("ratings_received"),
         )
 
         qs = qs.annotate(
             completed_orders=Count(
-                "orders_as_carrier", filter=Q(orders_as_carrier__status="finished")
+                "orders_as_carrier",
+                filter=Q(orders_as_carrier__status="delivered"),
             )
-            + Count("orders_as_customer", filter=Q(orders_as_customer__status="finished"))
+            + Count(
+                "orders_as_customer",
+                filter=Q(orders_as_customer__status="delivered"),
+            )
         )
 
         if role == "CARRIER":
             qs = qs.annotate(
                 total_distance=Sum(
-                    "orders_as_carrier__distance_km", filter=Q(orders_as_carrier__status="finished")
+                    "orders_as_carrier__route_distance_km",
+                    filter=Q(orders_as_carrier__status="delivered"),
                 )
             )
 
@@ -91,10 +104,6 @@ class RatingUserViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=False, methods=["get"], url_path="countries")
     def countries(self, request):
-        """
-        Эндпоинт для dropdown "Выбрать страну"
-        Возвращает список стран всех пользователей.
-        """
         countries = (
             User.objects.exclude(country__isnull=True)
             .exclude(country="")

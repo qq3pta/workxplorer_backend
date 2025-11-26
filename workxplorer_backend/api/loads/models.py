@@ -12,6 +12,8 @@ from unidecode import unidecode
 
 from .choices import ContactPref, Currency, ModerationStatus, TransportType
 
+from api.notifications.services import notify
+
 
 class CargoStatus(models.TextChoices):
     POSTED = "POSTED", "Опубликована"
@@ -148,8 +150,24 @@ class Cargo(models.Model):
     def __str__(self):
         return f"{self.product} ({self.origin_city} → {self.destination_city})"
 
-    # --- Автоконверсия в латиницу ---
+    # =====================================================================
+    #  Полностью обновлённый save() с уведомлениями
+    # =====================================================================
     def save(self, *args, **kwargs):
+        is_new = self.pk is None
+
+        old_moderation = None
+        old_status = None
+
+        if not is_new:
+            try:
+                old = Cargo.objects.get(pk=self.pk)
+                old_moderation = old.moderation_status
+                old_status = old.status
+            except Cargo.DoesNotExist:
+                pass
+
+        # латиница
         if self.origin_city:
             self.origin_city_latin = unidecode(self.origin_city).lower()
 
@@ -157,6 +175,61 @@ class Cargo(models.Model):
             self.destination_city_latin = unidecode(self.destination_city).lower()
 
         super().save(*args, **kwargs)
+
+        # ------------------------------------------------------------------
+        # Новая заявка
+        # ------------------------------------------------------------------
+        if is_new:
+            notify(
+                user=self.customer,
+                type="order_created",
+                title="Заявка успешно создана",
+                message="Ваша заявка создана и отправлена на модерацию",
+                cargo=self,
+                payload={"cargo_id": self.id},
+            )
+            return
+
+        # ------------------------------------------------------------------
+        # Статус модерации изменён
+        # ------------------------------------------------------------------
+        if old_moderation != self.moderation_status:
+            # публикация
+            if self.moderation_status == ModerationStatus.APPROVED:
+                notify(
+                    user=self.customer,
+                    type="order_published",
+                    title="Заявка опубликована",
+                    message="Ваша заявка прошла модерацию",
+                    cargo=self,
+                    payload={"cargo_id": self.id},
+                )
+
+            # отклонение
+            elif self.moderation_status == ModerationStatus.REJECTED:
+                notify(
+                    user=self.customer,
+                    type="order_rejected",
+                    title="Заявка отклонена",
+                    message="Модерация не пройдена",
+                    cargo=self,
+                    payload={"cargo_id": self.id},
+                )
+
+        # ------------------------------------------------------------------
+        # Изменился статус перевозки (MATCHED → DELIVERED → COMPLETED)
+        # ------------------------------------------------------------------
+        if old_status != self.status:
+            notify(
+                user=self.customer,
+                type="cargo_status_changed",
+                title="Статус перевозки изменён",
+                message=f"Статус изменён: {self.get_status_display()}",
+                cargo=self,
+                payload={"cargo_id": self.id},
+            )
+
+    # =====================================================================
 
     @property
     def weight_tons(self):

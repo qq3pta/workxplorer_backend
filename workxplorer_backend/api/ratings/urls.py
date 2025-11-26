@@ -1,13 +1,14 @@
 from rest_framework.routers import DefaultRouter
-
 from .views import RatingUserViewSet, UserRatingViewSet
 
 app_name = "ratings"
 
 router = DefaultRouter()
 
-router.register(r"", UserRatingViewSet, basename="ratings")
+# CRUD рейтингов пользователей
+router.register(r"ratings", UserRatingViewSet, basename="ratings")
 
-router.register(r"users", RatingUserViewSet, basename="rating-users")
+# Каталог пользователей с рейтингами
+router.register(r"rating-users", RatingUserViewSet, basename="rating-users")
 
 urlpatterns = router.urls

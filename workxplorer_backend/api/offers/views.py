@@ -35,7 +35,6 @@ class EmptySerializer(serializers.Serializer):
     pass
 
 
-# --------- helpers ---------
 def _apply_common_filters(qs, params):
     """
     Общие фильтры/поиск для list/my/incoming:
@@ -47,7 +46,6 @@ def _apply_common_filters(qs, params):
     """
     p = params
 
-    # --- id/uuid привязки ---
     if p.get("cargo_id"):
         qs = qs.filter(cargo_id=p["cargo_id"])
     if p.get("cargo_uuid"):
@@ -57,7 +55,6 @@ def _apply_common_filters(qs, params):
     if p.get("customer_id"):
         qs = qs.filter(cargo__customer_id=p["customer_id"])
 
-    # --- инициатор/активность/акцепты ---
     if p.get("initiator"):
         qs = qs.filter(initiator=p["initiator"])
     if p.get("is_active") in ("true", "false", "1", "0"):
@@ -67,13 +64,11 @@ def _apply_common_filters(qs, params):
     if p.get("accepted_by_carrier") in ("true", "false", "1", "0"):
         qs = qs.filter(accepted_by_carrier=p.get("accepted_by_carrier") in ("true", "1"))
 
-    # --- даты создания оффера ---
     if p.get("created_from"):
         qs = qs.filter(created_at__gte=p["created_from"])
     if p.get("created_to"):
         qs = qs.filter(created_at__lte=p["created_to"])
 
-    # --- даты по грузу (для списков/макета) ---
     if p.get("load_date_from"):
         qs = qs.filter(cargo__load_date__gte=p["load_date_from"])
     if p.get("load_date_to"):
@@ -83,13 +78,11 @@ def _apply_common_filters(qs, params):
     if p.get("delivery_date_to"):
         qs = qs.filter(cargo__delivery_date__lte=p["delivery_date_to"])
 
-    # --- города / адреса (иногда удобно на доске) ---
     if p.get("origin_city"):
         qs = qs.filter(cargo__origin_city__iexact=p["origin_city"])
     if p.get("destination_city"):
         qs = qs.filter(cargo__destination_city__iexact=p["destination_city"])
 
-    # --- поиск по компании/аккаунту ---
     q = p.get("company") or p.get("q")
     if q:
         qs = qs.filter(
@@ -101,7 +94,6 @@ def _apply_common_filters(qs, params):
             | Q(carrier__email__icontains=q)
         )
 
-    # --- фильтры по контактам (почта/телефон) ---
     if p.get("customer_email"):
         qs = qs.filter(cargo__customer__email__iexact=p["customer_email"])
     if p.get("customer_phone"):
@@ -117,7 +109,6 @@ def _apply_common_filters(qs, params):
             | Q(carrier__phone_number__icontains=p["carrier_phone"])
         )
 
-    # --- сортировка ---
     allowed = {
         "created_at",
         "-created_at",
@@ -127,7 +118,6 @@ def _apply_common_filters(qs, params):
         "-cargo__load_date",
         "cargo__delivery_date",
         "-cargo__delivery_date",
-        # сортировка по рейтингу перевозчика
         "carrier_rating",
         "-carrier_rating",
     }
@@ -240,7 +230,6 @@ class OfferViewSet(ModelViewSet):
             "invite": OfferInviteSerializer,
         }.get(self.action, OfferDetailSerializer)
 
-    # Права по action
     def get_permissions(self):
         if self.action in {"create", "my"}:
             classes = [IsAuthenticatedAndVerified, IsCustomerOrCarrierOrLogistic]
@@ -262,7 +251,6 @@ class OfferViewSet(ModelViewSet):
         scope = request.query_params.get("scope")
         qs = self.get_queryset()
 
-        # базовая видимость по scope
         if scope == "mine":
             qs = qs.filter(carrier=u)
         elif scope == "incoming":
@@ -274,7 +262,6 @@ class OfferViewSet(ModelViewSet):
             if not getattr(u, "is_staff", False):
                 return Response({"detail": "Forbidden"}, status=status.HTTP_403_FORBIDDEN)
         else:
-            # умолчания по ролям
             if getattr(u, "is_carrier", False) or getattr(u, "role", None) == "CARRIER":
                 qs = qs.filter(carrier=u)
             elif getattr(u, "is_customer", False) or getattr(u, "role", None) == "CUSTOMER":
@@ -284,7 +271,6 @@ class OfferViewSet(ModelViewSet):
             else:
                 qs = qs.none()
 
-        # общие фильтры/поиск/сортировка
         qs = _apply_common_filters(qs, request.query_params)
 
         page = self.paginate_queryset(qs)
@@ -409,6 +395,7 @@ class OfferViewSet(ModelViewSet):
                 price_value=ser.validated_data["price_value"],
                 price_currency=ser.validated_data.get("price_currency"),
                 message=ser.validated_data.get("message"),
+                by_user=request.user,
             )
 
         return Response(OfferDetailSerializer(offer).data, status=status.HTTP_200_OK)

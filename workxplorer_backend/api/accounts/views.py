@@ -51,7 +51,7 @@ def issue_tokens(user, remember: bool):
     return {"access": str(access), "refresh": str(refresh)}
 
 
-# ===================== WhatsApp-OTP (телефон) =====================
+# ===================== WhatsApp-OTP =====================
 
 
 @extend_schema(
@@ -88,7 +88,7 @@ class VerifyPhoneOTPView(APIView):
         return Response(s.save())
 
 
-# ===================== Регистрация / E-mail =====================
+# ===================== Регистрация =====================
 
 
 @extend_schema(
@@ -101,11 +101,10 @@ class RegisterView(generics.CreateAPIView):
     serializer_class = RegisterSerializer
 
     def create(self, request, *args, **kwargs):
-        super().create(request, *args, **kwargs)
-        return Response(
-            {"detail": "Регистрация успешна."},
-            status=status.HTTP_201_CREATED,
-        )
+        s = self.get_serializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        s.save()
+        return Response({"detail": "Регистрация успешна."}, status=201)
 
 
 @extend_schema(
@@ -141,11 +140,21 @@ class VerifyEmailView(APIView):
         s = VerifyEmailSerializer(data=request.data)
         s.is_valid(raise_exception=True)
         user = s.save()
-        Profile.objects.get_or_create(user=user)
-        return Response({"detail": "E-mail подтвержден", **issue_tokens(user, remember=False)})
+
+        if user.is_email_verified:
+            return Response({"detail": "E-mail уже подтвержден"}, status=200)
+
+        # Активируем пользователя ОДИН раз
+        user.is_email_verified = True
+        user.is_active = True
+        user.save(update_fields=["is_email_verified", "is_active"])
+
+        return Response(
+            {"detail": "E-mail подтвержден", **issue_tokens(user, remember=False)}, status=200
+        )
 
 
-# ===================== Логин / Токены / Выход =====================
+# ===================== Логин =====================
 
 
 @extend_schema(
@@ -166,10 +175,21 @@ class LoginView(APIView):
     def post(self, request):
         s = LoginSerializer(data=request.data)
         s.is_valid(raise_exception=True)
+
         user = s.validated_data["user"]
-        remember = s.validated_data["remember_me"]
+        remember = s.validated_data.get("remember_me")
+
+        # 🔥 Сохраняем FCM-токен при логине
+        fcm = request.data.get("fcm_token")
+        if fcm:
+            user.fcm_token = fcm
+            user.save(update_fields=["fcm_token"])
+
         Profile.objects.get_or_create(user=user)
         return Response({"user": MeSerializer(user).data, **issue_tokens(user, remember)})
+
+
+# ===================== Обновление токенов =====================
 
 
 @extend_schema(
@@ -187,12 +207,6 @@ class LoginView(APIView):
     ),
 )
 class RefreshView(APIView):
-    """
-    Обновление токенов вручную (альтернатива стандартному TokenRefreshView),
-    с опциональной ротацией под remember_me.
-    Body: {"refresh": "<token>", "remember_me": true|false}
-    """
-
     permission_classes = [AllowAny]
 
     def post(self, request):
@@ -203,17 +217,17 @@ class RefreshView(APIView):
 
         try:
             old = RefreshToken(refresh_str)
-            user_id = old["user_id"]
-            user = User.objects.get(id=user_id)
-
+            user = User.objects.get(id=old["user_id"])
             try:
                 old.blacklist()
             except Exception:
                 pass
-
             return Response(issue_tokens(user, remember))
         except Exception:
             return Response({"detail": "Невалидный refresh токен"}, status=401)
+
+
+# ===================== Logout =====================
 
 
 @extend_schema(
@@ -228,16 +242,11 @@ class RefreshView(APIView):
     ),
 )
 class LogoutView(APIView):
-    """
-    POST /api/auth/logout
-    - с телом {"refresh": "<token>"}: выход только с текущего устройства
-    - без тела: выход со всех устройств
-    """
-
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
         refresh_str = request.data.get("refresh")
+
         if refresh_str:
             try:
                 RefreshToken(refresh_str).blacklist()
@@ -246,6 +255,7 @@ class LogoutView(APIView):
         else:
             for t in OutstandingToken.objects.filter(user=request.user):
                 BlacklistedToken.objects.get_or_create(token=t)
+
         return Response({"detail": "Вы вышли из системы"})
 
 
@@ -275,20 +285,40 @@ class UpdateMeView(generics.UpdateAPIView):
         return self.request.user
 
     def update(self, request, *args, **kwargs):
-        """
-        Возвращаем MeSerializer после успешного обновления,
-        чтобы фронт сразу получил вложенный profile.
-        """
         partial = kwargs.pop("partial", True)
         instance = self.get_object()
+
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
-        self.perform_update(serializer)
+        serializer.save()
+
         Profile.objects.get_or_create(user=instance)
         return Response(MeSerializer(instance).data)
 
 
-# ===================== Роли =====================
+# ===================== Новый endpoint: обновление FCM токена =====================
+
+
+@extend_schema(
+    tags=["auth"],
+    request=inline_serializer("FCMUpdateRequest", {"fcm_token": serializers.CharField()}),
+    responses=inline_serializer("FCMUpdateResponse", {"detail": serializers.CharField()}),
+)
+class UpdateFCMTokenView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        token = request.data.get("fcm_token")
+        if not token:
+            return Response({"detail": "fcm_token обязателен"}, status=400)
+
+        request.user.fcm_token = token
+        request.user.save(update_fields=["fcm_token"])
+
+        return Response({"detail": "FCM токен обновлён"})
+
+
+# ===================== Смена роли =====================
 
 
 @extend_schema(
@@ -308,7 +338,7 @@ class ChangeRoleView(APIView):
         return Response(s.save())
 
 
-# ===================== Сброс пароля по e-mail =====================
+# ===================== Сброс пароля =====================
 
 
 @extend_schema(
@@ -339,7 +369,7 @@ class ResetPasswordView(APIView):
         return Response(s.save())
 
 
-# ===================== Аналитика профиля =====================
+# ===================== Аналитика =====================
 
 
 @extend_schema(
@@ -347,20 +377,14 @@ class ResetPasswordView(APIView):
     responses=AnalyticsSerializer,
 )
 class AnalyticsView(APIView):
-    """
-    GET /api/auth/me/analytics/ — данные для карточек аналитики в профиле.
-    """
-
     permission_classes = [IsAuthenticatedAndVerified]
 
     def get(self, request):
         user = request.user
         now = timezone.now()
 
-        # Базовый queryset успешных перевозок
         qs = Order.objects.filter(status=Order.OrderStatus.DELIVERED)
 
-        # Фильтрация по роли
         role = getattr(user, "role", None)
         if role == UserRole.LOGISTIC:
             qs = qs.filter(customer=user)
@@ -372,7 +396,6 @@ class AnalyticsView(APIView):
             qs = qs.filter(Q(customer=user) | Q(carrier=user))
             rating = user.rating_as_customer or user.rating_as_carrier or 0
 
-        # Текущий и предыдущий 30-дневные периоды
         days = 30
         current_start = now - timedelta(days=days)
         prev_start = now - timedelta(days=days * 2)
@@ -388,11 +411,9 @@ class AnalyticsView(APIView):
         else:
             successful_change = 1.0 if current_cnt > 0 else 0.0
 
-        # Регистрация
         registered_since = getattr(user, "date_joined", now).date()
         days_since_registered = (now.date() - registered_since).days
 
-        # Пройденное расстояние и количество сделок
         agg = qs.aggregate(total_km=Sum("route_distance_km"))
         distance_km = float(agg["total_km"] or 0)
         deals_count = qs.count()

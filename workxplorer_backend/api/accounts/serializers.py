@@ -41,7 +41,7 @@ class ProfileSerializer(serializers.ModelSerializer):
         return attrs
 
 
-# ---------------- WhatsApp OTP (телефон) ----------------
+# ---------------- WhatsApp OTP ----------------
 
 
 class SendPhoneOTPSerializer(serializers.Serializer):
@@ -123,6 +123,8 @@ class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
     password2 = serializers.CharField(write_only=True)
     role = serializers.ChoiceField(choices=UserRole.choices, required=False)
+    fcm_token = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+
     country = serializers.CharField(required=False, allow_blank=True)
     country_code = serializers.CharField(required=False, allow_blank=True, max_length=2)
     region = serializers.CharField(required=False, allow_blank=True)
@@ -143,6 +145,7 @@ class RegisterSerializer(serializers.ModelSerializer):
             "country_code",
             "region",
             "city",
+            "fcm_token",
         )
 
     def validate(self, attrs):
@@ -183,8 +186,10 @@ class RegisterSerializer(serializers.ModelSerializer):
         profile_fields = ("country", "country_code", "region", "city")
         profile_data = {k: validated.pop(k, None) for k in list(profile_fields)}
 
+        token = validated.pop("fcm_token", None)
+
         pwd = validated.pop("password")
-        role = validated.pop("role", UserRole.LOGISTIC)
+        role = validated.pop("role", UserRole.CUSTOMER)
         user = User.objects.create(
             role=role,
             is_active=True,
@@ -193,6 +198,10 @@ class RegisterSerializer(serializers.ModelSerializer):
         )
         user.set_password(pwd)
         user.save()
+
+        if token:
+            user.fcm_token = token
+            user.save(update_fields=["fcm_token"])
 
         Profile.objects.update_or_create(
             user=user, defaults={k: v for k, v in profile_data.items() if v is not None}
@@ -269,13 +278,15 @@ class LoginSerializer(serializers.Serializer):
     login = serializers.CharField()
     password = serializers.CharField()
     remember_me = serializers.BooleanField(default=False)
+    fcm_token = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
     def validate(self, attrs):
         login = attrs["login"]
         password = attrs["password"]
         u = User.objects.filter(Q(email__iexact=login) | Q(username__iexact=login)).first()
-        username = u.username if u else login
-        user = authenticate(username=username, password=password)
+        if not u:
+            raise serializers.ValidationError({"detail": "Неверные учетные данные"})
+        user = authenticate(username=u.username, password=password)
         if not user:
             raise serializers.ValidationError({"detail": "Неверные учетные данные"})
         if not user.is_email_verified:
@@ -290,6 +301,9 @@ class LoginSerializer(serializers.Serializer):
         attrs["tokens"] = {"access": str(access), "refresh": str(refresh)}
         attrs["user"] = user
         return attrs
+
+
+# ---------------- Профиль ----------------
 
 
 class MeSerializer(serializers.ModelSerializer):
@@ -311,6 +325,7 @@ class MeSerializer(serializers.ModelSerializer):
             "is_email_verified",
             "date_joined",
             "profile",
+            "fcm_token",
         )
 
         read_only_fields = (
@@ -327,10 +342,11 @@ class MeSerializer(serializers.ModelSerializer):
 
 class UpdateMeSerializer(serializers.ModelSerializer):
     profile = ProfileSerializer(required=False)
+    fcm_token = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
     class Meta:
         model = User
-        fields = ("first_name", "phone", "company_name", "photo", "profile")
+        fields = ("first_name", "phone", "company_name", "photo", "profile", "fcm_token")
 
     def validate_phone(self, value):
         norm = _normalize_phone(value) if value else value
@@ -340,8 +356,10 @@ class UpdateMeSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         profile_data = validated_data.pop("profile", None)
-        if "phone" in validated_data:
-            validated_data["phone"] = self.validate_phone(validated_data["phone"])
+
+        if "fcm_token" in validated_data:
+            instance.fcm_token = validated_data["fcm_token"]
+
         user = super().update(instance, validated_data)
 
         if profile_data is not None:

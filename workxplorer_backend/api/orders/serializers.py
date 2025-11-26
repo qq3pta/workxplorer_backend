@@ -5,7 +5,6 @@ from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from api.loads.choices import Currency
-
 from .models import Order, OrderDocument, OrderStatusHistory
 
 
@@ -22,9 +21,9 @@ def _order_status_choices() -> Iterable[tuple[str, str]]:
 
 
 def _driver_status_choices() -> Iterable[tuple[str, str]]:
-    DriverStatus = getattr(Order, "DriverStatus", None)
-    if DriverStatus is not None and hasattr(DriverStatus, "choices"):
-        return DriverStatus.choices
+    Driver = getattr(Order, "DriverStatus", None)
+    if Driver is not None and hasattr(Driver, "choices"):
+        return Driver.choices
     return _field_choices(Order, "driver_status")
 
 
@@ -63,36 +62,31 @@ class OrderDocumentSerializer(serializers.ModelSerializer):
             "uploaded_by",
             "created_at",
         )
+        read_only_fields = ("id", "uploaded_by", "created_at")
 
-    @extend_schema_field(serializers.CharField(allow_null=True, allow_blank=True))
-    def get_file_name(self, obj) -> str | None:
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_file_name(self, obj):
         try:
-            name = getattr(obj.file, "name", None)
-            return os.path.basename(name) if name else None
+            return os.path.basename(obj.file.name)
         except Exception:
             return None
 
-    @extend_schema_field(serializers.IntegerField(allow_null=True, min_value=0))
-    def get_file_size(self, obj) -> int | None:
+    @extend_schema_field(serializers.IntegerField(allow_null=True))
+    def get_file_size(self, obj):
         try:
-            size = getattr(obj.file, "size", None)
-            return int(size) if size is not None else None
+            return int(obj.file.size)
         except Exception:
-            return 0
+            return None
 
 
 class OrderListSerializer(serializers.ModelSerializer):
-    # агрегаты / вычисляемые поля
     price_per_km = serializers.FloatField(read_only=True)
     cargo_id = serializers.IntegerField(read_only=True)
 
     status = serializers.ChoiceField(choices=_order_status_choices())
     driver_status = serializers.ChoiceField(choices=_driver_status_choices(), read_only=True)
     currency = serializers.ChoiceField(choices=_currency_choices())
-    currency_display = serializers.CharField(
-        source="get_currency_display",
-        read_only=True,
-    )
+    currency_display = serializers.CharField(source="get_currency_display", read_only=True)
 
     customer_name = serializers.SerializerMethodField()
     carrier_name = serializers.SerializerMethodField()
@@ -101,11 +95,7 @@ class OrderListSerializer(serializers.ModelSerializer):
     origin_city = serializers.CharField(source="cargo.origin_city", read_only=True)
     destination_city = serializers.CharField(source="cargo.destination_city", read_only=True)
     load_date = serializers.DateField(source="cargo.load_date", read_only=True)
-    delivery_date = serializers.DateField(
-        source="cargo.delivery_date",
-        read_only=True,
-        allow_null=True,
-    )
+    delivery_date = serializers.DateField(source="cargo.delivery_date", read_only=True)
 
     documents_count = serializers.SerializerMethodField()
 
@@ -137,11 +127,11 @@ class OrderListSerializer(serializers.ModelSerializer):
         read_only_fields = (
             "id",
             "created_at",
-            "price_per_km",
-            "cargo_id",
             "customer",
             "carrier",
             "driver_status",
+            "cargo_id",
+            "price_per_km",
         )
 
     def _user_display_name(self, u):
@@ -155,24 +145,21 @@ class OrderListSerializer(serializers.ModelSerializer):
         )
 
     def get_customer_name(self, obj):
-        return self._user_display_name(getattr(obj, "customer", None))
+        return self._user_display_name(obj.customer)
 
     def get_carrier_name(self, obj):
-        return self._user_display_name(getattr(obj, "carrier", None))
+        return self._user_display_name(obj.carrier)
 
     def get_logistic_name(self, obj):
-        u = getattr(obj, "created_by", None)
-        if not u:
-            return ""
-        if getattr(u, "is_logistic", False) or getattr(u, "role", None) == "LOGISTIC":
+        u = obj.created_by
+        if u and (getattr(u, "is_logistic", False) or getattr(u, "role", "") == "LOGISTIC"):
             return self._user_display_name(u)
         return ""
 
-    @extend_schema_field(serializers.IntegerField(allow_null=False, min_value=0))
-    def get_documents_count(self, obj) -> int:
-        rel = getattr(obj, "documents", None)
+    @extend_schema_field(serializers.IntegerField())
+    def get_documents_count(self, obj):
         try:
-            return rel.count() if rel is not None else 0
+            return obj.documents.count()
         except Exception:
             return 0
 
@@ -217,6 +204,4 @@ class OrderStatusHistorySerializer(serializers.ModelSerializer):
         u = obj.user
         if not u:
             return ""
-        return (
-            getattr(u, "full_name", None) or getattr(u, "name", None) or getattr(u, "username", "")
-        )
+        return getattr(u, "full_name", None) or getattr(u, "name", None) or u.username

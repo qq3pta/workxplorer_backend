@@ -202,11 +202,16 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
         # convert tons → kg
         wt = attrs.get("weight_tons")
         if wt is not None:
-            attrs["weight_kg"] = Decimal(str(wt)) * Decimal("1000")
+            if isinstance(wt, (float, int)):
+                wt = Decimal(f"{wt:.6f}")
+            else:
+                wt = Decimal(str(wt))
+            attrs["weight_kg"] = wt * Decimal("1000")
 
         # date checks
         ld = self._val_or_instance(attrs, "load_date")
-        if ld and ld < timezone.now().date():
+        today = timezone.localdate()
+        if ld and ld < today:
             raise serializers.ValidationError(
                 {"load_date": "Дата загрузки не может быть в прошлом."}
             )
@@ -229,8 +234,13 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
 
         # axles
         ax = attrs.get("axles")
-        if ax is not None and not (3 <= int(ax) <= 10):
-            raise serializers.ValidationError({"axles": "Оси должны быть в диапазоне 3–10."})
+        if ax not in (None, ""):
+            try:
+                ax_i = int(ax)
+            except ValueError:
+                raise serializers.ValidationError({"axles": "Некорректное значение осей."})
+            if not (3 <= ax_i <= 10):
+                raise serializers.ValidationError({"axles": "Оси должны быть в диапазоне 3–10."})
 
         # volume
         vol = attrs.get("volume_m3")
@@ -241,9 +251,7 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
                         {"volume_m3": "Объём должен быть больше нуля."}
                     )
             except Exception:
-                raise serializers.ValidationError(
-                    {"volume_m3": "Некорректное значение объёма."}
-                ) from None
+                raise serializers.ValidationError({"volume_m3": "Введите число."}) from None
 
         return attrs
 
@@ -253,13 +261,20 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
     def create(self, validated_data):
         user = self.context["request"].user
 
-        # convert tons → kg
+        # convert tons → kg (унифицировано)
         wt = validated_data.pop("weight_tons", None)
         if wt is not None:
-            validated_data["weight_kg"] = Decimal(str(wt)) * Decimal("1000")
+            if isinstance(wt, (int, float)):
+                wt = Decimal(f"{wt:.6f}")
+            else:
+                wt = Decimal(str(wt))
+            validated_data["weight_kg"] = wt * Decimal("1000")
 
         origin_point = self._geocode_origin(validated_data)
         dest_point = self._geocode_dest(validated_data)
+
+        if not origin_point or not dest_point:
+            raise serializers.ValidationError("Не удалось определить координаты маршрута.")
 
         cargo = Cargo.objects.create(
             customer=user,
@@ -279,12 +294,17 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
     def update(self, instance, validated_data):
         wt = validated_data.pop("weight_tons", None)
         if wt is not None:
-            validated_data["weight_kg"] = Decimal(str(wt)) * Decimal("1000")
+            if isinstance(wt, (float, int)):
+                wt = Decimal(f"{wt:.6f}")
+            else:
+                wt = Decimal(str(wt))
+            validated_data["weight_kg"] = wt * Decimal("1000")
 
         need_origin, need_dest = self._need_regeocode(validated_data)
 
         if need_origin:
             instance.origin_point = self._geocode_origin(validated_data)
+
         if need_dest:
             instance.dest_point = self._geocode_dest(validated_data)
 
@@ -293,7 +313,13 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
 
         instance.save()
 
-        if need_origin or need_dest:
+        # validate dates on update
+        if instance.load_date and instance.load_date < timezone.localdate():
+            raise serializers.ValidationError(
+                {"load_date": "Дата загрузки не может быть в прошлом."}
+            )
+
+        if instance.origin_point and instance.dest_point and (need_origin or need_dest):
             instance.update_route_cache(save=True)
 
         instance.update_price_uzs()
@@ -413,6 +439,10 @@ class CargoListSerializer(RouteKmMixin, serializers.ModelSerializer):
         dist = obj.route_km or obj.route_km_cached or obj.path_km
         if not price or not dist:
             return None
+
+        if float(dist) == 0:
+            return None
+
         try:
             return (Decimal(str(price)) / Decimal(str(dist))).quantize(
                 Decimal("0.01"), rounding=ROUND_HALF_UP

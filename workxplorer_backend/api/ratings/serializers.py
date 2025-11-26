@@ -23,18 +23,28 @@ class UserRatingSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "rated_by", "created_at"]
 
     def validate(self, attrs):
-        user = self.context["request"].user
+        request = self.context["request"]
+        user = request.user
         order = attrs["order"]
+        rated_user = attrs["rated_user"]
 
-        # Проверка: участвует ли пользователь в заказе
-        if user not in [order.customer, order.carrier]:
+        if user not in (order.customer, order.carrier):
             raise serializers.ValidationError("Вы не участвуете в этом заказе.")
 
-        # Проверка: нельзя оценить самого себя
-        if attrs["rated_user"] == user:
+        if rated_user == user:
             raise serializers.ValidationError("Нельзя оценить самого себя.")
 
+        if rated_user not in (order.customer, order.carrier):
+            raise serializers.ValidationError("Пользователь не участвует в заказе.")
+
+        if UserRating.objects.filter(rated_user=rated_user, order=order).exists():
+            raise serializers.ValidationError("Пользователь уже был оценён в этом заказе.")
+
         return attrs
+
+    def create(self, validated_data):
+        validated_data["rated_by"] = self.context["request"].user
+        return super().create(validated_data)
 
 
 class RatingUserListSerializer(serializers.ModelSerializer):
@@ -44,18 +54,13 @@ class RatingUserListSerializer(serializers.ModelSerializer):
 
     display_name = serializers.SerializerMethodField()
 
-    # приходят из аннотаций:
     avg_rating = serializers.FloatField(read_only=True)
     rating_count = serializers.IntegerField(read_only=True)
     completed_orders = serializers.IntegerField(read_only=True)
 
-    # показываем дату регистрации
     registered_at = serializers.DateTimeField(source="date_joined", read_only=True)
-
-    # страна пользователя
     country = serializers.CharField(read_only=True)
 
-    # только для перевозчиков
     total_distance = serializers.SerializerMethodField()
 
     class Meta:
@@ -75,20 +80,9 @@ class RatingUserListSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_display_name(self, obj):
-        """
-        Отображаем:
-        - company_name (если есть)
-        - или username
-        - или email
-        """
         return obj.company_name or obj.username or obj.email
 
     def get_total_distance(self, obj):
-        """
-        total_distance приходит как аннотация.
-        Для ролей LOGISTIC / CUSTOMER не показываем.
-        """
         if getattr(obj, "role", None) != "CARRIER":
             return None
-
         return getattr(obj, "total_distance", 0)

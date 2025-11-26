@@ -12,13 +12,14 @@ from django.db.models import Q, UniqueConstraint
 from api.loads.choices import Currency
 from api.loads.models import Cargo, CargoStatus
 
+from api.notifications.services import notify
+
 
 class Offer(models.Model):
     class Initiator(models.TextChoices):
         CUSTOMER = "CUSTOMER", "Заказчик"
         CARRIER = "CARRIER", "Перевозчик"
 
-    # Привязки
     cargo = models.ForeignKey(
         Cargo,
         on_delete=models.CASCADE,
@@ -30,7 +31,6 @@ class Offer(models.Model):
         related_name="offers",
     )
 
-    # Содержимое оффера
     price_value = models.DecimalField(
         max_digits=14,
         decimal_places=2,
@@ -45,7 +45,6 @@ class Offer(models.Model):
     )
     message = models.TextField(blank=True)
 
-    # Согласования
     accepted_by_customer = models.BooleanField(default=False)
     accepted_by_carrier = models.BooleanField(default=False)
     initiator = models.CharField(
@@ -54,7 +53,6 @@ class Offer(models.Model):
         default=Initiator.CARRIER,
     )
 
-    # Технические поля
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -79,12 +77,127 @@ class Offer(models.Model):
             f"Offer#{self.pk} cargo={self.cargo_id} carrier={self.carrier_id} by={self.initiator}"
         )
 
-    # ---------------- Бизнес-логика ----------------
-
     @property
     def is_handshake(self) -> bool:
-        """Есть взаимный акцепт обеих сторон."""
         return self.accepted_by_customer and self.accepted_by_carrier
+
+    def send_create_notifications(self):
+        """Вызывается вручную из create() сериализатора."""
+        customer = self.cargo.customer
+        carrier = self.carrier
+
+        notify(
+            user=carrier,
+            type="offer_sent",
+            title="Предложение отправлено",
+            message="Вы отправили предложение заказчику.",
+            offer=self,
+            cargo=self.cargo,
+        )
+
+        notify(
+            user=customer,
+            type="offer_received_from_carrier",
+            title="Новое предложение",
+            message="Вы получили предложение от перевозчика.",
+            offer=self,
+            cargo=self.cargo,
+        )
+
+    def send_invite_notifications(self):
+        customer = self.cargo.customer
+        carrier = self.carrier
+
+        notify(
+            user=customer,
+            type="offer_sent",
+            title="Инвайт отправлен",
+            message="Вы отправили предложение перевозчику.",
+            offer=self,
+            cargo=self.cargo,
+        )
+
+        notify(
+            user=carrier,
+            type="offer_from_customer",
+            title="Новое предложение от заказчика",
+            message="Заказчик отправил вам предложение.",
+            offer=self,
+            cargo=self.cargo,
+        )
+
+    def send_counter_notifications(self, by_user):
+        customer = self.cargo.customer
+        carrier = self.carrier
+
+        notify(
+            user=by_user,
+            type="offer_my_response_sent",
+            title="Ответ отправлен",
+            message="Вы предложили новые условия.",
+            offer=self,
+            cargo=self.cargo,
+        )
+
+        other = customer if by_user.id == carrier.id else carrier
+
+        notify(
+            user=other,
+            type="offer_response_to_me",
+            title="Получен ответ по предложению",
+            message="По предложению поступил новый ответ.",
+            offer=self,
+            cargo=self.cargo,
+        )
+
+    def send_accept_notifications(self, accepted_by):
+        customer = self.cargo.customer
+        carrier = self.carrier
+
+        if self.is_handshake:
+            notify(
+                user=customer,
+                type="deal_success",
+                title="Сделка подтверждена",
+                message="Перевозчик подтвердил сделку.",
+                offer=self,
+                cargo=self.cargo,
+            )
+            notify(
+                user=carrier,
+                type="deal_success",
+                title="Сделка подтверждена",
+                message="Заказчик подтвердил сделку.",
+                offer=self,
+                cargo=self.cargo,
+            )
+            return
+
+        other = customer if accepted_by.id == carrier.id else carrier
+
+        notify(
+            user=other,
+            type="deal_confirm_required_by_other",
+            title="Необходима подтвердить сделку",
+            message="Другая сторона приняла предложение. Подтвердите сделку.",
+            offer=self,
+            cargo=self.cargo,
+        )
+
+    def send_reject_notifications(self, rejected_by):
+        customer = self.cargo.customer
+        carrier = self.carrier
+
+        other = customer if rejected_by.id == carrier.id else carrier
+
+        notify(
+            user=other,
+            type="deal_rejected_by_other",
+            title="Предложение отклонено",
+            message="Другая сторона отклонила предложение.",
+            offer=self,
+            cargo=self.cargo,
+        )
 
     def make_counter(
         self,
@@ -94,13 +207,6 @@ class Offer(models.Model):
         message: str | None = None,
         by_user=None,
     ) -> None:
-        """
-        Контр-предложение:
-        - обновляет цену/валюту/сообщение (если заданы),
-        - сбрасывает акцепты обеих сторон,
-        - помечает инициатора шага,
-        - оставляет оффер активным.
-        """
         if price_value is not None:
             self.price_value = price_value
         if price_currency:
@@ -130,64 +236,9 @@ class Offer(models.Model):
             ]
         )
 
-    def _finalize_handshake(self, cargo_locked: Cargo | None = None) -> None:
-        """
-        Эффекты взаимного согласия (выполнять ТОЛЬКО внутри transaction.atomic).
-        Если передан cargo_locked — считаем, что строка уже взята под select_for_update().
-        """
-        cargo = cargo_locked or self.cargo
-
-        cargo.status = CargoStatus.MATCHED
-
-        if hasattr(cargo, "assigned_carrier_id"):
-            cargo.assigned_carrier_id = self.carrier_id
-        if hasattr(cargo, "chosen_offer_id"):
-            cargo.chosen_offer_id = self.id
-
-        update_fields = ["status"]
-        if hasattr(cargo, "assigned_carrier_id"):
-            update_fields.append("assigned_carrier")
-        if hasattr(cargo, "chosen_offer_id"):
-            update_fields.append("chosen_offer")
-
-        cargo.save(update_fields=update_fields)
-
-        Offer.objects.filter(cargo_id=cargo.id, is_active=True).exclude(pk=self.pk).update(
-            is_active=False
-        )
-
-        try:
-            Order = apps.get_model("orders", "Order")
-        except (LookupError, AppRegistryNotReady):
-            return
-
-        route_km = (
-            getattr(cargo, "route_distance_km", None)
-            or getattr(cargo, "route_km_cached", None)
-            or getattr(cargo, "route_km", None)
-            or getattr(cargo, "path_km", None)
-            or 0
-        )
-
-        Order.objects.get_or_create(
-            cargo=cargo,
-            defaults={
-                "customer_id": cargo.customer_id,
-                "carrier_id": self.carrier_id,
-                "currency": self.price_currency
-                or getattr(cargo, "price_currency", None)
-                or Currency.UZS,
-                "price_total": self.price_value or Decimal("0"),
-                "route_distance_km": route_km,
-            },
-        )
+        self.send_counter_notifications(by_user)
 
     def accept_by(self, user) -> None:
-        """
-        Акцепт со стороны клиента (владельца груза) или перевозчика.
-        Разрешено только участникам и только для активного оффера.
-        При взаимном согласии — атомарно фиксирует сделку (_finalize_handshake).
-        """
         if not self.is_active:
             raise ValidationError("Нельзя принять неактивный оффер.")
 
@@ -203,6 +254,8 @@ class Offer(models.Model):
         with transaction.atomic():
             self.save(update_fields=["accepted_by_customer", "accepted_by_carrier", "updated_at"])
 
+            self.send_accept_notifications(user)
+
             if self.is_handshake:
                 cargo_locked = (
                     Cargo.objects.select_for_update()
@@ -210,7 +263,6 @@ class Offer(models.Model):
                     .get(pk=self.cargo_id)
                 )
 
-                # Если уже кем-то зафиксирован матч с выбранным оффером — выходим
                 if cargo_locked.status == CargoStatus.MATCHED and getattr(
                     cargo_locked, "chosen_offer_id", None
                 ):
@@ -219,13 +271,11 @@ class Offer(models.Model):
                 self._finalize_handshake(cargo_locked=cargo_locked)
 
     def reject_by(self, user) -> None:
-        """
-        Отклонение со стороны любой из сторон — оффер деактивируется.
-        Разрешено только участникам сделки.
-        """
         if user.id not in (self.cargo.customer_id, self.carrier_id):
             raise PermissionDenied("Нельзя отклонить оффер: вы не участник сделки.")
 
         if self.is_active:
             self.is_active = False
             self.save(update_fields=["is_active", "updated_at"])
+
+            self.send_reject_notifications(user)

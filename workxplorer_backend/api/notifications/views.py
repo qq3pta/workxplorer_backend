@@ -4,28 +4,26 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import Notification
-from .serializers import NotificationSerializer
+from .serializers import (
+    NotificationSerializer,
+    MarkReadSerializer,
+    MarkAllReadSerializer,
+)
 
 
 class NotificationListView(generics.ListAPIView):
-    """
-    Возвращает список уведомлений текущего пользователя.
-    """
-
     serializer_class = NotificationSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return Notification.objects.none()
         return Notification.objects.filter(user=self.request.user).order_by("-created_at")
 
 
 class NotificationMarkReadView(APIView):
-    """
-    Помечает одно уведомление как прочитанное.
-    POST /notifications/<id>/mark-read/
-    """
-
     permission_classes = [IsAuthenticated]
+    serializer_class = MarkReadSerializer
 
     def post(self, request, pk):
         notif = Notification.objects.filter(id=pk, user=request.user).first()
@@ -40,12 +38,8 @@ class NotificationMarkReadView(APIView):
 
 
 class NotificationMarkAllReadView(APIView):
-    """
-    Помечает все непрочитанные уведомления как прочитанные.
-    POST /notifications/mark-all-read/
-    """
-
     permission_classes = [IsAuthenticated]
+    serializer_class = MarkAllReadSerializer
 
     def post(self, request):
         Notification.objects.filter(user=request.user, is_read=False).update(is_read=True)

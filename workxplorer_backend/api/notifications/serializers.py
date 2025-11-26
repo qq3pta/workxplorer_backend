@@ -29,3 +29,7 @@ class MarkReadSerializer(serializers.Serializer):
     """
 
     id = serializers.IntegerField()
+
+
+class MarkAllReadSerializer(serializers.Serializer):
+    pass

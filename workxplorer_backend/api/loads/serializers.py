@@ -16,16 +16,10 @@ from .choices import ModerationStatus
 from .models import Cargo, PaymentMethod
 
 
-# ==============================================================================
-# Route distance mixin
-# ==============================================================================
 class RouteKmMixin(serializers.Serializer):
     route_km = serializers.SerializerMethodField()
 
     def get_route_km(self, obj: Cargo) -> float | None:
-        """Returns route_km, falling back to cached values or path_km."""
-
-        # direct (calculated)
         val = getattr(obj, "route_km", None)
         if val is not None:
             try:
@@ -33,7 +27,6 @@ class RouteKmMixin(serializers.Serializer):
             except Exception:
                 pass
 
-        # cached
         cached = getattr(obj, "route_km_cached", None)
         if cached is not None:
             try:
@@ -41,7 +34,6 @@ class RouteKmMixin(serializers.Serializer):
             except Exception:
                 pass
 
-        # live routing
         try:
             if obj.origin_point and obj.dest_point:
                 from api.routing.services import get_route
@@ -52,7 +44,6 @@ class RouteKmMixin(serializers.Serializer):
         except Exception:
             pass
 
-        # fallback
         pk = getattr(obj, "path_km", None)
         try:
             return round(float(pk), 1) if pk is not None else None
@@ -60,9 +51,6 @@ class RouteKmMixin(serializers.Serializer):
             return None
 
 
-# ==============================================================================
-# Publish Cargo
-# ==============================================================================
 class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
     price_uzs = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
     weight_tons = serializers.FloatField(required=False, write_only=True, min_value=0.001)
@@ -99,9 +87,6 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
         )
         read_only_fields = ("route_km", "price_uzs", "uuid")
 
-    # --------------------------------------------------------------------------
-    # helpers
-    # --------------------------------------------------------------------------
     def _val_or_instance(self, attrs: dict[str, Any], name: str):
         if name in attrs:
             return attrs[name]
@@ -120,9 +105,6 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
             return True, True
         return changed_origin, changed_dest
 
-    # --------------------------------------------------------------------------
-    # smart find place
-    # --------------------------------------------------------------------------
     def _smart_find_place(self, country: str, city: str) -> GeoPlace | None:
         country = COUNTRY_NORMALIZATION.get(country, country).strip()
         city_norm = city.strip().lower()
@@ -137,9 +119,6 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
             or qs.filter(name_latin__icontains=city_trans).first()
         )
 
-    # --------------------------------------------------------------------------
-    # geocode origin
-    # --------------------------------------------------------------------------
     def _geocode_origin(self, attrs):
         country = (attrs.get("origin_country") or "").strip()
         city = (attrs.get("origin_city") or "").strip()
@@ -153,14 +132,11 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
 
         try:
             return geocode_city(country=country, city=city)
-        except GeocodingError:
+        except GeocodingError as err:
             raise serializers.ValidationError(
                 {"origin_city": f"Город '{city}' не найден. Проверьте написание."}
-            ) from None
+            ) from err
 
-    # --------------------------------------------------------------------------
-    # geocode destination
-    # --------------------------------------------------------------------------
     def _geocode_dest(self, attrs):
         country = (attrs.get("destination_country") or "").strip()
         city = (attrs.get("destination_city") or "").strip()
@@ -174,14 +150,11 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
 
         try:
             return geocode_city(country=country, city=city)
-        except GeocodingError:
+        except GeocodingError as err:
             raise serializers.ValidationError(
                 {"destination_city": f"Город '{city}' не найден. Проверьте написание."}
-            ) from None
+            ) from err
 
-    # --------------------------------------------------------------------------
-    # VALIDATION
-    # --------------------------------------------------------------------------
     def validate(self, attrs):
         required = [
             "origin_address",
@@ -191,7 +164,6 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
             "contact_pref",
         ]
 
-        # required on create
         if self.instance is None:
             missing = [f for f in required if attrs.get(f) in ("", None)]
             if missing:
@@ -199,16 +171,14 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
                     {f: "Обязательное поле по ТЗ 2.6.13" for f in missing}
                 )
 
-        # convert tons → kg
         wt = attrs.get("weight_tons")
         if wt is not None:
-            if isinstance(wt, (float, int)):
+            if isinstance(wt, float) or isinstance(wt, int):  # FIXED UP038
                 wt = Decimal(f"{wt:.6f}")
             else:
                 wt = Decimal(str(wt))
             attrs["weight_kg"] = wt * Decimal("1000")
 
-        # date checks
         ld = self._val_or_instance(attrs, "load_date")
         today = timezone.localdate()
         if ld and ld < today:
@@ -222,27 +192,24 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
                 {"delivery_date": "Дата доставки не может быть раньше даты загрузки."}
             )
 
-        # weight
         wk = attrs.get("weight_kg")
         if wk is not None and Decimal(str(wk)) <= 0:
             raise serializers.ValidationError({"weight_kg": "Вес должен быть больше нуля."})
 
-        # price
         price = attrs.get("price_value")
         if price is not None and price < 0:
             raise serializers.ValidationError({"price_value": "Цена не может быть отрицательной."})
 
-        # axles
         ax = attrs.get("axles")
         if ax not in (None, ""):
             try:
                 ax_i = int(ax)
-            except ValueError:
-                raise serializers.ValidationError({"axles": "Некорректное значение осей."})
+            except ValueError as err:
+                raise serializers.ValidationError({"axles": "Некорректное значение осей."}) from err
+
             if not (3 <= ax_i <= 10):
                 raise serializers.ValidationError({"axles": "Оси должны быть в диапазоне 3–10."})
 
-        # volume
         vol = attrs.get("volume_m3")
         if vol is not None:
             try:
@@ -250,21 +217,17 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
                     raise serializers.ValidationError(
                         {"volume_m3": "Объём должен быть больше нуля."}
                     )
-            except Exception:
-                raise serializers.ValidationError({"volume_m3": "Введите число."}) from None
+            except Exception as err:
+                raise serializers.ValidationError({"volume_m3": "Введите число."}) from err
 
         return attrs
 
-    # --------------------------------------------------------------------------
-    # CREATE
-    # --------------------------------------------------------------------------
     def create(self, validated_data):
         user = self.context["request"].user
 
-        # convert tons → kg (унифицировано)
         wt = validated_data.pop("weight_tons", None)
         if wt is not None:
-            if isinstance(wt, (int, float)):
+            if isinstance(wt, float) or isinstance(wt, int):  # FIXED UP038
                 wt = Decimal(f"{wt:.6f}")
             else:
                 wt = Decimal(str(wt))
@@ -288,13 +251,10 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
         cargo.update_price_uzs()
         return cargo
 
-    # --------------------------------------------------------------------------
-    # UPDATE
-    # --------------------------------------------------------------------------
     def update(self, instance, validated_data):
         wt = validated_data.pop("weight_tons", None)
         if wt is not None:
-            if isinstance(wt, (float, int)):
+            if isinstance(wt, float) or isinstance(wt, int):  # FIXED UP038
                 wt = Decimal(f"{wt:.6f}")
             else:
                 wt = Decimal(str(wt))
@@ -313,7 +273,6 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
 
         instance.save()
 
-        # validate dates on update
         if instance.load_date and instance.load_date < timezone.localdate():
             raise serializers.ValidationError(
                 {"load_date": "Дата загрузки не может быть в прошлом."}
@@ -326,9 +285,6 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
         return instance
 
 
-# ==============================================================================
-# List serializer
-# ==============================================================================
 class CargoListSerializer(RouteKmMixin, serializers.ModelSerializer):
     id = serializers.IntegerField(read_only=True)
     price_uzs = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
@@ -396,7 +352,6 @@ class CargoListSerializer(RouteKmMixin, serializers.ModelSerializer):
         )
         read_only_fields = fields
 
-    # ----------------------------------------------------------------------
     def get_has_offers(self, obj):
         oa = getattr(obj, "offers_active", None)
         if oa is not None:

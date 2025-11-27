@@ -126,14 +126,6 @@ class OrdersViewSet(viewsets.ModelViewSet):
         ser.is_valid(raise_exception=True)
         document = ser.save(order=order, uploaded_by=request.user)
 
-        category_label = {
-            "licenses": "Лицензии",
-            "contracts": "Договор",
-            "loading": "Документ о погрузке",
-            "unloading": "Документ о разгрузке",
-            "other": "Документ",
-        }.get(document.category, "Документ")
-
         return Response(ser.data, http_status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["get"], url_path="status-history")

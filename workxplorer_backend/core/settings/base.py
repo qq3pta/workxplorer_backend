@@ -271,10 +271,20 @@ CHANNEL_LAYERS = {
     },
 }
 
-EMAIL_BACKEND = getenv("EMAIL_BACKEND")
-EMAIL_HOST = getenv("EMAIL_HOST")
-EMAIL_PORT = int(getenv("EMAIL_PORT"))
-EMAIL_USE_TLS = getenv("EMAIL_USE_TLS") == "True"
-EMAIL_HOST_USER = getenv("EMAIL_HOST_USER")
-EMAIL_HOST_PASSWORD = getenv("EMAIL_HOST_PASSWORD")
-DEFAULT_FROM_EMAIL = getenv("DEFAULT_FROM_EMAIL")
+
+def env_bool(key: str, default: bool = False) -> bool:
+    val = getenv(key)
+    if val is None:
+        return default
+    return val.lower() in ("true", "1", "yes", "on")
+
+
+EMAIL_BACKEND = getenv("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend")
+EMAIL_HOST = getenv("EMAIL_HOST", "smtp.gmail.com")
+EMAIL_PORT = int(getenv("EMAIL_PORT", "587"))
+EMAIL_USE_TLS = env_bool("EMAIL_USE_TLS", True)
+EMAIL_USE_SSL = env_bool("EMAIL_USE_SSL", False)
+
+EMAIL_HOST_USER = getenv("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = getenv("EMAIL_HOST_PASSWORD", "")
+DEFAULT_FROM_EMAIL = getenv("DEFAULT_FROM_EMAIL", "noreply@example.com")

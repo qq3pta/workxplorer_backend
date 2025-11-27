@@ -134,15 +134,17 @@ class CargoRefreshView(generics.GenericAPIView):
 # ============================================================
 @extend_schema(tags=["loads"])
 class MyCargosView(generics.ListAPIView):
-    permission_classes = [IsAuthenticatedAndVerified, IsCustomer]
+    permission_classes = [IsAuthenticatedAndVerified, IsCustomerOrLogistic]
     serializer_class = CargoListSerializer
 
     def get_queryset(self):
-        if _swagger(self):
+        if getattr(self, "swagger_fake_view", False) or self.request.user.is_anonymous:
             return Cargo.objects.none()
 
+        user = self.request.user
+
         qs = (
-            Cargo.objects.filter(customer=self.request.user)
+            Cargo.objects.filter(customer=user)
             .annotate(
                 offers_active=Count("offers", filter=Q(offers__is_active=True)),
                 path_m=Distance(F("origin_point"), F("dest_point")),
@@ -159,6 +161,15 @@ class MyCargosView(generics.ListAPIView):
             )
             .select_related("customer")
         )
+
+        if user.is_customer:
+            pass
+
+        elif user.is_logistic:
+            pass
+
+        else:
+            qs = qs.filter(is_hidden=False)
 
         p = self.request.query_params
 

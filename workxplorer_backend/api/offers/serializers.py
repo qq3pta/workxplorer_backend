@@ -243,8 +243,9 @@ class OfferShortSerializer(serializers.ModelSerializer):
             return ""
         return getattr(u, "email", "") or ""
 
+    @extend_schema_field(serializers.FloatField(allow_null=True))
     def get_route_km(self, obj):
-        return getattr(obj.cargo, "route_km_cached", None)
+        return obj.route_km
 
     @extend_schema_field(str)
     def get_payment_method(self, obj: Offer) -> str:

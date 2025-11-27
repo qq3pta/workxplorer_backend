@@ -2,10 +2,11 @@ import json
 from channels.generic.websocket import AsyncWebsocketConsumer
 
 
-class NotificationConsumer(AsyncWebsocketConsumer):
+class NotificationsConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         user = self.scope.get("user")
 
+        # user гарантированно Django user, а не payload
         if not user or user.is_anonymous:
             await self.close()
             return
@@ -13,7 +14,6 @@ class NotificationConsumer(AsyncWebsocketConsumer):
         self.group_name = f"user_{user.id}"
 
         await self.channel_layer.group_add(self.group_name, self.channel_name)
-
         await self.accept()
 
     async def disconnect(self, close_code):

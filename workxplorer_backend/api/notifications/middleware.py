@@ -1,40 +1,29 @@
 import jwt
 from django.conf import settings
-from django.contrib.auth import get_user_model
-from django.contrib.auth.models import AnonymousUser
 from channels.middleware import BaseMiddleware
-from channels.db import database_sync_to_async
-
-
-@database_sync_to_async
-def get_user_from_token(token):
-    User = get_user_model()
-    try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
-    except Exception:
-        return None
-
-    user_id = payload.get("user_id")
-    if not user_id:
-        return None
-
-    try:
-        return User.objects.get(id=user_id)
-    except User.DoesNotExist:
-        return None
 
 
 class JwtAuthMiddleware(BaseMiddleware):
     async def __call__(self, scope, receive, send):
-        query = scope.get("query_string", b"").decode()
+        # Отложенные импорты, чтобы Django был уже настроен
+        from django.contrib.auth import get_user_model
+        from django.contrib.auth.models import AnonymousUser
 
-        token = None
-        if "token=" in query:
-            token = query.split("token=")[-1]
+        headers = dict(scope.get("headers", []))
+        auth_header = headers.get(b"authorization", None)
 
-        if token:
-            user = await get_user_from_token(token)
-            scope["user"] = user if user else AnonymousUser()
+        if auth_header:
+            try:
+                token = auth_header.decode().split(" ")[1]
+                payload = jwt.decode(
+                    token,
+                    settings.SECRET_KEY,
+                    algorithms=["HS256"],
+                )
+                user = await get_user_model().objects.aget(id=payload["user_id"])
+                scope["user"] = user
+            except Exception:
+                scope["user"] = AnonymousUser()
         else:
             scope["user"] = AnonymousUser()
 

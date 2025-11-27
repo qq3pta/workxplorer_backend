@@ -112,7 +112,7 @@ class CargoDetailView(generics.RetrieveUpdateAPIView):
 # ============================================================
 @extend_schema(tags=["loads"], responses=RefreshResponseSerializer)
 class CargoRefreshView(generics.GenericAPIView):
-    permission_classes = [IsAuthenticatedAndVerified, IsCustomer]
+    permission_classes = [IsAuthenticatedAndVerified, IsCustomerOrLogistic]
     serializer_class = RefreshResponseSerializer
 
     def post(self, request, uuid: str):
@@ -293,15 +293,22 @@ class MyCargosBoardView(MyCargosView):
     permission_classes = [IsAuthenticatedAndVerified, IsCustomerOrLogistic]
 
     def get_queryset(self):
-        return (
-            super()
-            .get_queryset()
-            .filter(
-                status=CargoStatus.POSTED,
-                is_hidden=False,
-                moderation_status=ModerationStatus.APPROVED,
-            )
+        qs = super().get_queryset()
+
+        qs = qs.filter(
+            status=CargoStatus.POSTED,
+            moderation_status=ModerationStatus.APPROVED,
         )
+
+        user = self.request.user
+
+        if user.role == "customer":
+            return qs
+
+        if user.role == "logistic":
+            return qs
+
+        return qs.filter(is_hidden=False)
 
 
 # ============================================================
@@ -471,3 +478,26 @@ class CargoCancelView(generics.GenericAPIView):
         cargo.offers.update(is_active=False)
 
         return Response({"detail": "Перевозка отменена"}, status=status.HTTP_200_OK)
+
+
+@extend_schema(tags=["loads"])
+class CargoVisibilityView(generics.GenericAPIView):
+    permission_classes = [IsAuthenticatedAndVerified, IsCustomerOrLogistic]
+
+    def post(self, request, uuid: str):
+        cargo = get_object_or_404(Cargo, uuid=uuid)
+
+        if cargo.customer_id != request.user.id and request.user.role != "logistic":
+            return Response({"detail": "Нет доступа"}, status=403)
+
+        is_hidden = request.data.get("is_hidden")
+        if is_hidden not in (True, False):
+            return Response({"detail": "is_hidden must be true or false"}, status=400)
+
+        cargo.is_hidden = is_hidden
+        cargo.save(update_fields=["is_hidden"])
+
+        return Response(
+            {"detail": "Видимость обновлена", "is_hidden": cargo.is_hidden},
+            status=200,
+        )

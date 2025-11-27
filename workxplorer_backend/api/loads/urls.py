@@ -8,6 +8,7 @@ from .views import (
     MyCargosView,
     PublicLoadsView,
     PublishCargoView,
+    CargoVisibilityView,
 )
 
 app_name = "loads"
@@ -24,4 +25,5 @@ urlpatterns = [
     path("<uuid:uuid>/", CargoDetailView.as_view(), name="detail-by-uuid"),
     path("<uuid:uuid>/refresh/", CargoRefreshView.as_view(), name="refresh-by-uuid"),
     path("<uuid:uuid>/cancel/", CargoCancelView.as_view(), name="cancel-by-uuid"),
+    path("<uuid:uuid>/visibility/", CargoVisibilityView.as_view()),
 ]

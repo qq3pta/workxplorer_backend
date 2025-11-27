@@ -345,6 +345,7 @@ class CargoListSerializer(RouteKmMixin, serializers.ModelSerializer):
             "offers_count",
             "path_km",
             "route_km",
+            "payment_method",
             "price_per_km",
             "origin_dist_km",
             "origin_radius_km",

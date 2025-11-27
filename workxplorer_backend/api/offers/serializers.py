@@ -143,7 +143,7 @@ class OfferShortSerializer(serializers.ModelSerializer):
     carrier_rating = serializers.FloatField(read_only=True)
     phone = serializers.SerializerMethodField()
     email = serializers.SerializerMethodField()
-
+    route_km = serializers.SerializerMethodField()
     payment_method = serializers.SerializerMethodField()
     source_status = serializers.SerializerMethodField()
 
@@ -241,6 +241,9 @@ class OfferShortSerializer(serializers.ModelSerializer):
         if not u:
             return ""
         return getattr(u, "email", "") or ""
+
+    def get_route_km(self, obj):
+        return getattr(obj.cargo, "route_km_cached", None)
 
     @extend_schema_field(str)
     def get_payment_method(self, obj: Offer) -> str:

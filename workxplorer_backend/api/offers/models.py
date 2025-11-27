@@ -10,6 +10,7 @@ from django.db.models import Q, UniqueConstraint
 
 from api.loads.choices import Currency
 from api.loads.models import Cargo, CargoStatus
+from api.orders.models import Order
 from api.notifications.services import notify
 
 
@@ -251,7 +252,6 @@ class Offer(models.Model):
 
         with transaction.atomic():
             self.save(update_fields=["accepted_by_customer", "accepted_by_carrier", "updated_at"])
-
             self.send_accept_notifications(user)
 
             if self.is_handshake:
@@ -267,6 +267,29 @@ class Offer(models.Model):
                     return
 
                 self._finalize_handshake(cargo_locked=cargo_locked)
+
+    # ---------------- FINALIZE HANDSHAKE --------------------
+
+    def _finalize_handshake(self, *, cargo_locked):
+        """
+        Завершает handshake:
+        - меняет статус груза на MATCHED
+        - назначает перевозчика
+        - сохраняет выбранный оффер
+        - создаёт заказ
+        """
+
+        cargo_locked.status = CargoStatus.MATCHED
+        cargo_locked.assigned_carrier_id = self.carrier_id
+        cargo_locked.chosen_offer_id = self.id
+
+        cargo_locked.save(update_fields=["status", "assigned_carrier_id", "chosen_offer_id"])
+
+        Order.objects.create(
+            cargo=cargo_locked,
+            carrier=self.carrier,
+            offer=self,
+        )
 
     def reject_by(self, user) -> None:
         if user.id not in (self.cargo.customer_id, self.carrier_id):

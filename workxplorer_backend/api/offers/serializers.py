@@ -245,10 +245,33 @@ class OfferShortSerializer(serializers.ModelSerializer):
 
     @extend_schema_field(serializers.FloatField(allow_null=True))
     def get_route_km(self, obj):
-        cargo = getattr(obj, "cargo", None)
-        if not cargo:
-            return None
-        return cargo.path_km
+        cargo = obj.cargo
+
+        # 1) Используем route_km, который вычисляется в Cargo queryset
+        val = getattr(cargo, "route_km", None)
+        if val is not None:
+            try:
+                return round(float(val), 1)
+            except Exception:
+                pass
+
+        # 2) fallback: route_km_cached (если сохранён в Cargo)
+        val = getattr(cargo, "route_km_cached", None)
+        if val is not None:
+            try:
+                return round(float(val), 1)
+            except Exception:
+                pass
+
+        # 3) fallback: path_km (если аннотирован в Cargo queryset)
+        val = getattr(cargo, "path_km", None)
+        if val is not None:
+            try:
+                return round(float(val), 1)
+            except Exception:
+                pass
+
+        return None
 
     @extend_schema_field(str)
     def get_payment_method(self, obj: Offer) -> str:

@@ -1,20 +1,21 @@
 import jwt
+from urllib.parse import parse_qs
 from django.conf import settings
 from channels.middleware import BaseMiddleware
+from django.contrib.auth.models import AnonymousUser
+from django.contrib.auth import get_user_model
 
 
 class JwtAuthMiddleware(BaseMiddleware):
     async def __call__(self, scope, receive, send):
-        # Отложенные импорты, чтобы Django был уже настроен
-        from django.contrib.auth import get_user_model
-        from django.contrib.auth.models import AnonymousUser
+        # Извлекаем token из ws://.../?token=XXX
+        query_string = scope.get("query_string", b"").decode()
+        query_params = parse_qs(query_string)
+        token_list = query_params.get("token", None)
 
-        headers = dict(scope.get("headers", []))
-        auth_header = headers.get(b"authorization", None)
-
-        if auth_header:
+        if token_list:
+            token = token_list[0]
             try:
-                token = auth_header.decode().split(" ")[1]
                 payload = jwt.decode(
                     token,
                     settings.SECRET_KEY,

@@ -60,6 +60,7 @@ INSTALLED_APPS = [
     "api.orders",
     "api.ratings",
     "api.notifications",
+    "channels",
 ]
 
 MIDDLEWARE = [
@@ -93,6 +94,7 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = "core.wsgi.application"
+ASGI_APPLICATION = "core.asgi.application"
 
 # Database
 if getenv("DATABASE_URL"):
@@ -258,3 +260,21 @@ try:
         firebase_admin.initialize_app(cred)
 except Exception as e:
     print("Firebase init error:", e)
+
+# WebSocket / Channels
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [("redis", 6379)],
+        },
+    },
+}
+
+EMAIL_BACKEND = getenv("EMAIL_BACKEND")
+EMAIL_HOST = getenv("EMAIL_HOST")
+EMAIL_PORT = int(getenv("EMAIL_PORT"))
+EMAIL_USE_TLS = getenv("EMAIL_USE_TLS") == "True"
+EMAIL_HOST_USER = getenv("EMAIL_HOST_USER")
+EMAIL_HOST_PASSWORD = getenv("EMAIL_HOST_PASSWORD")
+DEFAULT_FROM_EMAIL = getenv("DEFAULT_FROM_EMAIL")

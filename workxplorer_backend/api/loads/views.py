@@ -58,7 +58,6 @@ class PublishCargoView(generics.CreateAPIView):
         s = self.get_serializer(data=request.data)
         s.is_valid(raise_exception=True)
         cargo = self.perform_create(s)
-
         data = self.get_serializer(cargo).data
 
         return Response(

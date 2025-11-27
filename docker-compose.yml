@@ -20,6 +20,12 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  redis:
+    image: redis:6
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
   web:
     build:
       context: .
@@ -31,6 +37,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_started
     env_file:
       - .env
     environment:
@@ -45,7 +53,7 @@ services:
       sh -c "
         python -m django collectstatic --noinput &&
         python -m django migrate --noinput &&
-        gunicorn core.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 120
+        daphne -b 0.0.0.0 -p 8000 core.asgi:application
       "
     ports:
       - "8000:8000"
@@ -61,12 +69,6 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-
-  # redis:
-  #   image: redis:7-alpine
-  #   ports:
-  #     - "6379:6379"
-  #   restart: unless-stopped
 
 volumes:
   pgdata:

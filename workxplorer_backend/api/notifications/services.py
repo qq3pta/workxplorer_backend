@@ -1,4 +1,7 @@
 from firebase_admin import messaging
+from django.core.mail import send_mail
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
 
 from .models import Notification
 
@@ -27,7 +30,7 @@ def send_push(token: str, title: str, message: str, data=None):
 
 def notify(user, type: str, title: str, message: str = "", payload=None, cargo=None, offer=None):
     """
-    Создаёт уведомление в БД + отправляет push при наличии токена.
+    Создаёт уведомление в БД + WebSocket + Email + Push.
     """
 
     notif = Notification.objects.create(
@@ -43,19 +46,44 @@ def notify(user, type: str, title: str, message: str = "", payload=None, cargo=N
     data = {
         "id": str(notif.id),
         "type": type,
+        "title": title,
+        "message": message or "",
         "cargo_id": str(cargo.id) if cargo else "",
         "offer_id": str(offer.id) if offer else "",
+        "created_at": notif.created_at.isoformat(),
     }
 
-    for k, v in (payload or {}).items():
-        data[k] = str(v)
+    if payload:
+        for k, v in payload.items():
+            data[k] = str(v)
+
+    try:
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(f"user_{user.id}", {"type": "notify", "data": data})
+    except Exception as e:
+        print("WebSocket error:", e)
+
+    if user.email:
+        try:
+            send_mail(
+                subject=title,
+                message=message or title,
+                from_email="KAD-ONE <kad.noreply1@gmail.com>",
+                recipient_list=[user.email],
+                fail_silently=True,
+            )
+        except Exception as e:
+            print("Email send error:", e)
 
     if getattr(user, "fcm_token", None):
-        send_push(
-            token=user.fcm_token,
-            title=title,
-            message=message,
-            data=data,
-        )
+        try:
+            send_push(
+                token=user.fcm_token,
+                title=title,
+                message=message,
+                data=data,
+            )
+        except Exception as e:
+            print("FCM send error:", e)
 
     return notif

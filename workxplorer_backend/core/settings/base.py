@@ -167,7 +167,7 @@ REST_FRAMEWORK = {
 }
 
 SPECTACULAR_SETTINGS = {
-    "TITLE": "Workxplorer Backend API",
+    "TITLE": "KAD Backend API",
     "DESCRIPTION": "API docs",
     "VERSION": "1.0.0",
     "ENUM_GENERATE_UNIQUE_NAME": False,

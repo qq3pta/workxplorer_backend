@@ -41,9 +41,6 @@ class ProfileSerializer(serializers.ModelSerializer):
         return attrs
 
 
-# ---------------- WhatsApp OTP ----------------
-
-
 class SendPhoneOTPSerializer(serializers.Serializer):
     phone = serializers.CharField()
     purpose = serializers.ChoiceField(
@@ -113,9 +110,6 @@ class VerifyPhoneOTPSerializer(serializers.Serializer):
             raise serializers.ValidationError({"code": "Неверный или просроченный код"})
 
         return {"verified": True}
-
-
-# ---------------- Регистрация ----------------
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -209,9 +203,6 @@ class RegisterSerializer(serializers.ModelSerializer):
         return user
 
 
-# ---------------- Верификация e-mail ----------------
-
-
 class VerifyEmailSerializer(serializers.Serializer):
     email = serializers.EmailField()
     code = serializers.CharField(max_length=6)
@@ -271,9 +262,6 @@ class ResendVerifySerializer(serializers.Serializer):
         }
 
 
-# ---------------- Логин ----------------
-
-
 class LoginSerializer(serializers.Serializer):
     login = serializers.CharField()
     password = serializers.CharField()
@@ -301,9 +289,6 @@ class LoginSerializer(serializers.Serializer):
         attrs["tokens"] = {"access": str(access), "refresh": str(refresh)}
         attrs["user"] = user
         return attrs
-
-
-# ---------------- Профиль ----------------
 
 
 class MeSerializer(serializers.ModelSerializer):
@@ -371,9 +356,6 @@ class UpdateMeSerializer(serializers.ModelSerializer):
         return user
 
 
-# ---------------- Сброс пароля ----------------
-
-
 class ForgotPasswordSerializer(serializers.Serializer):
     email = serializers.EmailField()
 
@@ -439,9 +421,6 @@ class ResetPasswordSerializer(serializers.Serializer):
         return {"detail": "Пароль обновлен"}
 
 
-# ---------------- Смена роли ----------------
-
-
 class RoleChangeSerializer(serializers.Serializer):
     role = serializers.ChoiceField(choices=UserRole.choices)
 
@@ -453,9 +432,6 @@ class RoleChangeSerializer(serializers.Serializer):
         user.role = new_role
         user.save(update_fields=["role"])
         return {"detail": "Роль обновлена", "role": user.role}
-
-
-# ---------------- Аналитика профиля ----------------
 
 
 class AnalyticsSerializer(serializers.Serializer):

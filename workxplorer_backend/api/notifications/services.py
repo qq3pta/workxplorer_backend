@@ -40,7 +40,6 @@ def notify(user, type: str, title: str, message: str = "", payload=None, cargo=N
         offer=offer,
     )
 
-    # ---- Подготовка data ----
     data = {
         "id": str(notif.id),
         "type": type,
@@ -48,11 +47,9 @@ def notify(user, type: str, title: str, message: str = "", payload=None, cargo=N
         "offer_id": str(offer.id) if offer else "",
     }
 
-    # Все значения payload → str
     for k, v in (payload or {}).items():
         data[k] = str(v)
 
-    # ---- Push ----
     if getattr(user, "fcm_token", None):
         send_push(
             token=user.fcm_token,

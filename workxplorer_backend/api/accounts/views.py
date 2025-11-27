@@ -51,9 +51,6 @@ def issue_tokens(user, remember: bool):
     return {"access": str(access), "refresh": str(refresh)}
 
 
-# ===================== WhatsApp-OTP =====================
-
-
 @extend_schema(
     tags=["auth"],
     request=SendPhoneOTPSerializer,
@@ -86,9 +83,6 @@ class VerifyPhoneOTPView(APIView):
         s = VerifyPhoneOTPSerializer(data=request.data)
         s.is_valid(raise_exception=True)
         return Response(s.save())
-
-
-# ===================== Регистрация =====================
 
 
 @extend_schema(
@@ -144,7 +138,6 @@ class VerifyEmailView(APIView):
         if user.is_email_verified:
             return Response({"detail": "E-mail уже подтвержден"}, status=200)
 
-        # Активируем пользователя ОДИН раз
         user.is_email_verified = True
         user.is_active = True
         user.save(update_fields=["is_email_verified", "is_active"])
@@ -152,9 +145,6 @@ class VerifyEmailView(APIView):
         return Response(
             {"detail": "E-mail подтвержден", **issue_tokens(user, remember=False)}, status=200
         )
-
-
-# ===================== Логин =====================
 
 
 @extend_schema(
@@ -179,7 +169,6 @@ class LoginView(APIView):
         user = s.validated_data["user"]
         remember = s.validated_data.get("remember_me")
 
-        # 🔥 Сохраняем FCM-токен при логине
         fcm = request.data.get("fcm_token")
         if fcm:
             user.fcm_token = fcm
@@ -187,9 +176,6 @@ class LoginView(APIView):
 
         Profile.objects.get_or_create(user=user)
         return Response({"user": MeSerializer(user).data, **issue_tokens(user, remember)})
-
-
-# ===================== Обновление токенов =====================
 
 
 @extend_schema(
@@ -227,9 +213,6 @@ class RefreshView(APIView):
             return Response({"detail": "Невалидный refresh токен"}, status=401)
 
 
-# ===================== Logout =====================
-
-
 @extend_schema(
     tags=["auth"],
     request=inline_serializer(
@@ -257,9 +240,6 @@ class LogoutView(APIView):
                 BlacklistedToken.objects.get_or_create(token=t)
 
         return Response({"detail": "Вы вышли из системы"})
-
-
-# ===================== Профиль =====================
 
 
 @extend_schema(tags=["auth"], responses=MeSerializer)
@@ -296,9 +276,6 @@ class UpdateMeView(generics.UpdateAPIView):
         return Response(MeSerializer(instance).data)
 
 
-# ===================== Новый endpoint: обновление FCM токена =====================
-
-
 @extend_schema(
     tags=["auth"],
     request=inline_serializer("FCMUpdateRequest", {"fcm_token": serializers.CharField()}),
@@ -318,9 +295,6 @@ class UpdateFCMTokenView(APIView):
         return Response({"detail": "FCM токен обновлён"})
 
 
-# ===================== Смена роли =====================
-
-
 @extend_schema(
     tags=["auth"],
     request=RoleChangeSerializer,
@@ -336,9 +310,6 @@ class ChangeRoleView(APIView):
         s = RoleChangeSerializer(data=request.data, context={"request": request})
         s.is_valid(raise_exception=True)
         return Response(s.save())
-
-
-# ===================== Сброс пароля =====================
 
 
 @extend_schema(
@@ -367,9 +338,6 @@ class ResetPasswordView(APIView):
         s = ResetPasswordSerializer(data=request.data)
         s.is_valid(raise_exception=True)
         return Response(s.save())
-
-
-# ===================== Аналитика =====================
 
 
 @extend_schema(

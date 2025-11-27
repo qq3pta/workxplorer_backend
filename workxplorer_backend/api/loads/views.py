@@ -30,7 +30,6 @@ from .models import Cargo, CargoStatus
 from .serializers import CargoListSerializer, CargoPublishSerializer
 
 
-# ============= utils =====================
 def _swagger(view) -> bool:
     return getattr(view, "swagger_fake_view", False)
 
@@ -44,9 +43,6 @@ class ExtractMinutes(Func):
     output_field = FloatField()
 
 
-# ============================================================
-#   Создание груза
-# ============================================================
 @extend_schema(tags=["loads"])
 class PublishCargoView(generics.CreateAPIView):
     permission_classes = [IsAuthenticatedAndVerified, IsCustomerOrLogistic]
@@ -76,9 +72,6 @@ class PublishCargoView(generics.CreateAPIView):
         )
 
 
-# ============================================================
-#   Детали груза
-# ============================================================
 @extend_schema(tags=["loads"])
 class CargoDetailView(generics.RetrieveUpdateAPIView):
     permission_classes = [IsAuthenticatedAndVerified, IsCustomerOrLogistic]
@@ -106,9 +99,6 @@ class CargoDetailView(generics.RetrieveUpdateAPIView):
         cargo.save(update_fields=["refreshed_at", "price_uzs"])
 
 
-# ============================================================
-#   Обновление (bump) заявки
-# ============================================================
 @extend_schema(tags=["loads"], responses=RefreshResponseSerializer)
 class CargoRefreshView(generics.GenericAPIView):
     permission_classes = [IsAuthenticatedAndVerified, IsCustomerOrLogistic]
@@ -128,9 +118,6 @@ class CargoRefreshView(generics.GenericAPIView):
         return Response({"detail": "Обновлено"}, status=status.HTTP_200_OK)
 
 
-# ============================================================
-#   Мои грузы
-# ============================================================
 @extend_schema(tags=["loads"])
 class MyCargosView(generics.ListAPIView):
     permission_classes = [IsAuthenticatedAndVerified, IsCustomerOrLogistic]
@@ -172,7 +159,6 @@ class MyCargosView(generics.ListAPIView):
 
         p = self.request.query_params
 
-        # ——— базовые фильтры ———
         if p.get("uuid"):
             qs = qs.filter(uuid=p["uuid"])
 
@@ -191,7 +177,6 @@ class MyCargosView(generics.ListAPIView):
         if p.get("load_date_to"):
             qs = qs.filter(load_date__lte=p["load_date_to"])
 
-        # ——— параметры ТС / габариты ———
         if p.get("transport_type"):
             qs = qs.filter(transport_type=p["transport_type"])
 
@@ -213,14 +198,12 @@ class MyCargosView(generics.ListAPIView):
         if p.get("volume_max"):
             qs = qs.filter(volume_m3__lte=p["volume_max"])
 
-        # ——— цена ———
         if p.get("min_price_uzs"):
             qs = qs.filter(price_uzs_anno__gte=p["min_price_uzs"])
 
         if p.get("max_price_uzs"):
             qs = qs.filter(price_uzs_anno__lte=p["max_price_uzs"])
 
-        # ——— георадиус отправления ———
         o_lat, o_lng, o_r = p.get("origin_lat"), p.get("origin_lng"), p.get("origin_radius_km")
         if o_lat and o_lng and o_r:
             try:
@@ -235,7 +218,6 @@ class MyCargosView(generics.ListAPIView):
             except Exception:
                 pass
 
-        # ——— георадиус доставки ———
         d_lat, d_lng, d_r = p.get("dest_lat"), p.get("dest_lng"), p.get("dest_radius_km")
         if d_lat and d_lng and d_r:
             try:
@@ -249,7 +231,6 @@ class MyCargosView(generics.ListAPIView):
             except Exception:
                 pass
 
-        # ——— поиск по компании ———
         q = p.get("company") or p.get("q")
         if q:
             qs = qs.filter(
@@ -258,7 +239,6 @@ class MyCargosView(generics.ListAPIView):
                 | Q(customer__email__icontains=q)
             )
 
-        # ——— контакты ———
         if p.get("customer_email"):
             qs = qs.filter(customer__email__iexact=p["customer_email"])
 
@@ -268,7 +248,6 @@ class MyCargosView(generics.ListAPIView):
                 | Q(customer__phone_number__icontains=p["customer_phone"])
             )
 
-        # ——— сортировка ———
         allowed = {
             "path_km",
             "-path_km",
@@ -295,14 +274,14 @@ class MyCargosView(generics.ListAPIView):
         return qs
 
 
-# ============================================================
-#   Борда моих заявок
-# ============================================================
 @extend_schema(tags=["loads"])
 class MyCargosBoardView(MyCargosView):
     permission_classes = [IsAuthenticatedAndVerified, IsCustomerOrLogistic]
 
     def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False) or self.request.user.is_anonymous:
+            return Cargo.objects.none()
+
         qs = super().get_queryset()
 
         qs = qs.filter(
@@ -321,9 +300,6 @@ class MyCargosBoardView(MyCargosView):
         return qs.filter(is_hidden=False)
 
 
-# ============================================================
-#   Публичная доска
-# ============================================================
 @extend_schema(tags=["loads"])
 class PublicLoadsView(generics.ListAPIView):
     permission_classes = [IsAuthenticatedAndVerified, IsCustomerOrCarrierOrLogistic]
@@ -356,7 +332,6 @@ class PublicLoadsView(generics.ListAPIView):
 
         p = self.request.query_params
 
-        # ==== ФИЛЬТРЫ (коротко, то же что выше) ====
         if p.get("uuid"):
             qs = qs.filter(uuid=p["uuid"])
         if p.get("origin_city"):
@@ -389,10 +364,6 @@ class PublicLoadsView(generics.ListAPIView):
         if p.get("max_price_uzs"):
             qs = qs.filter(price_uzs_anno__lte=p["max_price_uzs"])
 
-        # ——— Георадиусы ———
-        # (аналогично MyCargosView, убираю дублирования)
-
-        # Поиск по компании
         q = p.get("company") or p.get("q")
         if q:
             qs = qs.filter(
@@ -401,7 +372,6 @@ class PublicLoadsView(generics.ListAPIView):
                 | Q(customer__email__icontains=q)
             )
 
-        # Контакты
         if p.get("customer_id"):
             qs = qs.filter(customer_id=p["customer_id"])
         if p.get("customer_email"):
@@ -412,7 +382,6 @@ class PublicLoadsView(generics.ListAPIView):
                 | Q(customer__phone_number__icontains=p["customer_phone"])
             )
 
-        # ——— Сортировка ———
         allowed = {
             "path_km",
             "-path_km",
@@ -449,9 +418,6 @@ class PublicLoadsView(generics.ListAPIView):
         return qs
 
 
-# ============================================================
-#   Отмена груза
-# ============================================================
 @extend_schema(tags=["loads"])
 class CargoCancelView(generics.GenericAPIView):
     permission_classes = [IsAuthenticatedAndVerified]
@@ -464,7 +430,6 @@ class CargoCancelView(generics.GenericAPIView):
         cargo = get_object_or_404(Cargo, uuid=uuid)
         user = request.user
 
-        # customer OR assigned carrier may cancel
         allowed_users = {
             cargo.customer_id,
             getattr(cargo, "assigned_carrier_id", None),
@@ -473,7 +438,6 @@ class CargoCancelView(generics.GenericAPIView):
         if user.id not in allowed_users:
             return Response({"detail": "Нет доступа"}, status=status.HTTP_403_FORBIDDEN)
 
-        # cannot cancel final states
         if cargo.status in (
             CargoStatus.DELIVERED,
             CargoStatus.COMPLETED,
@@ -484,7 +448,6 @@ class CargoCancelView(generics.GenericAPIView):
         cargo.status = CargoStatus.CANCELLED
         cargo.save(update_fields=["status"])
 
-        # deactivate offers
         cargo.offers.update(is_active=False)
 
         return Response({"detail": "Перевозка отменена"}, status=status.HTTP_200_OK)

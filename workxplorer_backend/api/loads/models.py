@@ -39,30 +39,21 @@ class Cargo(models.Model):
         verbose_name="Заказчик",
     )
 
-    # Основное
     product = models.CharField("Название груза", max_length=120)
     description = models.TextField("Описание", blank=True)
-
-    # Маршрут
     origin_country = models.CharField(max_length=100, default="", blank=True)
     origin_address = models.CharField(max_length=255)
     origin_city = models.CharField(max_length=100)
     origin_city_latin = models.CharField(max_length=120, blank=True, null=True)
-
     destination_country = models.CharField(max_length=100, default="", blank=True)
     destination_address = models.CharField(max_length=255)
     destination_city = models.CharField(max_length=100)
     destination_city_latin = models.CharField(max_length=120, blank=True, null=True)
-
     origin_point = gis_models.PointField(geography=True, srid=4326, null=True, blank=True)
     dest_point = gis_models.PointField(geography=True, srid=4326, null=True, blank=True)
-
     load_date = models.DateField("Дата загрузки")
     delivery_date = models.DateField("Дата доставки", null=True, blank=True)
-
-    # Транспорт / габариты
     transport_type = models.CharField(max_length=10, choices=TransportType.choices)
-
     weight_kg = models.DecimalField(max_digits=12, decimal_places=2)
     axles = models.PositiveSmallIntegerField(
         null=True,
@@ -78,14 +69,12 @@ class Cargo(models.Model):
         help_text="Объём, м³",
     )
 
-    # Цена
     price_value = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
     price_currency = models.CharField(max_length=3, choices=Currency.choices, default=Currency.UZS)
     price_uzs = models.DecimalField(
         max_digits=14, decimal_places=2, null=True, blank=True, verbose_name="Цена в сумах"
     )
 
-    # Контакты / модерация / статус
     contact_pref = models.CharField(max_length=10, choices=ContactPref.choices)
     is_hidden = models.BooleanField(default=False)
     moderation_status = models.CharField(
@@ -99,7 +88,6 @@ class Cargo(models.Model):
     refreshed_at = models.DateTimeField(auto_now_add=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
-    # Способ оплаты
     payment_method = models.CharField(
         max_length=10,
         choices=PaymentMethod.choices,
@@ -107,7 +95,6 @@ class Cargo(models.Model):
         verbose_name="Способ оплаты",
     )
 
-    # Назначения
     assigned_carrier = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -125,7 +112,6 @@ class Cargo(models.Model):
         verbose_name="Выбранное предложение",
     )
 
-    # Кэш маршрута
     route_km_cached = models.FloatField(null=True, blank=True)
     route_duration_min_cached = models.FloatField(null=True, blank=True)
 
@@ -150,9 +136,6 @@ class Cargo(models.Model):
     def __str__(self):
         return f"{self.product} ({self.origin_city} → {self.destination_city})"
 
-    # =====================================================================
-    #  Полностью обновлённый save() с уведомлениями
-    # =====================================================================
     def save(self, *args, **kwargs):
         is_new = self.pk is None
 
@@ -167,7 +150,6 @@ class Cargo(models.Model):
             except Cargo.DoesNotExist:
                 pass
 
-        # латиница
         if self.origin_city:
             self.origin_city_latin = unidecode(self.origin_city).lower()
 
@@ -176,9 +158,6 @@ class Cargo(models.Model):
 
         super().save(*args, **kwargs)
 
-        # ------------------------------------------------------------------
-        # Новая заявка
-        # ------------------------------------------------------------------
         if is_new:
             notify(
                 user=self.customer,
@@ -190,9 +169,6 @@ class Cargo(models.Model):
             )
             return
 
-        # ------------------------------------------------------------------
-        # Статус модерации изменён
-        # ------------------------------------------------------------------
         if old_moderation != self.moderation_status:
             # публикация
             if self.moderation_status == ModerationStatus.APPROVED:
@@ -205,7 +181,6 @@ class Cargo(models.Model):
                     payload={"cargo_id": self.id},
                 )
 
-            # отклонение
             elif self.moderation_status == ModerationStatus.REJECTED:
                 notify(
                     user=self.customer,
@@ -216,9 +191,6 @@ class Cargo(models.Model):
                     payload={"cargo_id": self.id},
                 )
 
-        # ------------------------------------------------------------------
-        # Изменился статус перевозки (MATCHED → DELIVERED → COMPLETED)
-        # ------------------------------------------------------------------
         if old_status != self.status:
             notify(
                 user=self.customer,
@@ -228,8 +200,6 @@ class Cargo(models.Model):
                 cargo=self,
                 payload={"cargo_id": self.id},
             )
-
-    # =====================================================================
 
     @property
     def weight_tons(self):

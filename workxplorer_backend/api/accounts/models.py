@@ -43,7 +43,6 @@ class User(AbstractUser):
             UniqueConstraint(Lower("username"), name="user_username_ci_unique"),
         ]
 
-    # ------------------ SAVE ------------------
     def save(self, *args, **kwargs):
         # нормализация email
         if self.email:
@@ -59,7 +58,6 @@ class User(AbstractUser):
     def __str__(self):
         return self.username or self.email or f"User#{self.pk}"
 
-    # ------------------ ROLE HELPERS ------------------
     @property
     def is_logistic(self) -> bool:
         return self.role == UserRole.LOGISTIC
@@ -72,7 +70,6 @@ class User(AbstractUser):
     def is_carrier(self) -> bool:
         return self.role == UserRole.CARRIER
 
-    # ------------------ Рейтинги ------------------
     @property
     def avg_rating(self):
         """
@@ -91,7 +88,6 @@ class User(AbstractUser):
 
         return UserRating.objects.filter(rated_user=self).count()
 
-    # ------------------ Завершённые заказы ------------------
     @property
     def completed_orders(self):
         """
@@ -101,11 +97,6 @@ class User(AbstractUser):
         from api.orders.models import Order
 
         return Order.objects.filter(carrier=self, status__in=["delivered", "finished"]).count()
-
-
-# =====================================================================================
-#                                      EMAIL OTP
-# =====================================================================================
 
 
 class EmailOTP(models.Model):
@@ -168,11 +159,6 @@ class EmailOTP(models.Model):
         return False
 
 
-# =====================================================================================
-#                                      PHONE OTP
-# =====================================================================================
-
-
 class PhoneOTP(models.Model):
     PURPOSE_VERIFY = "verify"
     PURPOSE_RESET = "reset"
@@ -230,11 +216,6 @@ class PhoneOTP(models.Model):
         self.attempts_left = max(0, self.attempts_left - 1)
         self.save(update_fields=["attempts_left"])
         return False
-
-
-# =====================================================================================
-#                                      PROFILE
-# =====================================================================================
 
 
 class Profile(models.Model):

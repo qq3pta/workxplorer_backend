@@ -268,8 +268,6 @@ class Offer(models.Model):
 
                 self._finalize_handshake(cargo_locked=cargo_locked)
 
-    # ---------------- FINALIZE HANDSHAKE --------------------
-
     def _finalize_handshake(self, *, cargo_locked):
         """
         Завершает handshake:

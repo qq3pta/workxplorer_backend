@@ -323,7 +323,6 @@ class OfferViewSet(ModelViewSet):
             raise PermissionDenied("Нет доступа к офферу")
         return Response(self.get_serializer(obj).data)
 
-    # --------- действия ---------
     @extend_schema(
         tags=["offers"],
         summary="Принять оффер",
@@ -400,7 +399,6 @@ class OfferViewSet(ModelViewSet):
 
         return Response(OfferDetailSerializer(offer).data, status=status.HTTP_200_OK)
 
-    # --------- инвайт ---------
     @extend_schema(
         tags=["offers"],
         summary="Инвайт перевозчику (Заказчик)",

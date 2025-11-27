@@ -124,7 +124,7 @@ class OrdersViewSet(viewsets.ModelViewSet):
 
         ser = self.get_serializer(data=request.data, context=self.get_serializer_context())
         ser.is_valid(raise_exception=True)
-        document = ser.save(order=order, uploaded_by=request.user)
+        ser.save(order=order, uploaded_by=request.user)
 
         return Response(ser.data, http_status.HTTP_201_CREATED)
 

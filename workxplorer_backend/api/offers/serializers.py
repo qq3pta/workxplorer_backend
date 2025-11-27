@@ -245,7 +245,10 @@ class OfferShortSerializer(serializers.ModelSerializer):
 
     @extend_schema_field(serializers.FloatField(allow_null=True))
     def get_route_km(self, obj):
-        return obj.route_km
+        cargo = getattr(obj, "cargo", None)
+        if not cargo:
+            return None
+        return cargo.path_km
 
     @extend_schema_field(str)
     def get_payment_method(self, obj: Offer) -> str:

@@ -22,7 +22,6 @@ from rest_framework.response import Response
 
 from ..accounts.permissions import (
     IsAuthenticatedAndVerified,
-    IsCustomer,
     IsCustomerOrCarrierOrLogistic,
     IsCustomerOrLogistic,
 )

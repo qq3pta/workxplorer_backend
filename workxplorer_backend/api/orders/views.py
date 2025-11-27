@@ -104,14 +104,6 @@ class OrdersViewSet(viewsets.ModelViewSet):
                 user=user,
             )
 
-            msg = f"Статус водителя: {old_status} → {new_status}"
-
-            payload = {
-                "order_id": order.id,
-                "old_status": old_status,
-                "new_status": new_status,
-            }
-
         return Response(
             {"order_id": order.id, "old_status": old_status, "new_status": new_status},
             status=http_status.HTTP_200_OK,
@@ -141,15 +133,6 @@ class OrdersViewSet(viewsets.ModelViewSet):
             "unloading": "Документ о разгрузке",
             "other": "Документ",
         }.get(document.category, "Документ")
-
-        msg = f"{category_label} загружен"
-
-        payload = {
-            "order_id": order.id,
-            "document_id": document.id,
-            "category": document.category,
-            "title": document.title,
-        }
 
         return Response(ser.data, http_status.HTTP_201_CREATED)
 

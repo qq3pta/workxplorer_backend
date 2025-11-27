@@ -15,7 +15,7 @@ from django.db.models import (
 from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import generics, status
 from rest_framework import serializers as drf_serializers
 from rest_framework.response import Response
@@ -452,7 +452,24 @@ class CargoCancelView(generics.GenericAPIView):
         return Response({"detail": "Перевозка отменена"}, status=status.HTTP_200_OK)
 
 
-@extend_schema(tags=["loads"])
+@extend_schema(
+    tags=["loads"],
+    request=inline_serializer(
+        name="CargoVisibilityRequest",
+        fields={
+            "is_hidden": drf_serializers.BooleanField(),
+        },
+    ),
+    responses={
+        200: inline_serializer(
+            name="CargoVisibilityResponse",
+            fields={
+                "detail": drf_serializers.CharField(),
+                "is_hidden": drf_serializers.BooleanField(),
+            },
+        )
+    },
+)
 class CargoVisibilityView(generics.GenericAPIView):
     permission_classes = [IsAuthenticatedAndVerified, IsCustomerOrLogistic]
     serializer_class = CargoListSerializer
@@ -470,7 +487,4 @@ class CargoVisibilityView(generics.GenericAPIView):
         cargo.is_hidden = is_hidden
         cargo.save(update_fields=["is_hidden"])
 
-        return Response(
-            {"detail": "Видимость обновлена", "is_hidden": cargo.is_hidden},
-            status=200,
-        )
+        return Response({"detail": "Видимость обновлена", "is_hidden": cargo.is_hidden}, status=200)

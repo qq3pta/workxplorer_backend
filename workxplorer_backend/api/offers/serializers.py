@@ -169,6 +169,7 @@ class OfferShortSerializer(serializers.ModelSerializer):
             "carrier_rating",
             "phone",
             "email",
+            "route_km",
             "price_value",
             "price_currency",
             "payment_method",

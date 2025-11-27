@@ -483,6 +483,7 @@ class CargoCancelView(generics.GenericAPIView):
 @extend_schema(tags=["loads"])
 class CargoVisibilityView(generics.GenericAPIView):
     permission_classes = [IsAuthenticatedAndVerified, IsCustomerOrLogistic]
+    serializer_class = CargoListSerializer
 
     def post(self, request, uuid: str):
         cargo = get_object_or_404(Cargo, uuid=uuid)

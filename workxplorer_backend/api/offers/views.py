@@ -1,6 +1,7 @@
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
-from django.db.models import Avg, Q
+from django.db.models import Avg, Q, F
+from django.contrib.gis.db.models.functions import Distance
 from drf_spectacular.utils import (
     OpenApiParameter,
     OpenApiResponse,
@@ -212,8 +213,16 @@ class OfferViewSet(ModelViewSet):
       POST   /api/offers/invite/           — инвайт (Заказчик → Перевозчик)
     """
 
-    queryset = Offer.objects.select_related("cargo", "carrier").annotate(
-        carrier_rating=Avg("carrier__ratings_received__score"),
+    queryset = (
+        Offer.objects.select_related("cargo", "carrier")
+        .annotate(
+            carrier_rating=Avg("carrier__ratings_received__score"),
+            route_m=Distance(
+                F("cargo__origin_point"),
+                F("cargo__dest_point"),
+            ),
+        )
+        .annotate(route_km=F("route_m") / 1000.0)
     )
     permission_classes = [IsAuthenticatedAndVerified]
     serializer_class = OfferDetailSerializer

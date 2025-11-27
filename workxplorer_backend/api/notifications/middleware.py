@@ -1,42 +1,42 @@
 import jwt
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from urllib.parse import parse_qs
+from channels.middleware import BaseMiddleware
+from channels.db import database_sync_to_async
 
-User = get_user_model()
+
+@database_sync_to_async
+def get_user_from_token(token):
+    User = get_user_model()
+
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
+    except Exception:
+        return None
+
+    user_id = payload.get("user_id")
+    if not user_id:
+        return None
+
+    try:
+        return User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return None
 
 
-class JwtAuthMiddleware:
-    """
-    Custom JWT middleware for WebSockets.
-    """
-
-    def __init__(self, inner):
-        self.inner = inner
-
+class JwtAuthMiddleware(BaseMiddleware):
     async def __call__(self, scope, receive, send):
-        query_string = scope.get("query_string", b"").decode()
-        params = parse_qs(query_string)
+        query = scope.get("query_string", b"").decode()
 
         token = None
-        if "token" in params:
-            token = params["token"][0]
-
-        scope["user"] = None
+        if "token=" in query:
+            token = query.split("token=")[-1]
 
         if token:
-            try:
-                payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
-                user_id = payload.get("user_id")
-                scope["user"] = await self.get_user(user_id)
-            except Exception:
-                scope["user"] = None
+            user = await get_user_from_token(token)
+        else:
+            user = None
 
-        return await self.inner(scope, receive, send)
+        scope["user"] = user
 
-    @staticmethod
-    async def get_user(user_id):
-        try:
-            return await User.objects.aget(id=user_id)
-        except User.DoesNotExist:
-            return None
+        return await super().__call__(scope, receive, send)

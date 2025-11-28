@@ -11,12 +11,10 @@ from api.loads.models import Cargo
 class Command(BaseCommand):
     help = "Fix missing origin_point / dest_point / route_km_cached for all cargos"
 
-
     def normalize_country(self, country: str) -> str:
         if not country:
             return ""
         return COUNTRY_NORMALIZATION.get(country.strip(), country.strip())
-
 
     def find_point(self, country: str, city: str) -> Point | None:
         if not city:
@@ -41,7 +39,6 @@ class Command(BaseCommand):
 
         return None
 
-
     def handle(self, *args, **options):
         fixed_points = 0
         fixed_routes = 0
@@ -52,14 +49,12 @@ class Command(BaseCommand):
             origin_city = cargo.origin_city.strip()
             dest_city = cargo.destination_city.strip()
 
-
             if not cargo.origin_point:
                 point = self.find_point(cargo.origin_country, origin_city)
                 if point:
                     cargo.origin_point = point
                     fixed_points += 1
                     self.stdout.write(self.style.SUCCESS(f"[OK] Origin fixed → {origin_city}"))
-
 
             if not cargo.dest_point:
                 point = self.find_point(cargo.destination_country, dest_city)
@@ -70,7 +65,6 @@ class Command(BaseCommand):
 
             if cargo.origin_point or cargo.dest_point:
                 cargo.save(update_fields=["origin_point", "dest_point"])
-
 
             if cargo.origin_point and cargo.dest_point and cargo.route_km_cached is None:
                 route = cargo.update_route_cache(save=True)

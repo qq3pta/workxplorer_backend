@@ -28,6 +28,9 @@ from ..accounts.permissions import (
 from .choices import ModerationStatus
 from .models import Cargo, CargoStatus
 from .serializers import CargoListSerializer, CargoPublishSerializer
+from api.loads.models import LoadInvite
+
+INVITE_BASE_URL = "https://logistic-omega-eight.vercel.app/dashboard/desk/invite"
 
 
 def _swagger(view) -> bool:
@@ -488,3 +491,48 @@ class CargoVisibilityView(generics.GenericAPIView):
         cargo.save(update_fields=["is_hidden"])
 
         return Response({"detail": "Видимость обновлена", "is_hidden": cargo.is_hidden}, status=200)
+
+
+@extend_schema(
+    tags=["loads"],
+    responses={
+        200: inline_serializer(
+            name="GenerateInviteResponse",
+            fields={
+                "token": drf_serializers.CharField(),
+                "invite_url": drf_serializers.CharField(),
+            },
+        )
+    },
+)
+class CargoInviteGenerateView(generics.GenericAPIView):
+    permission_classes = [IsAuthenticatedAndVerified, IsCustomerOrLogistic]
+
+    def post(self, request, uuid: str):
+        """
+        Создание токен-ссылки на груз.
+        Только владелец груза (customer) или логист может генерировать ссылку.
+        """
+        cargo = get_object_or_404(Cargo, uuid=uuid)
+
+        # Доступ
+        if cargo.customer_id != request.user.id and request.user.role != "logistic":
+            return Response({"detail": "Нет доступа"}, status=403)
+
+        # Генерация токена
+        token = LoadInvite.generate_token()
+
+        LoadInvite.objects.create(
+            load=cargo,
+            token=token,
+        )
+
+        invite_url = f"{INVITE_BASE_URL}/{token}"
+
+        return Response(
+            {
+                "token": token,
+                "invite_url": invite_url,
+            },
+            status=200,
+        )

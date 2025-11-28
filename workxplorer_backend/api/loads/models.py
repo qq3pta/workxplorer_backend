@@ -1,4 +1,5 @@
 import uuid
+import secrets
 from decimal import Decimal
 
 from django.conf import settings
@@ -8,6 +9,7 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db.models.manager import Manager as DjangoManager
 from django.utils import timezone
+from datetime import timedelta
 from unidecode import unidecode
 
 from api.notifications.services import notify
@@ -266,3 +268,18 @@ class Cargo(models.Model):
                 self.save(update_fields=["price_uzs"])
         except Exception:
             return None
+
+
+def invite_expiry():
+    return timezone.now() + timedelta(days=3)
+
+
+class LoadInvite(models.Model):
+    load = models.ForeignKey("loads.Load", on_delete=models.CASCADE, related_name="invites")
+    token = models.CharField(max_length=64, unique=True)
+    expires_at = models.DateTimeField(default=invite_expiry)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    @staticmethod
+    def generate_token():
+        return secrets.token_urlsafe(32)

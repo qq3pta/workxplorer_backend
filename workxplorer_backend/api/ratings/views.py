@@ -1,6 +1,8 @@
 from django.contrib.auth import get_user_model
 from django.db.models import Avg, Count, Q, Sum
 from rest_framework import permissions, viewsets
+from rest_framework.decorators import action
+from rest_framework.response import Response
 
 from .models import UserRating
 from .serializers import RatingUserListSerializer, UserRatingSerializer
@@ -35,14 +37,6 @@ class UserRatingViewSet(viewsets.ModelViewSet):
 
 
 class RatingUserViewSet(viewsets.ReadOnlyModelViewSet):
-    """
-    Список пользователей с рейтингами (каталог).
-    Вкладки:
-    - Грузовладельцы
-    - Логисты
-    - Перевозчики
-    """
-
     queryset = User.objects.all()
     serializer_class = RatingUserListSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -105,3 +99,14 @@ class RatingUserViewSet(viewsets.ReadOnlyModelViewSet):
             qs = qs.order_by("-rating_count_value")
 
         return qs
+
+    @action(detail=False, methods=["get"], url_path="countries")
+    def countries(self, request):
+        countries = (
+            User.objects.exclude(country__isnull=True)
+            .exclude(country="")
+            .order_by("country")
+            .values_list("country", flat=True)
+            .distinct()
+        )
+        return Response({"countries": list(countries)})

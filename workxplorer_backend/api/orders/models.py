@@ -61,6 +61,10 @@ class Order(models.Model):
         related_name="orders_created",
     )
 
+    offer = models.OneToOneField(
+        "offers.Offer", on_delete=models.SET_NULL, null=True, blank=True, related_name="order"
+    )
+
     status = models.CharField(
         max_length=20,
         choices=OrderStatus.choices,

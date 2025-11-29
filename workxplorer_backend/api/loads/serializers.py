@@ -405,3 +405,17 @@ class CargoListSerializer(RouteKmMixin, serializers.ModelSerializer):
             )
         except Exception:
             return None
+
+
+class CargoInviteGenerateRequestSerializer(serializers.Serializer):
+    """
+    Пустой, потому что запрос не принимает тело.
+    Нужен только для корректной документации.
+    """
+
+    pass
+
+
+class CargoInviteGenerateResponseSerializer(serializers.Serializer):
+    token = serializers.CharField()
+    invite_url = serializers.CharField()

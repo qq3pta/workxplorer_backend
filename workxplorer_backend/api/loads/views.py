@@ -511,7 +511,7 @@ class CargoInviteGenerateView(generics.GenericAPIView):
     def post(self, request, uuid: str):
         """
         Создание токен-ссылки на груз.
-        Только владелец груза (customer) или логист может генерировать ссылку.
+        Генерируют customer или logistic.
         """
         cargo = get_object_or_404(Cargo, uuid=uuid)
 
@@ -523,6 +523,7 @@ class CargoInviteGenerateView(generics.GenericAPIView):
         LoadInvite.objects.create(
             load=cargo,
             token=token,
+            created_by=request.user,
         )
 
         invite_url = f"{INVITE_BASE_URL}/{token}"
@@ -552,13 +553,6 @@ class CargoInviteGenerateView(generics.GenericAPIView):
     },
 )
 class CargoInviteOpenView(generics.GenericAPIView):
-    """
-    Открытие приглашения по ссылке.
-    carrier = request.user (тот, кто открыл ссылку)
-    invited_by = кто создал ссылку (customer/logistic)
-    cargo_id → потом пойдёт в offers/invite
-    """
-
     permission_classes = [IsAuthenticatedAndVerified]
 
     def get(self, request, token: str):

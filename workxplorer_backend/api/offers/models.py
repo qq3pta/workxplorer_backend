@@ -269,14 +269,6 @@ class Offer(models.Model):
                 self._finalize_handshake(cargo_locked=cargo_locked)
 
     def _finalize_handshake(self, *, cargo_locked):
-        """
-        Завершает handshake:
-        - меняет статус груза на MATCHED
-        - назначает перевозчика
-        - сохраняет выбранный оффер
-        - создаёт заказ
-        """
-
         cargo_locked.status = CargoStatus.MATCHED
         cargo_locked.assigned_carrier_id = self.carrier_id
         cargo_locked.chosen_offer_id = self.id
@@ -286,6 +278,7 @@ class Offer(models.Model):
         Order.objects.create(
             cargo=cargo_locked,
             carrier=self.carrier,
+            customer=cargo_locked.customer,
             offer=self,
         )
 

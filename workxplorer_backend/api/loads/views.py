@@ -561,7 +561,25 @@ class CargoInviteOpenView(generics.GenericAPIView):
         if invite.expires_at < timezone.now():
             return Response({"detail": "Ссылка истекла"}, status=400)
 
-        cargo = invite.load
+        cargo = (
+            Cargo.objects.filter(id=invite.load_id)
+            .annotate(
+                path_m=Distance(F("origin_point"), F("dest_point")),
+            )
+            .annotate(
+                path_km=F("path_m") / 1000.0,
+                route_km=Coalesce(F("route_km_cached"), F("path_km")),
+                price_uzs_anno=Coalesce(
+                    F("price_uzs"),
+                    F("price_value"),
+                    output_field=DecimalField(max_digits=14, decimal_places=2),
+                ),
+                company_rating=Avg("customer__ratings_received__score"),
+            )
+            .select_related("customer")
+            .first()
+        )
+
         carrier = request.user
         invited_by = invite.created_by
 
@@ -569,7 +587,7 @@ class CargoInviteOpenView(generics.GenericAPIView):
             {
                 "cargo_id": cargo.id,
                 "carrier_id": carrier.id,
-                "invited_by_id": invited_by.id,
+                "invited_by_id": invited_by.id if invited_by else None,
                 "expires_at": invite.expires_at,
                 "cargo": CargoListSerializer(cargo).data,
             }

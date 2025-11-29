@@ -36,6 +36,9 @@ class UserRatingViewSet(viewsets.ModelViewSet):
         serializer.save()
 
 
+User = get_user_model()
+
+
 class RatingUserViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = User.objects.all()
     serializer_class = RatingUserListSerializer
@@ -44,14 +47,17 @@ class RatingUserViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         qs = super().get_queryset()
 
+        # Фильтр по роли
         role = self.request.query_params.get("role")
         if role in {"LOGISTIC", "CUSTOMER", "CARRIER"}:
             qs = qs.filter(role=role)
 
+        # Фильтр по стране (через Profile)
         country = self.request.query_params.get("country")
         if country:
-            qs = qs.filter(country__iexact=country)
+            qs = qs.filter(profile__country__iexact=country)
 
+        # Поиск
         search = self.request.query_params.get("search")
         if search:
             qs = qs.filter(
@@ -60,11 +66,13 @@ class RatingUserViewSet(viewsets.ReadOnlyModelViewSet):
                 | Q(company_name__icontains=search)
             )
 
+        # Аннотации рейтингов
         qs = qs.annotate(
             avg_rating_value=Avg("ratings_received__score"),
             rating_count_value=Count("ratings_received"),
         )
 
+        # Количество завершённых заказов
         qs = qs.annotate(
             completed_orders_value=(
                 Count(
@@ -80,6 +88,7 @@ class RatingUserViewSet(viewsets.ReadOnlyModelViewSet):
             )
         )
 
+        # Только для перевозчиков — суммарная дистанция
         if role == "CARRIER":
             qs = qs.annotate(
                 total_distance_value=Sum(
@@ -88,6 +97,7 @@ class RatingUserViewSet(viewsets.ReadOnlyModelViewSet):
                 )
             )
 
+        # Сортировка
         order_by = self.request.query_params.get("order_by")
         if order_by == "rating":
             qs = qs.order_by("-avg_rating_value")
@@ -103,10 +113,10 @@ class RatingUserViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=False, methods=["get"], url_path="countries")
     def countries(self, request):
         countries = (
-            User.objects.exclude(country__isnull=True)
-            .exclude(country="")
-            .order_by("country")
-            .values_list("country", flat=True)
+            User.objects.filter(profile__country__isnull=False)
+            .exclude(profile__country="")
+            .order_by("profile__country")
+            .values_list("profile__country", flat=True)
             .distinct()
         )
         return Response({"countries": list(countries)})

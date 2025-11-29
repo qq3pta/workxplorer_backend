@@ -54,9 +54,9 @@ class RatingUserListSerializer(serializers.ModelSerializer):
 
     display_name = serializers.SerializerMethodField()
 
-    avg_rating = serializers.FloatField(read_only=True)
-    rating_count = serializers.IntegerField(read_only=True)
-    completed_orders = serializers.IntegerField(read_only=True)
+    avg_rating = serializers.FloatField(source="avg_rating_value", read_only=True)
+    rating_count = serializers.IntegerField(source="rating_count_value", read_only=True)
+    completed_orders = serializers.IntegerField(source="completed_orders_value", read_only=True)
 
     registered_at = serializers.DateTimeField(source="date_joined", read_only=True)
     country = serializers.CharField(read_only=True)
@@ -85,4 +85,4 @@ class RatingUserListSerializer(serializers.ModelSerializer):
     def get_total_distance(self, obj) -> int | None:
         if getattr(obj, "role", None) != "CARRIER":
             return None
-        return int(getattr(obj, "total_distance", 0) or 0)
+        return int(getattr(obj, "total_distance_value", 0) or 0)

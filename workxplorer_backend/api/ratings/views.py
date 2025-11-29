@@ -1,8 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.db.models import Avg, Count, Q, Sum
 from rest_framework import permissions, viewsets
-from rest_framework.decorators import action
-from rest_framework.response import Response
 
 from .models import UserRating
 from .serializers import RatingUserListSerializer, UserRatingSerializer
@@ -69,24 +67,28 @@ class RatingUserViewSet(viewsets.ReadOnlyModelViewSet):
             )
 
         qs = qs.annotate(
-            avg_rating=Avg("ratings_received__score"),
-            rating_count=Count("ratings_received"),
+            avg_rating_value=Avg("ratings_received__score"),
+            rating_count_value=Count("ratings_received"),
         )
 
         qs = qs.annotate(
-            completed_orders=Count(
-                "orders_as_carrier",
-                filter=Q(orders_as_carrier__status="delivered"),
-            )
-            + Count(
-                "orders_as_customer",
-                filter=Q(orders_as_customer__status="delivered"),
+            completed_orders_value=(
+                Count(
+                    "orders_as_carrier",
+                    filter=Q(orders_as_carrier__status="delivered"),
+                    distinct=True,
+                )
+                + Count(
+                    "orders_as_customer",
+                    filter=Q(orders_as_customer__status="delivered"),
+                    distinct=True,
+                )
             )
         )
 
         if role == "CARRIER":
             qs = qs.annotate(
-                total_distance=Sum(
+                total_distance_value=Sum(
                     "orders_as_carrier__route_distance_km",
                     filter=Q(orders_as_carrier__status="delivered"),
                 )
@@ -94,21 +96,12 @@ class RatingUserViewSet(viewsets.ReadOnlyModelViewSet):
 
         order_by = self.request.query_params.get("order_by")
         if order_by == "rating":
-            qs = qs.order_by("-avg_rating")
+            qs = qs.order_by("-avg_rating_value")
         elif order_by == "orders":
-            qs = qs.order_by("-completed_orders")
+            qs = qs.order_by("-completed_orders_value")
         elif order_by == "date":
             qs = qs.order_by("-date_joined")
+        else:
+            qs = qs.order_by("-rating_count_value")
 
         return qs
-
-    @action(detail=False, methods=["get"], url_path="countries")
-    def countries(self, request):
-        countries = (
-            User.objects.exclude(country__isnull=True)
-            .exclude(country="")
-            .order_by("country")
-            .values_list("country", flat=True)
-            .distinct()
-        )
-        return Response({"countries": list(countries)})

@@ -1,6 +1,4 @@
 from django.urls import path
-from .views import CargoInviteGenerateView
-
 from .views import (
     CargoCancelView,
     CargoDetailView,
@@ -10,6 +8,8 @@ from .views import (
     PublicLoadsView,
     PublishCargoView,
     CargoVisibilityView,
+    CargoInviteGenerateView,
+    CargoInviteOpenView,
 )
 
 app_name = "loads"
@@ -23,5 +23,6 @@ urlpatterns = [
     path("<uuid:uuid>/refresh/", CargoRefreshView.as_view(), name="refresh-by-uuid"),
     path("<uuid:uuid>/cancel/", CargoCancelView.as_view(), name="cancel-by-uuid"),
     path("<uuid:uuid>/visibility/", CargoVisibilityView.as_view()),
-    path("<uuid:uuid>/invite/generate/", CargoInviteGenerateView.as_view()),
+    path("<uuid:uuid>/invite/generate/", CargoInviteGenerateView.as_view(), name="invite-generate"),
+    path("invite/<str:token>/", CargoInviteOpenView.as_view(), name="invite-open"),
 ]

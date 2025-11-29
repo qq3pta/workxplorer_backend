@@ -276,6 +276,15 @@ def invite_expiry():
 
 class LoadInvite(models.Model):
     load = models.ForeignKey("loads.Cargo", on_delete=models.CASCADE, related_name="invites")
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="invites_created",
+    )
+
     token = models.CharField(max_length=64, unique=True)
     expires_at = models.DateTimeField(default=invite_expiry)
     created_at = models.DateTimeField(auto_now_add=True)

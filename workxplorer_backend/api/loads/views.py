@@ -515,11 +515,9 @@ class CargoInviteGenerateView(generics.GenericAPIView):
         """
         cargo = get_object_or_404(Cargo, uuid=uuid)
 
-        # Доступ
         if cargo.customer_id != request.user.id and request.user.role != "logistic":
             return Response({"detail": "Нет доступа"}, status=403)
 
-        # Генерация токена
         token = LoadInvite.generate_token()
 
         LoadInvite.objects.create(
@@ -535,4 +533,50 @@ class CargoInviteGenerateView(generics.GenericAPIView):
                 "invite_url": invite_url,
             },
             status=200,
+        )
+
+
+@extend_schema(
+    tags=["loads"],
+    responses={
+        200: inline_serializer(
+            name="OpenInviteResponse",
+            fields={
+                "cargo_id": drf_serializers.IntegerField(),
+                "carrier_id": drf_serializers.IntegerField(),
+                "invited_by_id": drf_serializers.IntegerField(),
+                "cargo": CargoListSerializer(),
+                "expires_at": drf_serializers.DateTimeField(),
+            },
+        )
+    },
+)
+class CargoInviteOpenView(generics.GenericAPIView):
+    """
+    Открытие приглашения по ссылке.
+    carrier = request.user (тот, кто открыл ссылку)
+    invited_by = кто создал ссылку (customer/logistic)
+    cargo_id → потом пойдёт в offers/invite
+    """
+
+    permission_classes = [IsAuthenticatedAndVerified]
+
+    def get(self, request, token: str):
+        invite = get_object_or_404(LoadInvite, token=token)
+
+        if invite.expires_at < timezone.now():
+            return Response({"detail": "Ссылка истекла"}, status=400)
+
+        cargo = invite.load
+        carrier = request.user
+        invited_by = invite.created_by
+
+        return Response(
+            {
+                "cargo_id": cargo.id,
+                "carrier_id": carrier.id,
+                "invited_by_id": invited_by.id,
+                "expires_at": invite.expires_at,
+                "cargo": CargoListSerializer(cargo).data,
+            }
         )

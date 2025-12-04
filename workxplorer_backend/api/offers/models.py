@@ -280,6 +280,7 @@ class Offer(models.Model):
             carrier=self.carrier,
             customer=cargo_locked.customer,
             offer=self,
+            created_by=cargo_locked.customer,
         )
 
     def reject_by(self, user) -> None:

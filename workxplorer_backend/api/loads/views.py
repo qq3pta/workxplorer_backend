@@ -29,6 +29,7 @@ from .choices import ModerationStatus
 from .models import Cargo, CargoStatus
 from .serializers import CargoListSerializer, CargoPublishSerializer
 from api.loads.models import LoadInvite
+from api.offers.models import Offer
 
 INVITE_BASE_URL = "https://logistic-omega-eight.vercel.app/dashboard/desk/invite"
 
@@ -583,11 +584,21 @@ class CargoInviteOpenView(generics.GenericAPIView):
         carrier = request.user
         invited_by = invite.created_by
 
+        offer, created = Offer.objects.get_or_create(
+            cargo_id=cargo.id,
+            carrier_id=carrier.id,
+            defaults={
+                "initiator": Offer.Initiator.CUSTOMER,
+                "price_value": cargo.price_value or 0,
+            },
+        )
+
         return Response(
             {
                 "cargo_id": cargo.id,
                 "carrier_id": carrier.id,
                 "invited_by_id": invited_by.id if invited_by else None,
+                "offer_id": offer.id,
                 "expires_at": invite.expires_at,
                 "cargo": CargoListSerializer(cargo).data,
             }

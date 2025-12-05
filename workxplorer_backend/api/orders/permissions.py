@@ -2,10 +2,31 @@ from rest_framework.permissions import BasePermission
 
 
 class IsOrderParticipant(BasePermission):
+    """
+    Доступ:
+    • LOGISTIC — только заказы, созданные им (created_by)
+    • CUSTOMER — только свои (customer)
+    • CARRIER — только свои (carrier)
+    • STAFF — всё
+    """
+
+    def has_permission(self, request, view):
+        return request.user and request.user.is_authenticated
+
     def has_object_permission(self, request, view, obj):
         u = request.user
-        if not u or not u.is_authenticated:
-            return False
+        role = getattr(u, "role", None)
+
         if getattr(u, "is_staff", False) or getattr(u, "is_superuser", False):
             return True
-        return (obj.customer_id == u.id) or (obj.carrier_id == u.id)
+
+        if role == "LOGISTIC":
+            return obj.created_by_id == u.id
+
+        if role == "CUSTOMER":
+            return obj.customer_id == u.id
+
+        if role == "CARRIER":
+            return obj.carrier_id == u.id
+
+        return False

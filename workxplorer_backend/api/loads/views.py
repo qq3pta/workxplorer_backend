@@ -134,6 +134,7 @@ class MyCargosView(generics.ListAPIView):
 
         qs = (
             Cargo.objects.filter(customer=user)
+            .exclude(hidden_for=user)
             .annotate(
                 offers_active=Count("offers", filter=Q(offers__is_active=True)),
                 path_m=Distance(F("origin_point"), F("dest_point")),
@@ -156,9 +157,6 @@ class MyCargosView(generics.ListAPIView):
 
         elif user.is_logistic:
             pass
-
-        else:
-            qs = qs.filter(is_hidden=False)
 
         p = self.request.query_params
 
@@ -295,12 +293,12 @@ class MyCargosBoardView(MyCargosView):
         user = self.request.user
 
         if user.role == "customer":
-            return qs
+            return qs.exclude(hidden_for=user)
 
         if user.role == "logistic":
-            return qs
+            return qs.exclude(hidden_for=user)
 
-        return qs.filter(is_hidden=False)
+        return qs.exclude(hidden_for=user)
 
 
 @extend_schema(tags=["loads"])
@@ -311,10 +309,10 @@ class PublicLoadsView(generics.ListAPIView):
     def get_queryset(self):
         qs = (
             Cargo.objects.filter(
-                is_hidden=False,
                 moderation_status=ModerationStatus.APPROVED,
                 status=CargoStatus.POSTED,
             )
+            .exclude(hidden_for=self.request.user)
             .annotate(
                 offers_active=Count("offers", filter=Q(offers__is_active=True)),
                 age_minutes_anno=ExtractMinutes(F("refreshed_at")),
@@ -460,38 +458,46 @@ class CargoCancelView(generics.GenericAPIView):
     tags=["loads"],
     request=inline_serializer(
         name="CargoVisibilityRequest",
-        fields={
-            "is_hidden": drf_serializers.BooleanField(),
-        },
+        fields={"is_hidden": drf_serializers.BooleanField()},
     ),
     responses={
         200: inline_serializer(
             name="CargoVisibilityResponse",
             fields={
                 "detail": drf_serializers.CharField(),
-                "is_hidden": drf_serializers.BooleanField(),
+                "is_hidden_for_me": drf_serializers.BooleanField(),
             },
         )
     },
 )
 class CargoVisibilityView(generics.GenericAPIView):
     permission_classes = [IsAuthenticatedAndVerified, IsCustomerOrLogistic]
-    serializer_class = CargoListSerializer
 
     def post(self, request, uuid: str):
         cargo = get_object_or_404(Cargo, uuid=uuid)
+        user = request.user
 
-        if cargo.customer_id != request.user.id and request.user.role != "logistic":
+        if user.role not in ("customer", "logistic"):
             return Response({"detail": "Нет доступа"}, status=403)
 
         is_hidden = request.data.get("is_hidden")
         if is_hidden not in (True, False):
             return Response({"detail": "is_hidden must be true or false"}, status=400)
 
-        cargo.is_hidden = is_hidden
-        cargo.save(update_fields=["is_hidden"])
+        if is_hidden:
+            from api.accounts.models import User
 
-        return Response({"detail": "Видимость обновлена", "is_hidden": cargo.is_hidden}, status=200)
+            cargo.hidden_for.set(User.objects.exclude(id=user.id))
+        else:
+            cargo.hidden_for.clear()
+
+        return Response(
+            {
+                "detail": "Видимость обновлена",
+                "is_hidden_for_me": is_hidden,
+            },
+            status=200,
+        )
 
 
 @extend_schema(

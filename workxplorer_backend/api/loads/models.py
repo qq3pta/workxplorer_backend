@@ -78,7 +78,14 @@ class Cargo(models.Model):
     )
 
     contact_pref = models.CharField(max_length=10, choices=ContactPref.choices)
-    is_hidden = models.BooleanField(default=False)
+
+    hidden_for = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        related_name="hidden_cargos",
+        blank=True,
+        verbose_name="Скрыто для",
+    )
+
     moderation_status = models.CharField(
         max_length=10,
         choices=ModerationStatus.choices,
@@ -126,7 +133,6 @@ class Cargo(models.Model):
             models.Index(fields=["origin_city", "destination_city"]),
             models.Index(fields=["origin_city_latin"]),
             models.Index(fields=["destination_city_latin"]),
-            models.Index(fields=["is_hidden"]),
             models.Index(fields=["status"]),
             models.Index(fields=["refreshed_at"]),
             models.Index(fields=["price_value"]),

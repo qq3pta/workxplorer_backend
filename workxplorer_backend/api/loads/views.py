@@ -54,7 +54,10 @@ class PublishCargoView(generics.CreateAPIView):
     queryset = Cargo.objects.all()
 
     def perform_create(self, serializer):
-        cargo = serializer.save()
+        user = self.request.user
+
+        cargo = serializer.save(created_by=user if user.role == "logistic" else None)
+
         cargo.update_price_uzs()
         return cargo
 
@@ -477,8 +480,13 @@ class CargoVisibilityView(generics.GenericAPIView):
         cargo = get_object_or_404(Cargo, uuid=uuid)
         user = request.user
 
-        if user.role not in ("customer", "logistic"):
-            return Response({"detail": "Нет доступа"}, status=403)
+        if user.role == "customer" and cargo.customer_id != user.id:
+            return Response({"detail": "Вы можете скрывать только свои заявки"}, status=403)
+
+        if user.role == "logistic" and getattr(cargo, "created_by_id", None) != user.id:
+            return Response(
+                {"detail": "Вы можете скрывать только заявки, которые создали сами"}, status=403
+            )
 
         is_hidden = request.data.get("is_hidden")
         if is_hidden not in (True, False):

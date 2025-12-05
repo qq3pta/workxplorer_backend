@@ -41,6 +41,15 @@ class Cargo(models.Model):
         verbose_name="Заказчик",
     )
 
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="cargos_created",
+        verbose_name="Создано логистом",
+    )
+
     product = models.CharField("Название груза", max_length=120)
     description = models.TextField("Описание", blank=True)
     origin_country = models.CharField(max_length=100, default="", blank=True)

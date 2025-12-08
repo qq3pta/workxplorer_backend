@@ -10,8 +10,8 @@ from django.db.models import (
     FloatField,
     Func,
     Q,
-    Value,
 )
+
 from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -197,7 +197,7 @@ class MyCargosView(generics.ListAPIView):
             try:
                 pnt = Point(float(o_lng), float(o_lat), srid=4326)
                 qs = qs.filter(origin_point__distance_lte=(pnt, D(km=float(o_r))))
-            except:
+            except Exception:
                 pass
 
         d_lat, d_lng, d_r = p.get("dest_lat"), p.get("dest_lng"), p.get("dest_radius_km")
@@ -205,7 +205,7 @@ class MyCargosView(generics.ListAPIView):
             try:
                 pnt = Point(float(d_lng), float(d_lat), srid=4326)
                 qs = qs.filter(dest_point__distance_lte=(pnt, D(km=float(d_r))))
-            except:
+            except Exception:
                 pass
 
         q = p.get("company") or p.get("q")

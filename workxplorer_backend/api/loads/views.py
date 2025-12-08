@@ -285,11 +285,21 @@ class MyCargosBoardView(MyCargosView):
         if getattr(self, "swagger_fake_view", False) or self.request.user.is_anonymous:
             return Cargo.objects.none()
 
-        qs = super().get_queryset()
+        user = self.request.user
 
-        qs = qs.filter(
+        qs = Cargo.objects.filter(
             moderation_status=ModerationStatus.APPROVED,
-        ).exclude(status=CargoStatus.HIDDEN)
+        )
+
+        if user.role == "customer":
+            qs = qs.filter(customer=user)
+            return qs
+
+        if user.role == "logistic":
+            qs = qs.filter(created_by=user)
+            return qs
+
+        qs = qs.exclude(status=CargoStatus.HIDDEN)
 
         return qs
 

@@ -293,13 +293,24 @@ class MyCargosBoardView(MyCargosView):
 
         if user.role == "customer":
             qs = qs.filter(customer=user)
-            return qs
 
-        if user.role == "logistic":
+        elif user.role == "logistic":
             qs = qs.filter(created_by=user)
-            return qs
 
-        qs = qs.exclude(status=CargoStatus.HIDDEN)
+        else:
+            qs = qs.exclude(status=CargoStatus.HIDDEN)
+
+        qs = qs.annotate(
+            path_m=Distance(F("origin_point"), F("dest_point")),
+        ).annotate(
+            path_km=F("path_m") / 1000.0,
+            route_km=Coalesce(F("route_km_cached"), F("path_km")),
+            price_uzs_anno=Coalesce(
+                F("price_uzs"),
+                F("price_value"),
+                output_field=DecimalField(max_digits=14, decimal_places=2),
+            ),
+        )
 
         return qs
 

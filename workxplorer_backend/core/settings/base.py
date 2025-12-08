@@ -60,6 +60,7 @@ INSTALLED_APPS = [
     "api.orders",
     "api.ratings",
     "api.notifications",
+    "api.payments",
     "channels",
 ]
 

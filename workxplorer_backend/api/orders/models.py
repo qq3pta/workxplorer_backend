@@ -9,6 +9,7 @@ from django.utils.translation import gettext_lazy as _
 from api.loads.choices import Currency
 from api.loads.models import Cargo
 from api.notifications.services import notify
+from api.payments.models import Payment
 
 
 def order_upload_to(instance, filename: str) -> str:
@@ -163,6 +164,14 @@ class Order(models.Model):
                         payload=payload,
                         cargo=self.cargo,
                     )
+            if not self.payments.exists():
+                Payment.objects.create(
+                    order=self,
+                    amount=self.price_total,
+                    currency=self.currency,
+                    method="manual",
+                )
+
             return
 
         if new_status == Order.OrderStatus.DELIVERED:
@@ -220,6 +229,28 @@ class Order(models.Model):
         if old_status and old_status != self.status:
             transaction.on_commit(
                 lambda old=old_status, new=self.status: self.notify_status_changed(old, new)
+            )
+
+    def update_payment_status(self):
+        """
+        Обновляет статус заказа в зависимости от статусов всех платежей.
+        Если все платежи завершены → заказ становится PAID.
+        """
+        payments = self.payments.all()
+
+        if not payments.exists():
+            return
+
+        if all(p.status == "COMPLETED" for p in payments):
+            old_status = self.status
+            self.status = Order.OrderStatus.PAID
+            self.save(update_fields=["status"])
+
+            OrderStatusHistory.objects.create(
+                order=self,
+                old_status=old_status,
+                new_status=self.status,
+                user=None,
             )
 
     @property

@@ -45,7 +45,19 @@ class OrdersViewSet(viewsets.ModelViewSet):
         return qs.none()
 
     def perform_create(self, serializer):
-        serializer.save(created_by=self.request.user)
+        user = self.request.user
+
+        order = serializer.save(created_by=user)
+
+        if user.role == "logistic":
+            if order.carrier is None:
+                order.status = order.OrderStatus.NO_DRIVER
+            else:
+                order.status = order.OrderStatus.NEW
+
+            order.save(update_fields=["status"])
+
+        return order
 
     def get_serializer_class(self):
         if self.action == "list":

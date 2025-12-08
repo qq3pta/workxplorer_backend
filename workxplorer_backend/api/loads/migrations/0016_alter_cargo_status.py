@@ -4,15 +4,25 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('loads', '0015_cargo_created_by'),
+        ("loads", "0015_cargo_created_by"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='cargo',
-            name='status',
-            field=models.CharField(choices=[('POSTED', 'Опубликована'), ('MATCHED', 'В работе'), ('DELIVERED', 'Доставлено'), ('COMPLETED', 'Завершено'), ('CANCELLED', 'Отменена'), ('HIDDEN', 'Скрыта')], default='POSTED', max_length=20),
+            model_name="cargo",
+            name="status",
+            field=models.CharField(
+                choices=[
+                    ("POSTED", "Опубликована"),
+                    ("MATCHED", "В работе"),
+                    ("DELIVERED", "Доставлено"),
+                    ("COMPLETED", "Завершено"),
+                    ("CANCELLED", "Отменена"),
+                    ("HIDDEN", "Скрыта"),
+                ],
+                default="POSTED",
+                max_length=20,
+            ),
         ),
     ]

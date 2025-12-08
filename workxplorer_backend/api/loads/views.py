@@ -242,12 +242,20 @@ class MyCargosView(generics.ListAPIView):
 
 
 @extend_schema(tags=["loads"])
-class MyCargosBoardView(MyCargosView):
+class MyCargosBoardView(generics.ListAPIView):
     permission_classes = [IsAuthenticatedAndVerified, IsCustomerOrLogistic]
+    serializer_class = CargoListSerializer
 
     def get_queryset(self):
-        qs = super().get_queryset()
+        user = self.request.user
 
+        # показываем ВСЕ заявки пользователя:
+        qs = Cargo.objects.filter(Q(customer=user) | Q(created_by=user))
+
+        # скрытые НЕ показываем:
+        qs = qs.exclude(hidden_for=user)
+
+        # твои аннотации:
         qs = qs.annotate(
             path_m=Distance(F("origin_point"), F("dest_point")),
         ).annotate(
@@ -260,7 +268,7 @@ class MyCargosBoardView(MyCargosView):
             ),
         )
 
-        return qs
+        return qs.order_by("-refreshed_at", "-created_at")
 
 
 @extend_schema(tags=["loads"])

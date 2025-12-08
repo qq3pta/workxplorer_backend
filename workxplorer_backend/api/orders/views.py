@@ -14,6 +14,7 @@ from .serializers import (
     OrderDocumentSerializer,
     OrderListSerializer,
     OrderStatusHistorySerializer,
+    OrderDriverStatusUpdateSerializer,
 )
 
 
@@ -64,6 +65,8 @@ class OrdersViewSet(viewsets.ModelViewSet):
             return OrderListSerializer
         if self.action in {"retrieve", "create", "update", "partial_update"}:
             return OrderDetailSerializer
+        if self.action == "driver_status":
+            return OrderDriverStatusUpdateSerializer
         if self.action == "status_history":
             return OrderStatusHistorySerializer
         if self.action == "documents" and self.request.method == "POST":

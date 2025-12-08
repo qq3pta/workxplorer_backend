@@ -130,36 +130,29 @@ class MyCargosView(generics.ListAPIView):
     serializer_class = CargoListSerializer
 
     def get_queryset(self):
-        if getattr(self, "swagger_fake_view", False) or self.request.user.is_anonymous:
-            return Cargo.objects.none()
-
         user = self.request.user
 
-        qs = (
-            Cargo.objects.filter(customer=user)
-            .annotate(
-                offers_active=Count("offers", filter=Q(offers__is_active=True)),
-                path_m=Distance(F("origin_point"), F("dest_point")),
-            )
-            .annotate(
-                path_km=F("path_m") / 1000.0,
-                route_km=Coalesce(F("route_km_cached"), F("path_km")),
-                price_uzs_anno=Coalesce(
-                    F("price_uzs"),
-                    F("price_value"),
-                    output_field=DecimalField(max_digits=14, decimal_places=2),
-                ),
-                company_rating=Avg("customer__ratings_received__score"),
-            )
-            .select_related("customer")
+        if user.role == "customer":
+            qs = Cargo.objects.filter(customer=user)
+        elif user.role == "logistic":
+            qs = Cargo.objects.filter(created_by=user)
+        else:
+            return Cargo.objects.none()
+
+        qs = qs.annotate(
+            path_m=Distance(F("origin_point"), F("dest_point")),
+            offers_active=Count("offers", filter=Q(offers__is_active=True)),
+        ).annotate(
+            path_km=F("path_m") / 1000.0,
+            route_km=Coalesce(F("route_km_cached"), F("path_km")),
+            price_uzs_anno=Coalesce(
+                F("price_uzs"),
+                F("price_value"),
+                output_field=DecimalField(max_digits=14, decimal_places=2),
+            ),
         )
 
-        if user.is_customer:
-            pass
-
-        elif user.is_logistic:
-            pass
-
+        # ---- ФИЛЬТРЫ ----
         p = self.request.query_params
 
         if p.get("uuid"):
@@ -185,53 +178,34 @@ class MyCargosView(generics.ListAPIView):
 
         if p.get("min_weight"):
             qs = qs.filter(weight_kg__gte=p["min_weight"])
-
         if p.get("max_weight"):
             qs = qs.filter(weight_kg__lte=p["max_weight"])
 
-        if p.get("axles_min"):
-            qs = qs.filter(axles__gte=p["axles_min"])
-
-        if p.get("axles_max"):
-            qs = qs.filter(axles__lte=p["axles_max"])
-
         if p.get("volume_min"):
             qs = qs.filter(volume_m3__gte=p["volume_min"])
-
         if p.get("volume_max"):
             qs = qs.filter(volume_m3__lte=p["volume_max"])
 
         if p.get("min_price_uzs"):
             qs = qs.filter(price_uzs_anno__gte=p["min_price_uzs"])
-
         if p.get("max_price_uzs"):
             qs = qs.filter(price_uzs_anno__lte=p["max_price_uzs"])
 
+        # Гео фильтры
         o_lat, o_lng, o_r = p.get("origin_lat"), p.get("origin_lng"), p.get("origin_radius_km")
         if o_lat and o_lng and o_r:
             try:
                 pnt = Point(float(o_lng), float(o_lat), srid=4326)
-                radius = float(o_r)
-
-                qs = qs.filter(origin_point__distance_lte=(pnt, D(km=radius)))
-                qs = qs.annotate(
-                    origin_dist_km=Distance("origin_point", pnt) / 1000.0,
-                    origin_radius_km=Value(radius, output_field=FloatField()),
-                )
-            except Exception:
+                qs = qs.filter(origin_point__distance_lte=(pnt, D(km=float(o_r))))
+            except:
                 pass
 
         d_lat, d_lng, d_r = p.get("dest_lat"), p.get("dest_lng"), p.get("dest_radius_km")
         if d_lat and d_lng and d_r:
             try:
                 pnt = Point(float(d_lng), float(d_lat), srid=4326)
-                radius2 = float(d_r)
-
-                qs = qs.filter(dest_point__distance_lte=(pnt, D(km=radius2)))
-                qs = qs.annotate(
-                    dest_radius_km=Value(radius2, output_field=FloatField()),
-                )
-            except Exception:
+                qs = qs.filter(dest_point__distance_lte=(pnt, D(km=float(d_r))))
+            except:
                 pass
 
         q = p.get("company") or p.get("q")
@@ -242,22 +216,12 @@ class MyCargosView(generics.ListAPIView):
                 | Q(customer__email__icontains=q)
             )
 
-        if p.get("customer_email"):
-            qs = qs.filter(customer__email__iexact=p["customer_email"])
-
-        if p.get("customer_phone"):
-            qs = qs.filter(
-                Q(customer__phone__icontains=p["customer_phone"])
-                | Q(customer__phone_number__icontains=p["customer_phone"])
-            )
-
+        # ---- СОРТИРОВКА ---
         allowed = {
             "path_km",
             "-path_km",
             "route_km",
             "-route_km",
-            "origin_dist_km",
-            "-origin_dist_km",
             "price_uzs_anno",
             "-price_uzs_anno",
             "load_date",

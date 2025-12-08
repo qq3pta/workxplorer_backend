@@ -246,18 +246,7 @@ class MyCargosBoardView(MyCargosView):
     permission_classes = [IsAuthenticatedAndVerified, IsCustomerOrLogistic]
 
     def get_queryset(self):
-        user = self.request.user
-
         qs = super().get_queryset()
-
-        if user.role == "customer":
-            qs = qs.filter(customer=user)
-
-        elif user.role == "logistic":
-            qs = qs.filter(created_by=user)
-
-        else:
-            qs = qs.exclude(status=CargoStatus.HIDDEN)
 
         qs = qs.annotate(
             path_m=Distance(F("origin_point"), F("dest_point")),

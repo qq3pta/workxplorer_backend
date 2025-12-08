@@ -273,7 +273,7 @@ class PublicLoadsView(generics.ListAPIView):
             Cargo.objects.filter(
                 moderation_status=ModerationStatus.APPROVED,
             )
-            .exclude(status=CargoStatus.HIDDEN)
+            .exclude(hidden_for=self.request.user)
             .annotate(
                 offers_active=Count("offers", filter=Q(offers__is_active=True)),
                 age_minutes_anno=ExtractMinutes(F("refreshed_at")),
@@ -431,6 +431,22 @@ class CargoCancelView(generics.GenericAPIView):
         )
     },
 )
+@extend_schema(
+    tags=["loads"],
+    request=inline_serializer(
+        name="CargoVisibilityRequest",
+        fields={"is_hidden": drf_serializers.BooleanField()},
+    ),
+    responses={
+        200: inline_serializer(
+            name="CargoVisibilityResponse",
+            fields={
+                "detail": drf_serializers.CharField(),
+                "is_hidden_for_me": drf_serializers.BooleanField(),
+            },
+        )
+    },
+)
 class CargoVisibilityView(generics.GenericAPIView):
     permission_classes = [IsAuthenticatedAndVerified, IsCustomerOrLogistic]
 
@@ -438,12 +454,13 @@ class CargoVisibilityView(generics.GenericAPIView):
         cargo = get_object_or_404(Cargo, uuid=uuid)
         user = request.user
 
+        # Проверка доступа
         if user.role == "customer" and cargo.customer_id != user.id:
             return Response({"detail": "Вы можете скрывать только свои заявки"}, status=403)
 
         if user.role == "logistic" and cargo.created_by_id != user.id:
             return Response(
-                {"detail": "Вы можете скрывать только заявки, которые создали сами"},
+                {"detail": "Вы можете скрывать только созданные вами заявки"},
                 status=403,
             )
 
@@ -451,12 +468,11 @@ class CargoVisibilityView(generics.GenericAPIView):
         if is_hidden not in (True, False):
             return Response({"detail": "is_hidden must be true or false"}, status=400)
 
+        # --- ГЛАВНОЕ ---
         if is_hidden:
-            cargo.status = CargoStatus.HIDDEN
+            cargo.hidden_for.add(user)  # скрываем от себя
         else:
-            cargo.status = CargoStatus.POSTED
-
-        cargo.save(update_fields=["status"])
+            cargo.hidden_for.remove(user)  # делаем видимым для себя
 
         return Response(
             {

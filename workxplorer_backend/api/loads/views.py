@@ -137,7 +137,6 @@ class MyCargosView(generics.ListAPIView):
 
         qs = (
             Cargo.objects.filter(customer=user)
-            .exclude(hidden_for=user)
             .annotate(
                 offers_active=Count("offers", filter=Q(offers__is_active=True)),
                 path_m=Distance(F("origin_point"), F("dest_point")),
@@ -289,19 +288,10 @@ class MyCargosBoardView(MyCargosView):
         qs = super().get_queryset()
 
         qs = qs.filter(
-            status=CargoStatus.POSTED,
             moderation_status=ModerationStatus.APPROVED,
-        )
+        ).exclude(status=CargoStatus.HIDDEN)
 
-        user = self.request.user
-
-        if user.role == "customer":
-            return qs.exclude(hidden_for=user)
-
-        if user.role == "logistic":
-            return qs.exclude(hidden_for=user)
-
-        return qs.exclude(hidden_for=user)
+        return qs
 
 
 @extend_schema(tags=["loads"])
@@ -313,9 +303,8 @@ class PublicLoadsView(generics.ListAPIView):
         qs = (
             Cargo.objects.filter(
                 moderation_status=ModerationStatus.APPROVED,
-                status=CargoStatus.POSTED,
             )
-            .exclude(hidden_for=self.request.user)
+            .exclude(status=CargoStatus.HIDDEN)
             .annotate(
                 offers_active=Count("offers", filter=Q(offers__is_active=True)),
                 age_minutes_anno=ExtractMinutes(F("refreshed_at")),
@@ -483,9 +472,10 @@ class CargoVisibilityView(generics.GenericAPIView):
         if user.role == "customer" and cargo.customer_id != user.id:
             return Response({"detail": "Вы можете скрывать только свои заявки"}, status=403)
 
-        if user.role == "logistic" and getattr(cargo, "created_by_id", None) != user.id:
+        if user.role == "logistic" and cargo.created_by_id != user.id:
             return Response(
-                {"detail": "Вы можете скрывать только заявки, которые создали сами"}, status=403
+                {"detail": "Вы можете скрывать только заявки, которые создали сами"},
+                status=403,
             )
 
         is_hidden = request.data.get("is_hidden")
@@ -493,11 +483,11 @@ class CargoVisibilityView(generics.GenericAPIView):
             return Response({"detail": "is_hidden must be true or false"}, status=400)
 
         if is_hidden:
-            from api.accounts.models import User
-
-            cargo.hidden_for.set(User.objects.exclude(id=user.id))
+            cargo.status = CargoStatus.HIDDEN
         else:
-            cargo.hidden_for.clear()
+            cargo.status = CargoStatus.POSTED
+
+        cargo.save(update_fields=["status"])
 
         return Response(
             {

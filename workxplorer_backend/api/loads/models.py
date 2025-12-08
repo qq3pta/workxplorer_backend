@@ -23,6 +23,7 @@ class CargoStatus(models.TextChoices):
     DELIVERED = "DELIVERED", "Доставлено"
     COMPLETED = "COMPLETED", "Завершено"
     CANCELLED = "CANCELLED", "Отменена"
+    HIDDEN = "HIDDEN", "Скрыта"
 
 
 class PaymentMethod(models.TextChoices):

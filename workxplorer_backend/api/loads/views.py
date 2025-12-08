@@ -278,8 +278,9 @@ class MyCargosView(generics.ListAPIView):
 
 
 @extend_schema(tags=["loads"])
-class MyCargosBoardView(MyCargosView):
+class MyCargosView(generics.ListAPIView):
     permission_classes = [IsAuthenticatedAndVerified, IsCustomerOrLogistic]
+    serializer_class = CargoListSerializer
 
     def get_queryset(self):
         if getattr(self, "swagger_fake_view", False) or self.request.user.is_anonymous:
@@ -287,20 +288,17 @@ class MyCargosBoardView(MyCargosView):
 
         user = self.request.user
 
-        qs = Cargo.objects.filter(
-            moderation_status=ModerationStatus.APPROVED,
-        )
-
         if user.role == "customer":
-            qs = qs.filter(customer=user)
+            qs = Cargo.objects.filter(customer=user)
 
         elif user.role == "logistic":
-            qs = qs.filter(created_by=user)
+            qs = Cargo.objects.filter(created_by=user)
 
         else:
-            qs = qs.exclude(status=CargoStatus.HIDDEN)
+            return Cargo.objects.none()
 
         qs = qs.annotate(
+            offers_active=Count("offers", filter=Q(offers__is_active=True)),
             path_m=Distance(F("origin_point"), F("dest_point")),
         ).annotate(
             path_km=F("path_m") / 1000.0,
@@ -310,7 +308,85 @@ class MyCargosBoardView(MyCargosView):
                 F("price_value"),
                 output_field=DecimalField(max_digits=14, decimal_places=2),
             ),
+            company_rating=Avg("customer__ratings_received__score"),
         )
+
+        p = self.request.query_params
+
+        if p.get("uuid"):
+            qs = qs.filter(uuid=p["uuid"])
+        if p.get("origin_city"):
+            qs = qs.filter(origin_city__iexact=p["origin_city"])
+        if p.get("destination_city"):
+            qs = qs.filter(destination_city__iexact=p["destination_city"])
+        if p.get("load_date"):
+            qs = qs.filter(load_date=p["load_date"])
+
+        if p.get("load_date_from"):
+            qs = qs.filter(load_date__gte=p["load_date_from"])
+        if p.get("load_date_to"):
+            qs = qs.filter(load_date__lte=p["load_date_to"])
+
+        if p.get("transport_type"):
+            qs = qs.filter(transport_type=p["transport_type"])
+
+        if p.get("min_weight"):
+            qs = qs.filter(weight_kg__gte=p["min_weight"])
+        if p.get("max_weight"):
+            qs = qs.filter(weight_kg__lte=p["max_weight"])
+
+        if p.get("axles_min"):
+            qs = qs.filter(axles__gte=p["axles_min"])
+        if p.get("axles_max"):
+            qs = qs.filter(axles__lte=p["axles_max"])
+
+        if p.get("volume_min"):
+            qs = qs.filter(volume_m3__gte=p["volume_min"])
+        if p.get("volume_max"):
+            qs = qs.filter(volume_m3__lte=p["volume_max"])
+
+        if p.get("min_price_uzs"):
+            qs = qs.filter(price_uzs_anno__gte=p["min_price_uzs"])
+        if p.get("max_price_uzs"):
+            qs = qs.filter(price_uzs_anno__lte=p["max_price_uzs"])
+
+        q = p.get("company") or p.get("q")
+        if q:
+            qs = qs.filter(
+                Q(customer__company_name__icontains=q)
+                | Q(customer__username__icontains=q)
+                | Q(customer__email__icontains=q)
+            )
+
+        if p.get("customer_email"):
+            qs = qs.filter(customer__email__iexact=p["customer_email"])
+
+        if p.get("customer_phone"):
+            qs = qs.filter(
+                Q(customer__phone__icontains=p["customer_phone"])
+                | Q(customer__phone_number__icontains=p["customer_phone"])
+            )
+
+        # 4. Сортировка
+        allowed = {
+            "path_km",
+            "-path_km",
+            "route_km",
+            "-route_km",
+            "origin_dist_km",
+            "-origin_dist_km",
+            "price_uzs_anno",
+            "-price_uzs_anno",
+            "load_date",
+            "-load_date",
+            "axles",
+            "-axles",
+            "volume_m3",
+            "-volume_m3",
+        }
+
+        order = p.get("order")
+        qs = qs.order_by(order) if order in allowed else qs.order_by("-refreshed_at", "-created_at")
 
         return qs
 

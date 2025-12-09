@@ -175,6 +175,7 @@ class OrderListSerializer(serializers.ModelSerializer):
                 "login": u.username,
                 "phone": getattr(u, "phone", None),
                 "company": getattr(u, "company_name", None) or getattr(u, "company", None),
+                "role": getattr(u, "role", None),
             }
 
         # CUSTOMER — всегда

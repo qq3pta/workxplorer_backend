@@ -1,3 +1,5 @@
+import uuid
+from django.contrib.auth import get_user_model
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import status as http_status
 from rest_framework import viewsets
@@ -16,6 +18,8 @@ from .serializers import (
     OrderStatusHistorySerializer,
     OrderDriverStatusUpdateSerializer,
 )
+
+User = get_user_model()
 
 
 class OrdersViewSet(viewsets.ModelViewSet):
@@ -149,3 +153,75 @@ class OrdersViewSet(viewsets.ModelViewSet):
         qs = order.status_history.all()
         ser = self.get_serializer(qs, many=True)
         return Response(ser.data, http_status.HTTP_200_OK)
+
+    @action(detail=True, methods=["post"], url_path="invite-by-id")
+    def invite_by_id(self, request, pk=None):
+        order = self.get_object()
+        user = request.user
+
+        # 1. Только создатель заказа (логист) может приглашать
+        if order.created_by_id != user.id:
+            return Response({"detail": "Можно приглашать только в свои заказы"}, status=403)
+
+        # 2. Приглашать можно только если нет водителя
+        if order.status != Order.OrderStatus.NO_DRIVER:
+            return Response({"detail": "У заказа уже есть водитель"}, status=400)
+
+        driver_id = request.data.get("driver_id")
+        if not driver_id:
+            return Response({"detail": "Введите ID перевозчика (driver_id)"}, status=400)
+
+        try:
+            driver = User.objects.get(id=driver_id, role="CARRIER")
+        except User.DoesNotExist:
+            return Response({"detail": "Перевозчик с таким ID не найден"}, status=404)
+
+        # 3. Сохраняем приглашённого перевозчика
+        order.invited_carrier = driver
+        order.save(update_fields=["invited_carrier"])
+
+        return Response({"detail": "Перевозчик приглашён"}, status=200)
+
+    @action(detail=True, methods=["post"], url_path="generate-invite")
+    def generate_invite(self, request, pk=None):
+        order = self.get_object()
+        user = request.user
+
+        if order.created_by_id != user.id:
+            return Response({"detail": "Нет доступа"}, status=403)
+
+        if order.status != Order.OrderStatus.NO_DRIVER:
+            return Response({"detail": "У заказа уже есть водитель"}, status=400)
+
+        # создать токен
+        token = uuid.uuid4()
+        order.invite_token = token
+        order.save(update_fields=["invite_token"])
+
+        invite_url = f"https://moshin.uz/invite-order/{token}"
+
+        return Response({"invite_url": invite_url}, status=200)
+
+    @action(detail=False, methods=["post"], url_path="accept-invite")
+    def accept_invite(self, request):
+        token = request.data.get("token")
+        user = request.user
+
+        if not token:
+            return Response({"detail": "token обязателен"}, status=400)
+
+        try:
+            order = Order.objects.get(invite_token=token, status=Order.OrderStatus.NO_DRIVER)
+        except Order.DoesNotExist:
+            return Response({"detail": "Приглашение недействительно"}, status=404)
+
+        if user.role != "CARRIER":
+            return Response({"detail": "Только перевозчики могут принять заказ"}, status=403)
+
+        # назначаем перевозчика
+        order.carrier = user
+        order.status = Order.OrderStatus.PENDING
+        order.invite_token = None  # токен больше не нужен
+        order.save(update_fields=["carrier", "status", "invite_token"])
+
+        return Response({"detail": "Вы назначены перевозчиком заказа", "order_id": order.id})

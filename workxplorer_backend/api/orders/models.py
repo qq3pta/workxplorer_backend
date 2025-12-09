@@ -1,4 +1,5 @@
 import os
+import uuid
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -97,6 +98,19 @@ class Order(models.Model):
 
     loading_datetime = models.DateTimeField(null=True, blank=True)
     unloading_datetime = models.DateTimeField(null=True, blank=True)
+
+    invite_token = models.UUIDField(
+        null=True, blank=True, unique=True, help_text="Токен приглашения перевозчика"
+    )
+
+    invited_carrier = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="invited_orders",
+        help_text="Перевозчик, приглашённый вручную по ID",
+    )
 
     class Meta:
         ordering = ["-created_at"]

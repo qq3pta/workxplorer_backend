@@ -289,7 +289,8 @@ class CargoListSerializer(RouteKmMixin, serializers.ModelSerializer):
     price_uzs = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
     uuid = serializers.UUIDField(read_only=True)
     age_minutes = serializers.IntegerField(read_only=True)
-
+    user_name = serializers.SerializerMethodField()
+    user_id = serializers.SerializerMethodField()
     path_km = serializers.FloatField(read_only=True)
     origin_dist_km = serializers.FloatField(read_only=True)
     origin_radius_km = serializers.FloatField(read_only=True)
@@ -350,6 +351,8 @@ class CargoListSerializer(RouteKmMixin, serializers.ModelSerializer):
             "origin_radius_km",
             "dest_radius_km",
             "is_hidden_for_me",
+            "user_name",
+            "user_id",
         )
         read_only_fields = fields
 
@@ -395,6 +398,21 @@ class CargoListSerializer(RouteKmMixin, serializers.ModelSerializer):
             return round(float(obj.weight_kg) / 1000, 3)
         except Exception:
             return None
+
+    def _get_author(self, obj):
+        return obj.created_by if obj.created_by else obj.customer
+
+    def get_user_name(self, obj):
+        author = self._get_author(obj)
+        return (
+            getattr(author, "company_name", None)
+            or getattr(author, "name", None)
+            or getattr(author, "username", "")
+        )
+
+    def get_user_id(self, obj):
+        author = self._get_author(obj)
+        return author.id
 
     @extend_schema_field(Decimal)
     def get_price_per_km(self, obj):

@@ -58,14 +58,20 @@ class OfferCreateSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         user = self.context["request"].user
+        cargo = validated_data["cargo"]
+
+        logistic_user = None
+        if cargo.created_by and getattr(cargo.created_by, "role", None) == "LOGISTIC":
+            logistic_user = cargo.created_by
+
         offer = Offer.objects.create(
             carrier=user,
             initiator=Offer.Initiator.CARRIER,
+            logistic=logistic_user,
             **validated_data,
         )
 
         offer.send_create_notifications()
-
         return offer
 
 
@@ -107,13 +113,20 @@ class OfferInviteSerializer(serializers.Serializer):
         return attrs
 
     def create(self, validated_data):
+        cargo = validated_data["cargo"]
+        carrier = validated_data["carrier"]
+
+        logistic_user = None
+        if cargo.created_by and getattr(cargo.created_by, "role", None) == "LOGISTIC":
+            logistic_user = cargo.created_by
+
         offer = Offer.objects.create(
             initiator=Offer.Initiator.CUSTOMER,
+            logistic=logistic_user,
             **validated_data,
         )
 
         offer.send_invite_notifications()
-
         return offer
 
 

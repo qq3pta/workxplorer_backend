@@ -30,6 +30,15 @@ class Offer(models.Model):
         related_name="offers",
     )
 
+    logistic = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="logistic_offers",
+        limit_choices_to={"role": "LOGISTIC"},
+    )
+
     price_value = models.DecimalField(
         max_digits=14,
         decimal_places=2,
@@ -281,6 +290,12 @@ class Offer(models.Model):
             customer=cargo_locked.customer,
             offer=self,
             created_by=cargo_locked.customer,
+            logistic=self.logistic
+            or (
+                cargo_locked.created_by
+                if getattr(cargo_locked.created_by, "role", None) == "LOGISTIC"
+                else None
+            ),
         )
 
     def reject_by(self, user) -> None:

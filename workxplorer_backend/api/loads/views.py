@@ -249,11 +249,13 @@ class MyCargosBoardView(generics.ListAPIView):
     def get_queryset(self):
         user = self.request.user
 
-        # показываем ВСЕ заявки пользователя:
         qs = Cargo.objects.filter(Q(customer=user) | Q(created_by=user))
 
-        # скрытые НЕ показываем:
-        qs = qs.exclude(hidden_for=user)
+        qs = qs.filter(
+            Q(status=CargoStatus.HIDDEN, customer=user)
+            | Q(status=CargoStatus.HIDDEN, created_by=user)
+            | ~Q(status=CargoStatus.HIDDEN)
+        )
 
         # твои аннотации:
         qs = qs.annotate(
@@ -281,7 +283,7 @@ class PublicLoadsView(generics.ListAPIView):
             Cargo.objects.filter(
                 moderation_status=ModerationStatus.APPROVED,
             )
-            .exclude(hidden_for=self.request.user)
+            .exclude(status=CargoStatus.HIDDEN)
             .annotate(
                 offers_active=Count("offers", filter=Q(offers__is_active=True)),
                 age_minutes_anno=ExtractMinutes(F("refreshed_at")),
@@ -476,11 +478,12 @@ class CargoVisibilityView(generics.GenericAPIView):
         if is_hidden not in (True, False):
             return Response({"detail": "is_hidden must be true or false"}, status=400)
 
-        # --- ГЛАВНОЕ ---
         if is_hidden:
-            cargo.hidden_for.add(user)  # скрываем от себя
+            cargo.status = CargoStatus.HIDDEN
         else:
-            cargo.hidden_for.remove(user)  # делаем видимым для себя
+            cargo.status = CargoStatus.POSTED
+
+        cargo.save(update_fields=["status"])
 
         return Response(
             {

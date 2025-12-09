@@ -114,7 +114,6 @@ class OfferInviteSerializer(serializers.Serializer):
 
     def create(self, validated_data):
         cargo = validated_data["cargo"]
-        carrier = validated_data["carrier"]
 
         logistic_user = None
         if cargo.created_by and getattr(cargo.created_by, "role", None) == "LOGISTIC":

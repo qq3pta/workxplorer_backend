@@ -156,9 +156,8 @@ class OrderListSerializer(serializers.ModelSerializer):
         return self._user_display_name(obj.carrier)
 
     def get_logistic_name(self, obj):
-        u = obj.created_by
-        if u and getattr(u, "role", "").upper() == "LOGISTIC":
-            return self._user_display_name(u)
+        if obj.logistic:
+            return self._user_display_name(obj.logistic)
         return ""
 
     # --------------------------

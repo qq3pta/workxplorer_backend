@@ -53,14 +53,28 @@ class OrdersViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         user = self.request.user
 
+        offer = serializer.validated_data.get("offer")
+
+        if offer and getattr(user, "role", "").upper() == "CUSTOMER":
+            order = Order.objects.create(
+                cargo=offer.cargo,
+                customer=offer.customer,
+                created_by=offer.customer,
+                logistic=offer.logistic,
+                status=Order.OrderStatus.NO_DRIVER,
+                currency=offer.currency,
+                price_total=offer.price,
+                route_distance_km=offer.route_distance_km,
+            )
+            return order
+
         order = serializer.save(created_by=user)
 
-        if user.role == "logistic":
+        if getattr(user, "role", "").upper() == "LOGISTIC":
             if order.carrier is None:
-                order.status = order.OrderStatus.NO_DRIVER
+                order.status = Order.OrderStatus.NO_DRIVER
             else:
-                order.status = order.OrderStatus.NEW
-
+                order.status = Order.OrderStatus.NEW
             order.save(update_fields=["status"])
 
         return order

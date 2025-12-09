@@ -62,6 +62,16 @@ class Order(models.Model):
         related_name="orders_created",
     )
 
+    logistic = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="logistic_orders",
+        limit_choices_to={"role": "LOGISTIC"},
+        help_text="Логист-посредник (экспедитор) по заказу",
+    )
+
     offer = models.OneToOneField(
         "offers.Offer", on_delete=models.SET_NULL, null=True, blank=True, related_name="order"
     )

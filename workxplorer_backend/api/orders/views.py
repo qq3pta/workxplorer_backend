@@ -156,27 +156,32 @@ class OrdersViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="invite-by-id")
     def invite_by_id(self, request, pk=None):
+        from .serializers import InviteByIdSerializer
+
         order = self.get_object()
         user = request.user
 
-        # 1. Только создатель заказа (логист) может приглашать
+        # 1. Только логист (создатель заказа) может приглашать
         if order.created_by_id != user.id:
             return Response({"detail": "Можно приглашать только в свои заказы"}, status=403)
 
-        # 2. Приглашать можно только если нет водителя
+        # 2. Можно приглашать только статус NO_DRIVER
         if order.status != Order.OrderStatus.NO_DRIVER:
             return Response({"detail": "У заказа уже есть водитель"}, status=400)
 
-        driver_id = request.data.get("driver_id")
-        if not driver_id:
-            return Response({"detail": "Введите ID перевозчика (driver_id)"}, status=400)
+        # ---- Валидируем данные ----
+        ser = InviteByIdSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
 
+        driver_id = ser.validated_data["driver_id"]
+
+        # 3. Проверяем перевозчика
         try:
             driver = User.objects.get(id=driver_id, role="CARRIER")
         except User.DoesNotExist:
             return Response({"detail": "Перевозчик с таким ID не найден"}, status=404)
 
-        # 3. Сохраняем приглашённого перевозчика
+        # 4. Записываем приглашённого перевозчика
         order.invited_carrier = driver
         order.save(update_fields=["invited_carrier"])
 

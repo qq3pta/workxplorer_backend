@@ -181,7 +181,10 @@ class OrderListSerializer(serializers.ModelSerializer):
         customer = user_info(obj.customer)
 
         # LOGISTIC — только если created_by.role == LOGISTIC
-        logistic = user_info(obj.logistic)
+        logistic_user = obj.logistic or (
+            obj.created_by if getattr(obj.created_by, "role", "") == "LOGISTIC" else None
+        )
+        logistic = user_info(logistic_user)
 
         # CARRIER — только когда назначен
         carrier = user_info(obj.carrier)

@@ -7,6 +7,7 @@ from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from django.db import models
 
 from .filters import OrderFilter
 from .models import Order, OrderStatusHistory
@@ -40,7 +41,11 @@ class OrdersViewSet(viewsets.ModelViewSet):
         role = getattr(user, "role", None)
 
         if role == "LOGISTIC":
-            return qs.filter(created_by=user)
+            return qs.filter(
+                models.Q(logistic=user)
+                | models.Q(created_by=user)
+                | models.Q(cargo__created_by=user)
+            )
 
         if role == "CUSTOMER":
             return qs.filter(customer=user)
@@ -56,11 +61,13 @@ class OrdersViewSet(viewsets.ModelViewSet):
         offer = serializer.validated_data.get("offer")
 
         if offer and getattr(user, "role", "").upper() == "CUSTOMER":
+            logistic_user = offer.intermediary or offer.logistic
+
             order = Order.objects.create(
                 cargo=offer.cargo,
                 customer=offer.customer,
-                created_by=offer.customer,
-                logistic=offer.logistic,
+                created_by=logistic_user or offer.customer,
+                logistic=logistic_user,
                 status=Order.OrderStatus.NO_DRIVER,
                 currency=offer.currency,
                 price_total=offer.price,
@@ -74,7 +81,7 @@ class OrdersViewSet(viewsets.ModelViewSet):
             if order.carrier is None:
                 order.status = Order.OrderStatus.NO_DRIVER
             else:
-                order.status = Order.OrderStatus.NEW
+                order.status = Order.OrderStatus.PENDING
             order.save(update_fields=["status"])
 
         return order

@@ -333,28 +333,59 @@ class Offer(models.Model):
                 self._finalize_handshake(cargo_locked=cargo_locked)
 
     def _finalize_handshake(self, *, cargo_locked):
-        if self.accepted_by_customer and self.accepted_by_logistic and not self.accepted_by_carrier:
+        customer = cargo_locked.customer
+        carrier = self.carrier
+        logistic_creator = self.logistic
+        logistic_acceptor = self.intermediary
+
+        # -------------------------------------------
+        # CASE 1: Customer → Carrier
+        # -------------------------------------------
+        if customer and carrier and self.accepted_by_customer and self.accepted_by_carrier:
             cargo_locked.status = CargoStatus.MATCHED
+            cargo_locked.assigned_carrier_id = carrier.id
             cargo_locked.chosen_offer_id = self.id
-            cargo_locked.save(update_fields=["status", "chosen_offer_id"])
+            cargo_locked.save(update_fields=["status", "assigned_carrier_id", "chosen_offer_id"])
 
             Order.objects.create(
                 cargo=cargo_locked,
-                customer=cargo_locked.customer,
-                created_by=self.intermediary or self.logistic,  # кто логист
-                logistic=self.intermediary or self.logistic,
-                carrier=None,
-                status=Order.OrderStatus.NO_DRIVER,
+                customer=customer,
+                carrier=carrier,
+                logistic=None,
+                created_by=customer,
+                status=Order.OrderStatus.PENDING,
                 offer=self,
             )
             return
 
-        # --- CASE 4: Logistic + Logistic (нет перевозчика) ---
+        # -------------------------------------------
+        # CASE 2: Logistic → Carrier
+        # -------------------------------------------
+        if logistic_creator and carrier and self.accepted_by_logistic and self.accepted_by_carrier:
+            cargo_locked.status = CargoStatus.MATCHED
+            cargo_locked.assigned_carrier_id = carrier.id
+            cargo_locked.chosen_offer_id = self.id
+            cargo_locked.save(update_fields=["status", "assigned_carrier_id", "chosen_offer_id"])
+
+            Order.objects.create(
+                cargo=cargo_locked,
+                customer=customer,
+                carrier=carrier,
+                logistic=logistic_creator,
+                created_by=logistic_creator,
+                status=Order.OrderStatus.PENDING,
+                offer=self,
+            )
+            return
+
+        # -------------------------------------------
+        # CASE 3: Customer → Logistic (NO DRIVER)
+        # -------------------------------------------
         if (
-            self.accepted_by_logistic
-            and self.logistic
-            and self.intermediary
-            and not self.accepted_by_carrier
+            customer
+            and logistic_acceptor
+            and self.accepted_by_customer
+            and self.accepted_by_logistic
         ):
             cargo_locked.status = CargoStatus.MATCHED
             cargo_locked.chosen_offer_id = self.id
@@ -362,29 +393,33 @@ class Offer(models.Model):
 
             Order.objects.create(
                 cargo=cargo_locked,
-                customer=None,
-                created_by=self.logistic,
-                logistic=self.intermediary,
+                customer=customer,
                 carrier=None,
+                logistic=logistic_acceptor,
+                created_by=logistic_acceptor,
                 status=Order.OrderStatus.NO_DRIVER,
                 offer=self,
             )
             return
 
-        # --- CASE 1 & CASE 2: Customer + Carrier / Logistic + Carrier ---
-        cargo_locked.status = CargoStatus.MATCHED
-        cargo_locked.assigned_carrier_id = self.carrier_id
-        cargo_locked.chosen_offer_id = self.id
-        cargo_locked.save(update_fields=["status", "assigned_carrier_id", "chosen_offer_id"])
+        # -------------------------------------------
+        # CASE 4: Logistic → Logistic (NO DRIVER)
+        # -------------------------------------------
+        if logistic_creator and logistic_acceptor and self.accepted_by_logistic and not carrier:
+            cargo_locked.status = CargoStatus.MATCHED
+            cargo_locked.chosen_offer_id = self.id
+            cargo_locked.save(update_fields=["status", "chosen_offer_id"])
 
-        Order.objects.create(
-            cargo=cargo_locked,
-            carrier=self.carrier,
-            customer=cargo_locked.customer,
-            offer=self,
-            created_by=self.logistic or cargo_locked.customer,
-            logistic=self.logistic,
-        )
+            Order.objects.create(
+                cargo=cargo_locked,
+                customer=customer,
+                carrier=None,
+                logistic=logistic_acceptor,
+                created_by=logistic_creator,
+                status=Order.OrderStatus.NO_DRIVER,
+                offer=self,
+            )
+            return
 
     def reject_by(self, user) -> None:
         if user.id not in (self.cargo.customer_id, self.carrier_id) and user.role != "LOGISTIC":

@@ -336,6 +336,17 @@ class Offer(models.Model):
 
             self.send_accept_notifications(user)
 
+            print(
+                f"ОТЛАДКА: Оффер {self.id} принят пользователем с ролью {user.role}, ID: {user.id}"
+            )
+            print(f"ОТЛАДКА: Результат is_handshake: {self.is_handshake}")
+            print(
+                f"ОТЛАДКА: Флаги - заказчик: {self.accepted_by_customer}, логист: {self.accepted_by_logistic}, перевозчик: {self.accepted_by_carrier}"
+            )
+            print(
+                f"ОТЛАДКА: Связанные ID - Логист_1: {self.logistic_id}, Логист_2 (Посредник): {self.intermediary_id}"
+            )
+
             if self.is_handshake:
                 cargo_locked = (
                     Cargo.objects.select_for_update()
@@ -348,6 +359,7 @@ class Offer(models.Model):
                 ):
                     return
 
+                print(f"ОТЛАДКА: *** ВЫЗЫВАЕМ _FINALIZE_HANDSHAKE ***")
                 self._finalize_handshake(cargo_locked=cargo_locked)
 
     def _finalize_handshake(self, *, cargo_locked):
@@ -440,6 +452,11 @@ class Offer(models.Model):
             and logistic
             and not self.accepted_by_carrier
         ):
+            print(f"ОТЛАДКА: !!! ПОПАЛИ В КЕЙС 4 - СОЗДАНИЕ ЗАКАЗА !!!")
+            print(
+                f"ОТЛАДКА: Роль Создателя: {creator.role}, ID Посредника: {intermediary.id}, ID Логиста_1: {logistic.id}"
+            )
+
             cargo_locked.status = CargoStatus.MATCHED
             cargo_locked.chosen_offer_id = self.id
             cargo_locked.save(update_fields=["status", "chosen_offer_id"])
@@ -454,7 +471,9 @@ class Offer(models.Model):
                 status=Order.OrderStatus.NO_DRIVER,
                 driver_status=Order.DriverStatus.STOPPED,
             )
+            print(f"ОТЛАДКА: ЗАКАЗ УСПЕШНО СОЗДАН (Кейс 4)")
             return
 
         # Если ни один из кейсов не сработал — НИЧЕГО не создаём
+        print(f"ОТЛАДКА: Завершение сделки НЕ УДАЛОСЬ - Ни один кейс не сработал.")
         return

@@ -6,6 +6,7 @@ from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from django.db import models
 
@@ -57,13 +58,13 @@ class OrdersViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         user = self.request.user
-
         offer = serializer.validated_data.get("offer")
 
-        if offer and getattr(user, "role", "").upper() == "CUSTOMER":
+        # CASE 1: Customer manually confirms offer → creates order
+        if offer and user.role == "CUSTOMER":
             logistic_user = offer.intermediary or offer.logistic
 
-            order = Order.objects.create(
+            return Order.objects.create(
                 cargo=offer.cargo,
                 customer=offer.customer,
                 created_by=logistic_user or offer.customer,
@@ -73,18 +74,15 @@ class OrdersViewSet(viewsets.ModelViewSet):
                 price_total=offer.price,
                 route_distance_km=offer.route_distance_km,
             )
-            return order
 
-        order = serializer.save(created_by=user)
+        # CASE 2: Logistic cannot create order manually — only through accepting an offer
+        if user.role == "LOGISTIC":
+            raise ValidationError(
+                "Логисты не создают заказ вручную — заказ создаётся автоматически при принятии оффера."
+            )
 
-        if getattr(user, "role", "").upper() == "LOGISTIC":
-            if order.carrier is None:
-                order.status = Order.OrderStatus.NO_DRIVER
-            else:
-                order.status = Order.OrderStatus.PENDING
-            order.save(update_fields=["status"])
-
-        return order
+        # CASE 3: Carrier cannot create orders manually either
+        raise ValidationError("Создание заказа возможно только через оффер.")
 
     def get_serializer_class(self):
         if self.action == "list":

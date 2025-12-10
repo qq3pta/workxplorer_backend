@@ -125,7 +125,6 @@ class Offer(models.Model):
             and self.intermediary is not None
             and self.logistic_id != self.intermediary_id
             and not self.accepted_by_carrier
-            and self.accepted_by_customer  # <-- ДОБАВИТЬ ЭТО УСЛОВИЕ
             and self.accepted_by_logistic
         ):
             return True
@@ -453,7 +452,7 @@ class Offer(models.Model):
                 created_by=intermediary,
                 offer=self,
                 status=Order.OrderStatus.NO_DRIVER,
-                driver_status=Order.DriverStatus.STOPPED,  # <-- ИСПРАВЛЕНО
+                driver_status=Order.DriverStatus.STOPPED,
             )
             return
 

@@ -307,11 +307,11 @@ class Offer(models.Model):
         # LOGISTIC принимает
         elif user.role == "LOGISTIC":
             # ЛОГИСТ ПРЕДСТАВЛЯЕТ ЗАКАЗЧИКА (customer → logistic)
-            if self.cargo.created_by_id == user.id:
+            if user.id == self.cargo.customer_id:  # <--- ИСПРАВЛЕНИЕ ТУТ
                 if not self.accepted_by_customer:
                     self.accepted_by_customer = True
 
-            # ЛОГИСТ – ПОСРЕДНИК / ВТОРОЙ ЛОГИСТ (logistic → logistic)
+                # ЛОГИСТ – ПОСРЕДНИК / ВТОРОЙ ЛОГИСТ (logistic → logistic)
             else:
                 if not self.accepted_by_logistic:
                     self.accepted_by_logistic = True

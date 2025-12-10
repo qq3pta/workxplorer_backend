@@ -18,14 +18,10 @@ class Offer(models.Model):
     class Initiator(models.TextChoices):
         CUSTOMER = "CUSTOMER", "Заказчик"
         CARRIER = "CARRIER", "Перевозчик"
+        LOGISTIC = "LOGISTIC", "Логист"
 
     cargo = models.ForeignKey(
         Cargo,
-        on_delete=models.CASCADE,
-        related_name="offers",
-    )
-    carrier = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="offers",
     )
@@ -37,6 +33,21 @@ class Offer(models.Model):
         on_delete=models.SET_NULL,
         related_name="logistic_offers",
         limit_choices_to={"role": "LOGISTIC"},
+    )
+
+    intermediary = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="intermediary_offers",
+        limit_choices_to={"role": "LOGISTIC"},
+    )
+
+    carrier = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="offers",
     )
 
     price_value = models.DecimalField(
@@ -54,6 +65,7 @@ class Offer(models.Model):
     message = models.TextField(blank=True)
 
     accepted_by_customer = models.BooleanField(default=False)
+    accepted_by_logistic = models.BooleanField(default=False)
     accepted_by_carrier = models.BooleanField(default=False)
     initiator = models.CharField(
         max_length=16,
@@ -86,8 +98,35 @@ class Offer(models.Model):
         )
 
     @property
-    def is_handshake(self) -> bool:
-        return self.accepted_by_customer and self.accepted_by_carrier
+    def is_handshake(self):
+        # CASE 1 — customer + carrier
+        if self.accepted_by_customer and self.accepted_by_carrier:
+            return True
+
+        # CASE 2 — logistic(creator) + carrier
+        if self.logistic and self.accepted_by_logistic and self.accepted_by_carrier:
+            return True
+
+        # CASE 3 — customer + logistic (NO_DRIVER)
+        if (
+            self.logistic is None
+            and not self.accepted_by_carrier
+            and self.accepted_by_customer
+            and self.accepted_by_logistic
+        ):
+            return True
+
+        # CASE 4 — logistic + logistic (NO_DRIVER)
+        if (
+            self.logistic is not None
+            and self.intermediary is not None
+            and self.logistic_id != self.intermediary_id
+            and not self.accepted_by_carrier
+            and self.accepted_by_logistic
+        ):
+            return True
+
+        return False
 
     def send_create_notifications(self):
         """Вызывается вручную из create() сериализатора."""
@@ -223,14 +262,16 @@ class Offer(models.Model):
             self.message = message
 
         if by_user is not None:
-            self.initiator = (
-                self.Initiator.CUSTOMER
-                if by_user.id == self.cargo.customer_id
-                else self.Initiator.CARRIER
-            )
+            if by_user.role == "LOGISTIC":
+                self.initiator = self.Initiator.LOGISTIC
+            elif by_user.id == self.cargo.customer_id:
+                self.initiator = self.Initiator.CUSTOMER
+            else:
+                self.initiator = self.Initiator.CARRIER
 
         self.accepted_by_customer = False
         self.accepted_by_carrier = False
+        self.accepted_by_logistic = False
 
         self.save(
             update_fields=[
@@ -240,6 +281,7 @@ class Offer(models.Model):
                 "initiator",
                 "accepted_by_customer",
                 "accepted_by_carrier",
+                "accepted_by_logistic",
                 "updated_at",
             ]
         )
@@ -256,11 +298,24 @@ class Offer(models.Model):
         elif user.id == self.carrier_id:
             if not self.accepted_by_carrier:
                 self.accepted_by_carrier = True
+        elif getattr(user, "role", None) == "LOGISTIC":
+            if not self.accepted_by_logistic:
+                self.accepted_by_logistic = True
+                if self.intermediary is None:
+                    self.intermediary = user
         else:
             raise PermissionDenied("Нельзя принять оффер: вы не участник сделки.")
 
         with transaction.atomic():
-            self.save(update_fields=["accepted_by_customer", "accepted_by_carrier", "updated_at"])
+            self.save(
+                update_fields=[
+                    "accepted_by_customer",
+                    "accepted_by_carrier",
+                    "accepted_by_logistic",
+                    "intermediary",
+                    "updated_at",
+                ]
+            )
             self.send_accept_notifications(user)
 
             if self.is_handshake:
@@ -278,10 +333,48 @@ class Offer(models.Model):
                 self._finalize_handshake(cargo_locked=cargo_locked)
 
     def _finalize_handshake(self, *, cargo_locked):
+        if self.accepted_by_customer and self.accepted_by_logistic and not self.accepted_by_carrier:
+            cargo_locked.status = CargoStatus.MATCHED
+            cargo_locked.chosen_offer_id = self.id
+            cargo_locked.save(update_fields=["status", "chosen_offer_id"])
+
+            Order.objects.create(
+                cargo=cargo_locked,
+                customer=cargo_locked.customer,
+                created_by=self.intermediary or self.logistic,  # кто логист
+                logistic=self.intermediary or self.logistic,
+                carrier=None,
+                status=Order.OrderStatus.NO_DRIVER,
+                offer=self,
+            )
+            return
+
+        # --- CASE 4: Logistic + Logistic (нет перевозчика) ---
+        if (
+            self.accepted_by_logistic
+            and self.logistic
+            and self.intermediary
+            and not self.accepted_by_carrier
+        ):
+            cargo_locked.status = CargoStatus.MATCHED
+            cargo_locked.chosen_offer_id = self.id
+            cargo_locked.save(update_fields=["status", "chosen_offer_id"])
+
+            Order.objects.create(
+                cargo=cargo_locked,
+                customer=None,
+                created_by=self.logistic,
+                logistic=self.intermediary,
+                carrier=None,
+                status=Order.OrderStatus.NO_DRIVER,
+                offer=self,
+            )
+            return
+
+        # --- CASE 1 & CASE 2: Customer + Carrier / Logistic + Carrier ---
         cargo_locked.status = CargoStatus.MATCHED
         cargo_locked.assigned_carrier_id = self.carrier_id
         cargo_locked.chosen_offer_id = self.id
-
         cargo_locked.save(update_fields=["status", "assigned_carrier_id", "chosen_offer_id"])
 
         Order.objects.create(
@@ -289,21 +382,15 @@ class Offer(models.Model):
             carrier=self.carrier,
             customer=cargo_locked.customer,
             offer=self,
-            created_by=cargo_locked.customer,
-            logistic=self.logistic
-            or (
-                cargo_locked.created_by
-                if getattr(cargo_locked.created_by, "role", None) == "LOGISTIC"
-                else None
-            ),
+            created_by=self.logistic or cargo_locked.customer,
+            logistic=self.logistic,
         )
 
     def reject_by(self, user) -> None:
-        if user.id not in (self.cargo.customer_id, self.carrier_id):
+        if user.id not in (self.cargo.customer_id, self.carrier_id) and user.role != "LOGISTIC":
             raise PermissionDenied("Нельзя отклонить оффер: вы не участник сделки.")
 
         if self.is_active:
             self.is_active = False
             self.save(update_fields=["is_active", "updated_at"])
-
             self.send_reject_notifications(user)

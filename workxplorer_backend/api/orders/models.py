@@ -44,8 +44,11 @@ class Order(models.Model):
     customer = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
+        null=True,
+        blank=True,
         related_name="orders_as_customer",
     )
+
     carrier = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,

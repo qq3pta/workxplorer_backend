@@ -359,7 +359,7 @@ class Offer(models.Model):
                 ):
                     return
 
-                print(f"ОТЛАДКА: *** ВЫЗЫВАЕМ _FINALIZE_HANDSHAKE ***")
+                print("ОТЛАДКА: *** ВЫЗЫВАЕМ _FINALIZE_HANDSHAKE ***")
                 self._finalize_handshake(cargo_locked=cargo_locked)
 
     def _finalize_handshake(self, *, cargo_locked):
@@ -452,7 +452,7 @@ class Offer(models.Model):
             and logistic
             and not self.accepted_by_carrier
         ):
-            print(f"ОТЛАДКА: !!! ПОПАЛИ В КЕЙС 4 - СОЗДАНИЕ ЗАКАЗА !!!")
+            print("ОТЛАДКА: !!! ПОПАЛИ В КЕЙС 4 - СОЗДАНИЕ ЗАКАЗА !!!")
             print(
                 f"ОТЛАДКА: Роль Создателя: {creator.role}, ID Посредника: {intermediary.id}, ID Логиста_1: {logistic.id}"
             )
@@ -471,9 +471,9 @@ class Offer(models.Model):
                 status=Order.OrderStatus.NO_DRIVER,
                 driver_status=Order.DriverStatus.STOPPED,
             )
-            print(f"ОТЛАДКА: ЗАКАЗ УСПЕШНО СОЗДАН (Кейс 4)")
+            print("ОТЛАДКА: ЗАКАЗ УСПЕШНО СОЗДАН (Кейс 4)")
             return
 
         # Если ни один из кейсов не сработал — НИЧЕГО не создаём
-        print(f"ОТЛАДКА: Завершение сделки НЕ УДАЛОСЬ - Ни один кейс не сработал.")
+        print("ОТЛАДКА: Завершение сделки НЕ УДАЛОСЬ - Ни один кейс не сработал.")
         return

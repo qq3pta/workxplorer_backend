@@ -307,8 +307,16 @@ class Offer(models.Model):
 
         # LOGISTIC принимает
         elif user.role == "LOGISTIC":
-            if not self.accepted_by_logistic:
-                self.accepted_by_logistic = True
+            # ЛОГИСТ ПРЕДСТАВЛЯЕТ ЗАКАЗЧИКА (customer → logistic)
+            if user.id == self.cargo.customer_id:
+                if not self.accepted_by_customer:
+                    self.accepted_by_customer = True
+
+            # ЛОГИСТ – ПОСРЕДНИК / ВТОРОЙ ЛОГИСТ (logistic → logistic)
+            else:
+                if not self.accepted_by_logistic:
+                    self.accepted_by_logistic = True
+
                 if self.intermediary is None:
                     self.intermediary = user
 
@@ -400,7 +408,7 @@ class Offer(models.Model):
         # Создатель — заказчик, принял логист
         if (
             creator.role == "CUSTOMER"
-            and self.accepted_by_logistic
+            and self.accepted_by_customer
             and not self.accepted_by_carrier
         ):
             cargo_locked.status = CargoStatus.MATCHED

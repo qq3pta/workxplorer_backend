@@ -19,6 +19,7 @@ from ..accounts.permissions import (
     IsCustomerOrCarrierOrLogistic,
 )
 from .models import Offer
+from api.orders.models import Order
 from .serializers import (
     OfferAcceptResponseSerializer,
     OfferCounterSerializer,
@@ -346,18 +347,57 @@ class OfferViewSet(ModelViewSet):
     @action(detail=True, methods=["post"])
     def accept(self, request, pk=None):
         offer = self.get_object()
+
         try:
             offer.accept_by(request.user)
         except PermissionDenied as e:
             return Response({"detail": str(e)}, status=status.HTTP_403_FORBIDDEN)
+
+        # --- LOGIC TO CREATE ORDER AUTOMATICALLY ---
+        if offer.accepted_by_customer and offer.accepted_by_carrier and offer.order is None:
+            order = self._create_order_from_offer(offer, request.user)
+            offer.order = order
+            offer.save(update_fields=["order"])
+
         return Response(
             {
                 "detail": "Принято",
                 "accepted_by_customer": offer.accepted_by_customer,
                 "accepted_by_carrier": offer.accepted_by_carrier,
+                "order_id": offer.order.id if offer.order else None,
             },
             status=status.HTTP_200_OK,
         )
+
+    def _create_order_from_offer(self, offer, accepted_by):
+        """
+        Создаёт заказ на основе оффера после взаимного акцепта.
+        """
+        logistic_user = offer.intermediary or offer.logistic
+
+        # Если принял перевозчик — водитель известен
+        if accepted_by.role == "CARRIER":
+            status = Order.OrderStatus.PENDING
+            carrier = accepted_by
+        else:
+            # Логист принял → водитель неизвестен
+            status = Order.OrderStatus.NO_DRIVER
+            carrier = None
+
+        order = Order.objects.create(
+            offer=offer,
+            cargo=offer.cargo,
+            customer=offer.customer,
+            carrier=carrier,
+            logistic=logistic_user,
+            created_by=logistic_user or offer.customer,
+            status=status,
+            currency=offer.currency,
+            price_total=offer.price,
+            route_distance_km=offer.route_distance_km,
+        )
+
+        return order
 
     @extend_schema(
         tags=["offers"],

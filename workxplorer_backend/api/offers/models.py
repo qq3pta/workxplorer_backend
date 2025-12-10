@@ -308,7 +308,7 @@ class Offer(models.Model):
         # LOGISTIC принимает
         elif user.role == "LOGISTIC":
             # ЛОГИСТ ПРЕДСТАВЛЯЕТ ЗАКАЗЧИКА (customer → logistic)
-            if user.id == self.cargo.customer_id:
+            if self.cargo.created_by_id == user.id:
                 if not self.accepted_by_customer:
                     self.accepted_by_customer = True
 
@@ -409,6 +409,7 @@ class Offer(models.Model):
         if (
             creator.role == "CUSTOMER"
             and self.accepted_by_customer
+            and self.accepted_by_logistic
             and not self.accepted_by_carrier
         ):
             cargo_locked.status = CargoStatus.MATCHED

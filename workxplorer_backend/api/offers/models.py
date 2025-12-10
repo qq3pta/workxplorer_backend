@@ -46,8 +46,11 @@ class Offer(models.Model):
 
     carrier = models.ForeignKey(
         settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
         related_name="offers",
+        limit_choices_to={"role": "CARRIER"},
     )
 
     price_value = models.DecimalField(
@@ -333,15 +336,16 @@ class Offer(models.Model):
                 self._finalize_handshake(cargo_locked=cargo_locked)
 
     def _finalize_handshake(self, *, cargo_locked):
+        creator = cargo_locked.created_by
         customer = cargo_locked.customer
+        logistic = self.logistic
+        intermediary = self.intermediary
         carrier = self.carrier
-        logistic_creator = self.logistic
-        logistic_acceptor = self.intermediary
 
-        # -------------------------------------------
-        # CASE 1: Customer → Carrier
-        # -------------------------------------------
-        if customer and carrier and self.accepted_by_customer and self.accepted_by_carrier:
+        # ---------------------------------------------
+        # CASE 1 — CUSTOMER → CARRIER
+        # ---------------------------------------------
+        if creator.role == "CUSTOMER" and self.accepted_by_carrier:
             cargo_locked.status = CargoStatus.MATCHED
             cargo_locked.assigned_carrier_id = carrier.id
             cargo_locked.chosen_offer_id = self.id
@@ -353,15 +357,15 @@ class Offer(models.Model):
                 carrier=carrier,
                 logistic=None,
                 created_by=customer,
-                status=Order.OrderStatus.PENDING,
                 offer=self,
+                status=Order.OrderStatus.PENDING,
             )
             return
 
-        # -------------------------------------------
-        # CASE 2: Logistic → Carrier
-        # -------------------------------------------
-        if logistic_creator and carrier and self.accepted_by_logistic and self.accepted_by_carrier:
+        # ---------------------------------------------
+        # CASE 2 — LOGISTIC → CARRIER
+        # ---------------------------------------------
+        if creator.role == "LOGISTIC" and self.accepted_by_carrier:
             cargo_locked.status = CargoStatus.MATCHED
             cargo_locked.assigned_carrier_id = carrier.id
             cargo_locked.chosen_offer_id = self.id
@@ -371,21 +375,20 @@ class Offer(models.Model):
                 cargo=cargo_locked,
                 customer=customer,
                 carrier=carrier,
-                logistic=logistic_creator,
-                created_by=logistic_creator,
-                status=Order.OrderStatus.PENDING,
+                logistic=logistic,
+                created_by=logistic,
                 offer=self,
+                status=Order.OrderStatus.PENDING,
             )
             return
 
-        # -------------------------------------------
-        # CASE 3: Customer → Logistic (NO DRIVER)
-        # -------------------------------------------
+        # ---------------------------------------------
+        # CASE 3 — CUSTOMER → LOGISTIC
+        # ---------------------------------------------
         if (
-            customer
-            and logistic_acceptor
-            and self.accepted_by_customer
+            creator.role == "CUSTOMER"
             and self.accepted_by_logistic
+            and not self.accepted_by_carrier
         ):
             cargo_locked.status = CargoStatus.MATCHED
             cargo_locked.chosen_offer_id = self.id
@@ -394,18 +397,23 @@ class Offer(models.Model):
             Order.objects.create(
                 cargo=cargo_locked,
                 customer=customer,
+                logistic=logistic,
                 carrier=None,
-                logistic=logistic_acceptor,
-                created_by=logistic_acceptor,
+                created_by=logistic,
                 status=Order.OrderStatus.NO_DRIVER,
                 offer=self,
             )
             return
 
-        # -------------------------------------------
-        # CASE 4: Logistic → Logistic (NO DRIVER)
-        # -------------------------------------------
-        if logistic_creator and logistic_acceptor and self.accepted_by_logistic and not carrier:
+        # ---------------------------------------------
+        # CASE 4 — LOGISTIC → LOGISTIC
+        # ---------------------------------------------
+        if (
+            creator.role == "LOGISTIC"
+            and intermediary
+            and logistic
+            and not self.accepted_by_carrier
+        ):
             cargo_locked.status = CargoStatus.MATCHED
             cargo_locked.chosen_offer_id = self.id
             cargo_locked.save(update_fields=["status", "chosen_offer_id"])
@@ -413,19 +421,10 @@ class Offer(models.Model):
             Order.objects.create(
                 cargo=cargo_locked,
                 customer=customer,
+                logistic=intermediary,
                 carrier=None,
-                logistic=logistic_acceptor,
-                created_by=logistic_creator,
+                created_by=intermediary,
                 status=Order.OrderStatus.NO_DRIVER,
                 offer=self,
             )
             return
-
-    def reject_by(self, user) -> None:
-        if user.id not in (self.cargo.customer_id, self.carrier_id) and user.role != "LOGISTIC":
-            raise PermissionDenied("Нельзя отклонить оффер: вы не участник сделки.")
-
-        if self.is_active:
-            self.is_active = False
-            self.save(update_fields=["is_active", "updated_at"])
-            self.send_reject_notifications(user)

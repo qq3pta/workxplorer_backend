@@ -450,6 +450,8 @@ class Offer(models.Model):
             creator.role == "LOGISTIC"
             and intermediary
             and logistic
+            and self.accepted_by_customer  # Логист1 (Заказчик) принял
+            and self.accepted_by_logistic  # Логист2 (Исполнитель) подтвердил
             and not self.accepted_by_carrier
         ):
             print("ОТЛАДКА: !!! ПОПАЛИ В КЕЙС 4 - СОЗДАНИЕ ЗАКАЗА !!!")

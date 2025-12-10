@@ -353,18 +353,17 @@ class OfferViewSet(ModelViewSet):
         except PermissionDenied as e:
             return Response({"detail": str(e)}, status=status.HTTP_403_FORBIDDEN)
 
-        # --- LOGIC TO CREATE ORDER AUTOMATICALLY ---
-        if offer.accepted_by_customer and offer.accepted_by_carrier and offer.order is None:
-            order = self._create_order_from_offer(offer, request.user)
-            offer.order = order
-            offer.save(update_fields=["order"])
+        # Обновляем offer, чтобы увидеть созданный Order
+        offer.refresh_from_db()
+
+        order = getattr(offer, "order", None)
 
         return Response(
             {
                 "detail": "Принято",
                 "accepted_by_customer": offer.accepted_by_customer,
                 "accepted_by_carrier": offer.accepted_by_carrier,
-                "order_id": offer.order_id,
+                "order_id": order.id if order else None,
             },
             status=status.HTTP_200_OK,
         )

@@ -454,7 +454,7 @@ class Offer(models.Model):
         ):
             print("ОТЛАДКА: !!! ПОПАЛИ В КЕЙС 4 - СОЗДАНИЕ ЗАКАЗА !!!")
             print(
-                f"ОТЛАДКА: Роль Создателя: {creator.role}, ID Посредника: {intermediary.id}, ID Логиста_1: {logistic.id}"
+                f"ОТЛАДКА: Роль Создателя: {creator.role}, ID Посредника: {intermediary.id}, ID Логиста_1: {self.logistic_id}"
             )
 
             cargo_locked.status = CargoStatus.MATCHED

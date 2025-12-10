@@ -336,11 +336,15 @@ class Offer(models.Model):
                 self._finalize_handshake(cargo_locked=cargo_locked)
 
     def _finalize_handshake(self, *, cargo_locked):
-        creator = cargo_locked.created_by
         customer = cargo_locked.customer
         logistic = self.logistic
-        intermediary = self.intermediary
+        intermediary = self.intermediary  # логист 2
         carrier = self.carrier
+
+        creator = getattr(cargo_locked, "created_by", None)
+
+        if creator is None:
+            creator = customer
 
         # ---------------------------------------------
         # CASE 1 — CUSTOMER → CARRIER
@@ -354,8 +358,8 @@ class Offer(models.Model):
             Order.objects.create(
                 cargo=cargo_locked,
                 customer=customer,
-                carrier=carrier,
                 logistic=None,
+                carrier=carrier,
                 created_by=customer,
                 offer=self,
                 status=Order.OrderStatus.PENDING,
@@ -365,6 +369,7 @@ class Offer(models.Model):
         # ---------------------------------------------
         # CASE 2 — LOGISTIC → CARRIER
         # ---------------------------------------------
+        # Создатель заявки — логист, принял перевозчик
         if creator.role == "LOGISTIC" and self.accepted_by_carrier:
             cargo_locked.status = CargoStatus.MATCHED
             cargo_locked.assigned_carrier_id = carrier.id
@@ -374,8 +379,8 @@ class Offer(models.Model):
             Order.objects.create(
                 cargo=cargo_locked,
                 customer=customer,
-                carrier=carrier,
                 logistic=logistic,
+                carrier=carrier,
                 created_by=logistic,
                 offer=self,
                 status=Order.OrderStatus.PENDING,
@@ -385,6 +390,7 @@ class Offer(models.Model):
         # ---------------------------------------------
         # CASE 3 — CUSTOMER → LOGISTIC
         # ---------------------------------------------
+        # Создатель — заказчик, принял логист
         if (
             creator.role == "CUSTOMER"
             and self.accepted_by_logistic
@@ -400,14 +406,15 @@ class Offer(models.Model):
                 logistic=logistic,
                 carrier=None,
                 created_by=logistic,
-                status=Order.OrderStatus.NO_DRIVER,
                 offer=self,
+                status=Order.OrderStatus.NO_DRIVER,
             )
             return
 
         # ---------------------------------------------
         # CASE 4 — LOGISTIC → LOGISTIC
         # ---------------------------------------------
+        # Создатель — логист 1, принял логист 2
         if (
             creator.role == "LOGISTIC"
             and intermediary
@@ -424,7 +431,10 @@ class Offer(models.Model):
                 logistic=intermediary,
                 carrier=None,
                 created_by=intermediary,
-                status=Order.OrderStatus.NO_DRIVER,
                 offer=self,
+                status=Order.OrderStatus.NO_DRIVER,
             )
             return
+
+        # Если ни один из кейсов не сработал — НИЧЕГО не создаём
+        return

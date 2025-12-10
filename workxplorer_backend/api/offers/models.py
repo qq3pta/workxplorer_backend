@@ -121,11 +121,10 @@ class Offer(models.Model):
 
         # CASE 4 — logistic + logistic (NO_DRIVER)
         if (
-            self.logistic is not None
-            and self.intermediary is not None
-            and self.logistic_id != self.intermediary_id
-            and not self.accepted_by_carrier
+            self.intermediary is not None
+            and self.accepted_by_customer
             and self.accepted_by_logistic
+            and not self.accepted_by_carrier
         ):
             return True
 
@@ -449,9 +448,8 @@ class Offer(models.Model):
         if (
             creator.role == "LOGISTIC"
             and intermediary
-            and logistic
-            and self.accepted_by_customer  # Логист1 (Заказчик) принял
-            and self.accepted_by_logistic  # Логист2 (Исполнитель) подтвердил
+            and self.accepted_by_customer
+            and self.accepted_by_logistic
             and not self.accepted_by_carrier
         ):
             print("ОТЛАДКА: !!! ПОПАЛИ В КЕЙС 4 - СОЗДАНИЕ ЗАКАЗА !!!")

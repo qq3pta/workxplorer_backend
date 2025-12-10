@@ -393,6 +393,8 @@ class OfferAcceptResponseSerializer(serializers.Serializer):
     detail = serializers.CharField()
     accepted_by_customer = serializers.BooleanField()
     accepted_by_carrier = serializers.BooleanField()
+    accepted_by_logistic = serializers.BooleanField()
+    order_id = serializers.IntegerField(allow_null=True, required=False)
 
 
 class OfferRejectResponseSerializer(serializers.Serializer):

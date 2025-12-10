@@ -363,6 +363,7 @@ class OfferViewSet(ModelViewSet):
                 "detail": "Принято",
                 "accepted_by_customer": offer.accepted_by_customer,
                 "accepted_by_carrier": offer.accepted_by_carrier,
+                "accepted_by_logistic": offer.accepted_by_logistic,
                 "order_id": order.id if order else None,
             },
             status=status.HTTP_200_OK,

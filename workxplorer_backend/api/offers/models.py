@@ -295,17 +295,23 @@ class Offer(models.Model):
         if not self.is_active:
             raise ValidationError("Нельзя принять неактивный оффер.")
 
-        if user.id == self.cargo.customer_id:
+        # CUSTOMER принимает
+        if user.role == "CUSTOMER" and user.id == self.cargo.customer_id:
             if not self.accepted_by_customer:
                 self.accepted_by_customer = True
-        elif user.id == self.carrier_id:
+
+        # CARRIER принимает
+        elif user.role == "CARRIER" and user.id == self.carrier_id:
             if not self.accepted_by_carrier:
                 self.accepted_by_carrier = True
-        elif getattr(user, "role", None) == "LOGISTIC":
+
+        # LOGISTIC принимает
+        elif user.role == "LOGISTIC":
             if not self.accepted_by_logistic:
                 self.accepted_by_logistic = True
                 if self.intermediary is None:
                     self.intermediary = user
+
         else:
             raise PermissionDenied("Нельзя принять оффер: вы не участник сделки.")
 
@@ -319,6 +325,7 @@ class Offer(models.Model):
                     "updated_at",
                 ]
             )
+
             self.send_accept_notifications(user)
 
             if self.is_handshake:

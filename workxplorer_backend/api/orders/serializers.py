@@ -108,7 +108,6 @@ class OrderListSerializer(serializers.ModelSerializer):
             "id",
             "cargo",
             "cargo_id",
-            # users (STRICTLY SEPARATED)
             "customer",
             "customer_id",
             "customer_company",
@@ -121,21 +120,17 @@ class OrderListSerializer(serializers.ModelSerializer):
             "logistic_company",
             "logistic_name",
             "roles",
-            # status
             "status",
             "driver_status",
-            # pricing
             "currency",
             "currency_display",
             "price_total",
             "route_distance_km",
             "price_per_km",
-            # location
             "origin_city",
             "load_date",
             "destination_city",
             "delivery_date",
-            # misc
             "documents_count",
             "created_at",
         )
@@ -150,7 +145,7 @@ class OrderListSerializer(serializers.ModelSerializer):
         )
 
     # --------------------------
-    # NAME HELPERS
+    # HELPERS
     # --------------------------
 
     def _get_user_company(self, u):
@@ -159,7 +154,14 @@ class OrderListSerializer(serializers.ModelSerializer):
     def _get_user_full_name(self, u):
         if not u:
             return ""
-        return u.get_full_name() or getattr(u, "name", "") or u.username
+        return u.get_full_name() or getattr(u, "name", "") or getattr(u, "username", "")
+
+    # --------------------------
+    # GETTERS
+    # --------------------------
+
+    def get_customer_company(self, obj):
+        return self._get_user_company(obj.customer)
 
     def get_customer_name(self, obj):
         return self._get_user_full_name(obj.customer)
@@ -190,12 +192,10 @@ class OrderListSerializer(serializers.ModelSerializer):
             }
 
         customer = user_info(obj.customer)
-
         logistic_user = obj.logistic or (
             obj.created_by if getattr(obj.created_by, "role", "") == "LOGISTIC" else None
         )
         logistic = user_info(logistic_user)
-
         carrier = user_info(obj.carrier)
 
         return {

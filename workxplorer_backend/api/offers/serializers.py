@@ -158,7 +158,7 @@ class OfferShortSerializer(serializers.ModelSerializer):
 
     carrier_company = serializers.SerializerMethodField()
     carrier_full_name = serializers.SerializerMethodField()
-    carrier_id = serializers.IntegerField(source="carrier_id", read_only=True)
+    carrier_id = serializers.IntegerField(read_only=True)
     carrier_rating = serializers.FloatField(read_only=True)
 
     phone = serializers.SerializerMethodField()

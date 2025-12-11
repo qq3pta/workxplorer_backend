@@ -406,12 +406,12 @@ class Offer(models.Model):
             Order.objects.create(
                 cargo=cargo_locked,
                 customer=customer,
-                logistic=logistic,
+                logistic=creator,
                 carrier=carrier,
-                created_by=logistic,
+                created_by=creator,
                 offer=self,
                 status=Order.OrderStatus.PENDING,
-                driver_status=Order.DriverStatus.STOPPED,  # <-- ИСПРАВЛЕНО
+                driver_status=Order.DriverStatus.STOPPED,
             )
             return
 

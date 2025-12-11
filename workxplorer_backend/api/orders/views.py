@@ -204,18 +204,28 @@ class OrdersViewSet(viewsets.ModelViewSet):
         order.invited_carrier = carrier
         order.save(update_fields=["invited_carrier"])
 
-        Offer.objects.get_or_create(
+        # --- Создаём оффер так, чтобы он сразу появился в incoming у перевозчика ---
+        offer, created = Offer.objects.get_or_create(
             cargo=order.cargo,
             carrier=carrier,
             defaults={
-                "initiator": Offer.Initiator.LOGISTIC,
+                "initiator": Offer.Initiator.CUSTOMER,  # ← теперь перевозчик увидит в incoming
                 "logistic": user,
-                "price_value": order.price_total,
+                "price_value": order.price_total or 0,
                 "price_currency": order.currency,
+                "message": "Приглашение через заказ",
+                "is_active": True,
             },
         )
 
-        return Response({"detail": "Перевозчик приглашён и оффер создан"}, status=200)
+        # Если нужно уведомление
+        if created:
+            offer.send_create_notifications()
+
+        return Response(
+            {"detail": "Перевозчик приглашён и оффер создан", "offer_id": offer.id},
+            status=200,
+        )
 
     @action(detail=True, methods=["post"], url_path="generate-invite")
     def generate_invite(self, request, pk=None):

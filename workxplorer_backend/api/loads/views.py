@@ -600,6 +600,6 @@ class CargoInviteOpenView(generics.GenericAPIView):
                 "invited_by_id": invited_by.id if invited_by else None,
                 "offer_id": offer.id,
                 "expires_at": invite.expires_at,
-                "cargo": CargoListSerializer(cargo).data,
+                "cargo": CargoListSerializer(cargo, context={"request": request}).data,
             }
         )

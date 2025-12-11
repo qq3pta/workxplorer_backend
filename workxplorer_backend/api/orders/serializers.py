@@ -191,11 +191,30 @@ class OrderListSerializer(serializers.ModelSerializer):
                 "role": getattr(u, "role", None),
             }
 
+        # CUSTOMER всегда выводим как есть
         customer = user_info(obj.customer)
-        logistic_user = obj.logistic or (
-            obj.created_by if getattr(obj.created_by, "role", "") == "LOGISTIC" else None
-        )
+
+        # ---------------------------
+        # LOGISTIC — только если он НЕ равен заказчику
+        # ---------------------------
+
+        logistic_user = None
+
+        # Если в заказе указан логист, но это НЕ заказчик
+        if obj.logistic_id and obj.logistic_id != obj.customer_id:
+            logistic_user = obj.logistic
+
+        # Если created_by является ЛОГИСТОМ, но это НЕ заказчик
+        elif (
+            obj.created_by_id
+            and obj.created_by_id != obj.customer_id
+            and getattr(obj.created_by, "role", "") == "LOGISTIC"
+        ):
+            logistic_user = obj.created_by
+
         logistic = user_info(logistic_user)
+
+        # Перевозчик
         carrier = user_info(obj.carrier)
 
         return {

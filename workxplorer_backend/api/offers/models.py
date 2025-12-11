@@ -363,8 +363,7 @@ class Offer(models.Model):
 
     def _finalize_handshake(self, *, cargo_locked):
         customer = cargo_locked.customer
-        logistic = self.logistic
-        intermediary = self.intermediary  # логист 2
+        intermediary = self.intermediary
         carrier = self.carrier
 
         creator = getattr(cargo_locked, "created_by", None)

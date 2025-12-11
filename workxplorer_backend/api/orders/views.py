@@ -12,6 +12,7 @@ from django.db import models
 
 from .filters import OrderFilter
 from .models import Order, OrderStatusHistory
+from api.offers.models import Offer
 from .permissions import IsOrderParticipant
 from .serializers import (
     OrderDetailSerializer,
@@ -200,10 +201,22 @@ class OrdersViewSet(viewsets.ModelViewSet):
         except User.DoesNotExist:
             return Response({"detail": "Перевозчик с таким ID не найден"}, status=404)
 
+        # Присваиваем invited_carrier
         order.invited_carrier = driver
         order.save(update_fields=["invited_carrier"])
 
-        return Response({"detail": "Перевозчик приглашён"}, status=200)
+        # --- Новое: создаём оффер для отображения в /offers/incoming ---
+        Offer.objects.create(
+            cargo=order.cargo,
+            customer=order.customer,
+            carrier=driver,
+            source_status="Предложение от посредника",
+            price=order.price_total,
+            route_distance_km=order.route_distance_km,
+            order=order,
+        )
+
+        return Response({"detail": "Перевозчик приглашён и оффер создан"}, status=200)
 
     @action(detail=True, methods=["post"], url_path="generate-invite")
     def generate_invite(self, request, pk=None):
@@ -216,14 +229,15 @@ class OrdersViewSet(viewsets.ModelViewSet):
         if order.status != Order.OrderStatus.NO_DRIVER:
             return Response({"detail": "У заказа уже есть водитель"}, status=400)
 
-        # создать токен
+        # генерируем токен
         token = uuid.uuid4()
+
+        # сохраняем токен в заказе (опционально)
         order.invite_token = token
         order.save(update_fields=["invite_token"])
 
-        invite_url = f"https://moshin.uz/invite-order/{token}"
-
-        return Response({"invite_url": invite_url}, status=200)
+        # возвращаем только токен, фронт сам соберет URL
+        return Response({"invite_token": str(token)}, status=200)
 
     @action(detail=False, methods=["post"], url_path="accept-invite")
     def accept_invite(self, request):

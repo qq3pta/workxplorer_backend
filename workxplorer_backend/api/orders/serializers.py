@@ -81,11 +81,19 @@ class OrderListSerializer(serializers.ModelSerializer):
     currency = serializers.ChoiceField(choices=_currency_choices())
     currency_display = serializers.CharField(source="get_currency_display", read_only=True)
 
+    customer_company = serializers.SerializerMethodField()
     customer_name = serializers.SerializerMethodField()
-    carrier_name = serializers.SerializerMethodField()
-    logistic_name = serializers.SerializerMethodField()
+    customer_id = serializers.IntegerField(source="customer.id", read_only=True)
 
-    roles = serializers.SerializerMethodField()  # <---- Новый корректный блок
+    carrier_company = serializers.SerializerMethodField()
+    carrier_name = serializers.SerializerMethodField()
+    carrier_id = serializers.IntegerField(source="carrier.id", read_only=True)
+
+    logistic_company = serializers.SerializerMethodField()
+    logistic_name = serializers.SerializerMethodField()
+    logistic_id = serializers.IntegerField(source="logistic.id", read_only=True)
+
+    roles = serializers.SerializerMethodField()
 
     origin_city = serializers.CharField(source="cargo.origin_city", read_only=True)
     destination_city = serializers.CharField(source="cargo.destination_city", read_only=True)
@@ -100,11 +108,17 @@ class OrderListSerializer(serializers.ModelSerializer):
             "id",
             "cargo",
             "cargo_id",
-            # users
+            # users (STRICTLY SEPARATED)
             "customer",
+            "customer_id",
+            "customer_company",
             "customer_name",
             "carrier",
+            "carrier_id",
+            "carrier_company",
             "carrier_name",
+            "logistic_id",
+            "logistic_company",
             "logistic_name",
             "roles",
             # status
@@ -139,30 +153,28 @@ class OrderListSerializer(serializers.ModelSerializer):
     # NAME HELPERS
     # --------------------------
 
-    def _user_display_name(self, u):
+    def _get_user_company(self, u):
+        return getattr(u, "company_name", "") if u else ""
+
+    def _get_user_full_name(self, u):
         if not u:
             return ""
-        return (
-            getattr(u, "company_name", None)
-            or getattr(u, "company", None)
-            or getattr(u, "name", None)
-            or getattr(u, "username", "")
-        )
+        return u.get_full_name() or getattr(u, "name", "") or u.username
 
     def get_customer_name(self, obj):
-        return self._user_display_name(obj.customer)
+        return self._get_user_full_name(obj.customer)
+
+    def get_carrier_company(self, obj):
+        return self._get_user_company(obj.carrier)
 
     def get_carrier_name(self, obj):
-        return self._user_display_name(obj.carrier)
+        return self._get_user_full_name(obj.carrier)
+
+    def get_logistic_company(self, obj):
+        return self._get_user_company(obj.logistic)
 
     def get_logistic_name(self, obj):
-        if obj.logistic:
-            return self._user_display_name(obj.logistic)
-        return ""
-
-    # --------------------------
-    # ROLES BLOCK FOR FRONT
-    # --------------------------
+        return self._get_user_full_name(obj.logistic)
 
     def get_roles(self, obj):
         def user_info(u):
@@ -170,23 +182,20 @@ class OrderListSerializer(serializers.ModelSerializer):
                 return None
             return {
                 "id": u.id,
-                "name": getattr(u, "company_name", None) or getattr(u, "name", None) or u.username,
+                "name": self._get_user_full_name(u),
+                "company": self._get_user_company(u),
                 "login": u.username,
                 "phone": getattr(u, "phone", None),
-                "company": getattr(u, "company_name", None) or getattr(u, "company", None),
                 "role": getattr(u, "role", None),
             }
 
-        # CUSTOMER — всегда
         customer = user_info(obj.customer)
 
-        # LOGISTIC — только если created_by.role == LOGISTIC
         logistic_user = obj.logistic or (
             obj.created_by if getattr(obj.created_by, "role", "") == "LOGISTIC" else None
         )
         logistic = user_info(logistic_user)
 
-        # CARRIER — только когда назначен
         carrier = user_info(obj.carrier)
 
         return {

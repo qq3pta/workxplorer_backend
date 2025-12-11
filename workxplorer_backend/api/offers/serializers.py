@@ -137,7 +137,10 @@ class OfferShortSerializer(serializers.ModelSerializer):
 
     cargo_uuid = serializers.UUIDField(source="cargo.uuid", read_only=True)
     cargo_title = serializers.CharField(source="cargo.product", read_only=True)
-    company_name = serializers.CharField(source="cargo.customer.company_name", read_only=True)
+
+    customer_company = serializers.SerializerMethodField()
+    customer_full_name = serializers.SerializerMethodField()
+    customer_id = serializers.IntegerField(source="cargo.customer.id", read_only=True)
 
     origin_city = serializers.CharField(source="cargo.origin_city", read_only=True)
     origin_country = serializers.CharField(source="cargo.origin_country", read_only=True)
@@ -153,13 +156,17 @@ class OfferShortSerializer(serializers.ModelSerializer):
     transport_type_display = serializers.SerializerMethodField()
     weight_t = serializers.SerializerMethodField()
 
-    carrier_name = serializers.SerializerMethodField()
+    carrier_company = serializers.SerializerMethodField()
+    carrier_full_name = serializers.SerializerMethodField()
+    carrier_id = serializers.IntegerField(source="carrier_id", read_only=True)
     carrier_rating = serializers.FloatField(read_only=True)
+
     phone = serializers.SerializerMethodField()
     email = serializers.SerializerMethodField()
     route_km = serializers.SerializerMethodField()
     payment_method = serializers.SerializerMethodField()
     source_status = serializers.SerializerMethodField()
+    price_per_km = serializers.SerializerMethodField()
 
     status_display = serializers.SerializerMethodField()
     is_handshake = serializers.SerializerMethodField()
@@ -171,7 +178,9 @@ class OfferShortSerializer(serializers.ModelSerializer):
             "cargo",
             "cargo_uuid",
             "cargo_title",
-            "company_name",
+            "customer_company",
+            "customer_id",
+            "customer_full_name",
             "origin_city",
             "origin_country",
             "load_date",
@@ -181,7 +190,9 @@ class OfferShortSerializer(serializers.ModelSerializer):
             "transport_type",
             "transport_type_display",
             "weight_t",
-            "carrier_name",
+            "carrier_company",
+            "carrier_full_name",
+            "carrier_id",
             "carrier_rating",
             "phone",
             "email",
@@ -189,8 +200,10 @@ class OfferShortSerializer(serializers.ModelSerializer):
             "price_value",
             "price_currency",
             "payment_method",
+            "price_per_km",
             "accepted_by_customer",
             "accepted_by_carrier",
+            "accepted_by_logistic",
             "is_active",
             "status_display",
             "is_handshake",
@@ -202,6 +215,34 @@ class OfferShortSerializer(serializers.ModelSerializer):
 
     # ----- helpers -----
 
+    def _get_user_full_name(self, user) -> str:
+        """Вспомогательный метод для получения полного имени (ФИО)."""
+        if not user:
+            return ""
+        return user.get_full_name() or getattr(user, "name", None) or ""
+
+    def get_customer_company(self, obj: Offer) -> str:
+        """Название компании заказчика (строго только компания)."""
+        u = obj.cargo.customer
+        if not u:
+            return ""
+        return getattr(u, "company_name", "")
+
+    def get_customer_full_name(self, obj: Offer) -> str:
+        """Полное имя заказчика (строго ФИО)."""
+        return self._get_user_full_name(obj.cargo.customer)
+
+    def get_carrier_company(self, obj: Offer) -> str:
+        """Название компании перевозчика (строго только компания)."""
+        u = obj.carrier
+        if not u:
+            return ""
+        return getattr(u, "company_name", "")
+
+    def get_carrier_full_name(self, obj: Offer) -> str:
+        """Полное имя перевозчика (строго ФИО)."""
+        return self._get_user_full_name(obj.carrier)
+
     def get_transport_type_display(self, obj: Offer) -> str:
         """
         Для колонки «Тип» в макете (Т, Р, М, С, П...).
@@ -209,9 +250,8 @@ class OfferShortSerializer(serializers.ModelSerializer):
         """
         cargo = obj.cargo
         if hasattr(cargo, "get_transport_type_display"):
-            label = cargo.get_transport_type_display()  # напр. "Тент"
+            label = cargo.get_transport_type_display()
             return label[:1] if label else ""
-        # fallback: просто первая буква кода
         return (cargo.transport_type or "")[:1]
 
     def get_weight_t(self, obj: Offer) -> float | None:
@@ -225,20 +265,6 @@ class OfferShortSerializer(serializers.ModelSerializer):
             return round(float(cargo.weight_kg) / 1000.0, 1)
         except Exception:
             return None
-
-    def get_carrier_name(self, obj: Offer) -> str:
-        """
-        Название перевозчика для колонки «Перевозчик».
-        """
-        u = obj.carrier
-        if not u:
-            return ""
-        return (
-            getattr(u, "company_name", None)
-            or getattr(u, "company", None)
-            or getattr(u, "name", None)
-            or getattr(u, "username", "")
-        )
 
     def get_phone(self, obj: Offer) -> str:
         """
@@ -263,7 +289,6 @@ class OfferShortSerializer(serializers.ModelSerializer):
     def get_route_km(self, obj):
         cargo = obj.cargo
 
-        # 1) Используем route_km, который вычисляется в Cargo queryset
         val = getattr(cargo, "route_km", None)
         if val is not None:
             try:
@@ -271,7 +296,6 @@ class OfferShortSerializer(serializers.ModelSerializer):
             except Exception:
                 pass
 
-        # 2) fallback: route_km_cached (если сохранён в Cargo)
         val = getattr(cargo, "route_km_cached", None)
         if val is not None:
             try:
@@ -279,7 +303,6 @@ class OfferShortSerializer(serializers.ModelSerializer):
             except Exception:
                 pass
 
-        # 3) fallback: path_km (если аннотирован в Cargo queryset)
         val = getattr(cargo, "path_km", None)
         if val is not None:
             try:
@@ -361,20 +384,35 @@ class OfferShortSerializer(serializers.ModelSerializer):
 
         return "Ожидает ответа"
 
+    def get_price_per_km(self, obj) -> Decimal | None:
+        """
+        Рассчитывает цену за километр, используя цену оффера и расстояние груза.
+        """
+        price = obj.price_value
+        dist = self.get_route_km(obj)
 
-class OfferDetailSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Offer
-        fields = "__all__"
-        read_only_fields = (
-            "carrier",
-            "initiator",
-            "accepted_by_customer",
-            "accepted_by_carrier",
-            "is_active",
-            "created_at",
-            "updated_at",
-        )
+        if not price or not dist or float(dist) == 0:
+            return None
+
+        try:
+            from decimal import ROUND_HALF_UP
+
+            return (Decimal(str(price)) / Decimal(str(dist))).quantize(
+                Decimal("0.01"), rounding=ROUND_HALF_UP
+            )
+        except Exception:
+            return None
+
+
+class OfferDetailSerializer(OfferShortSerializer):
+    """
+    Детальная карточка оффера. Наследует все поля из OfferShortSerializer
+    и добавляет служебные поля вроде `updated_at`.
+    """
+
+    class Meta(OfferShortSerializer.Meta):
+        fields = OfferShortSerializer.Meta.fields + ("updated_at",)
+        read_only_fields = fields
 
 
 class OfferCounterSerializer(serializers.Serializer):

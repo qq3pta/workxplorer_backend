@@ -54,6 +54,10 @@ class RatingUserListSerializer(serializers.ModelSerializer):
 
     display_name = serializers.SerializerMethodField()
 
+    phone = serializers.CharField(read_only=True)
+    email = serializers.EmailField(read_only=True)
+    city = serializers.CharField(source="profile_city", read_only=True)
+
     avg_rating = serializers.FloatField(source="avg_rating_value", read_only=True)
     rating_count = serializers.IntegerField(source="rating_count_value", read_only=True)
     completed_orders = serializers.IntegerField(source="completed_orders_value", read_only=True)
@@ -63,6 +67,8 @@ class RatingUserListSerializer(serializers.ModelSerializer):
 
     total_distance = serializers.SerializerMethodField()
 
+    orders_stats = serializers.SerializerMethodField()
+
     class Meta:
         model = User
         fields = (
@@ -70,19 +76,54 @@ class RatingUserListSerializer(serializers.ModelSerializer):
             "role",
             "company_name",
             "display_name",
+            "phone",
+            "email",
+            "city",
             "country",
             "avg_rating",
             "rating_count",
             "completed_orders",
             "total_distance",
             "registered_at",
+            "orders_stats",
         )
         read_only_fields = fields
 
+    # -----------------------
+    # ФИО вместо company_name
+    # -----------------------
     def get_display_name(self, obj) -> str:
-        return obj.company_name or obj.username or obj.email
+        full_name = obj.get_full_name() or getattr(obj, "name", "")
+        if full_name:
+            return full_name
+        return obj.username or obj.email
 
-    def get_total_distance(self, obj) -> int | None:
+    # -----------------------
+    # KM суммарно для перевозчика
+    # -----------------------
+    def get_total_distance(self, obj):
         if getattr(obj, "role", None) != "CARRIER":
             return None
         return int(getattr(obj, "total_distance_value", 0) or 0)
+
+    # -----------------------
+    # Piechart statistics
+    # -----------------------
+    def get_orders_stats(self, obj):
+        """
+        Возвращает структуру вида:
+        {
+            "total": int,
+            "completed": int,
+            "in_progress": int,
+            "queued": int,
+            "excellent": int
+        }
+        """
+        return {
+            "total": int(getattr(obj, "orders_total_value", 0)),
+            "completed": int(getattr(obj, "orders_completed_value", 0)),
+            "in_progress": int(getattr(obj, "orders_in_progress_value", 0)),
+            "queued": int(getattr(obj, "orders_queued_value", 0)),
+            "excellent": int(getattr(obj, "orders_excellent_value", 0)),
+        }

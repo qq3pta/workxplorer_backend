@@ -1,7 +1,8 @@
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
-from django.db.models import Avg, Q, F
+from django.db.models import Avg, Q, F, FloatField
 from django.contrib.gis.db.models.functions import Distance
+from django.db.models.functions import Coalesce
 from drf_spectacular.utils import (
     OpenApiParameter,
     OpenApiResponse,
@@ -218,12 +219,20 @@ class OfferViewSet(ModelViewSet):
         Offer.objects.select_related("cargo", "carrier")
         .annotate(
             carrier_rating=Avg("carrier__ratings_received__score"),
-            route_m=Distance(
+            # 1. Сначала вычисляем дистанцию по прямой (path_km) для fallback
+            path_m_anno=Distance(
                 F("cargo__origin_point"),
                 F("cargo__dest_point"),
             ),
         )
-        .annotate(route_km=F("route_m") / 1000.0)
+        .annotate(
+            path_km_anno=F("path_m_anno") / 1000.0,
+            # 2. Вычисляем окончательное расстояние route_km:
+            # Приоритет: cargo__route_km_cached, иначе path_km_anno
+            route_km=Coalesce(
+                F("cargo__route_km_cached"), F("path_km_anno"), output_field=FloatField()
+            ),
+        )
     )
     permission_classes = [IsAuthenticatedAndVerified]
     serializer_class = OfferDetailSerializer

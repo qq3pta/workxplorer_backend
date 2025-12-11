@@ -323,10 +323,19 @@ class OfferViewSet(ModelViewSet):
     @action(detail=False, methods=["get"])
     def incoming(self, request):
         u = request.user
+        qs = self.get_queryset()
+
         if getattr(u, "is_carrier", False) or getattr(u, "role", None) == "CARRIER":
-            qs = self.get_queryset().filter(carrier=u, initiator=Offer.Initiator.CUSTOMER)
+            # Показываем все активные инвайты для перевозчика
+            qs = qs.filter(
+                carrier=u,
+                is_active=True,
+                initiator__in=[Offer.Initiator.CUSTOMER, Offer.Initiator.LOGISTIC],
+            )
         else:
-            qs = self.get_queryset().filter(cargo__customer=u)
+            # Для заказчика/логиста — офферы от перевозчиков
+            qs = qs.filter(cargo__customer=u, is_active=True)
+
         qs = _apply_common_filters(qs, request.query_params)
         page = self.paginate_queryset(qs)
         ser = self.get_serializer(page or qs, many=True)

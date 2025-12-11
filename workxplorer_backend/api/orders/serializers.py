@@ -97,6 +97,10 @@ class OrderListSerializer(serializers.ModelSerializer):
 
     origin_city = serializers.CharField(source="cargo.origin_city", read_only=True)
     destination_city = serializers.CharField(source="cargo.destination_city", read_only=True)
+
+    origin_address = serializers.CharField(source="cargo.origin_address", read_only=True)
+    destination_address = serializers.CharField(source="cargo.destination_address", read_only=True)
+
     load_date = serializers.DateField(source="cargo.load_date", read_only=True)
     delivery_date = serializers.DateField(source="cargo.delivery_date", read_only=True)
 
@@ -128,8 +132,10 @@ class OrderListSerializer(serializers.ModelSerializer):
             "route_distance_km",
             "price_per_km",
             "origin_city",
+            "origin_address",
             "load_date",
             "destination_city",
+            "destination_address",
             "delivery_date",
             "documents_count",
             "created_at",

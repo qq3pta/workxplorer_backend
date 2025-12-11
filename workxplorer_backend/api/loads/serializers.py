@@ -404,11 +404,21 @@ class CargoListSerializer(RouteKmMixin, serializers.ModelSerializer):
 
     def get_user_name(self, obj):
         author = self._get_author(obj)
-        return (
-            getattr(author, "company_name", None)
-            or getattr(author, "name", None)
-            or getattr(author, "username", "")
-        )
+
+        # если есть полноценное имя
+        full = getattr(author, "get_full_name", None)
+        if callable(full):
+            name = full()
+            if name:
+                return name
+
+        # имя из поля name
+        name = getattr(author, "name", None)
+        if name:
+            return name
+
+        # username — fallback
+        return getattr(author, "username", "")
 
     def get_user_id(self, obj):
         author = self._get_author(obj)

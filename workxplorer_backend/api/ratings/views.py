@@ -46,17 +46,14 @@ class RatingUserViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         qs = super().get_queryset()
 
-        # Фильтр по роли
         role = self.request.query_params.get("role")
         if role in {"LOGISTIC", "CUSTOMER", "CARRIER"}:
             qs = qs.filter(role=role)
 
-        # Фильтр по стране (через Profile)
         country = self.request.query_params.get("country")
         if country:
             qs = qs.filter(profile__country__iexact=country)
 
-        # Поиск
         search = self.request.query_params.get("search")
         if search:
             qs = qs.filter(
@@ -68,18 +65,10 @@ class RatingUserViewSet(viewsets.ReadOnlyModelViewSet):
         qs = qs.annotate(
             avg_rating_value=Avg("ratings_received__score"),
             rating_count_value=Count("ratings_received", distinct=True),
-        )
-
-        # -----------------------------
-        # Статистика заказов (pie chart)
-        # -----------------------------
-        qs = qs.annotate(
-            # Всего заказов
             orders_total_value=(
                 Count("orders_as_carrier", distinct=True)
                 + Count("orders_as_customer", distinct=True)
             ),
-            # Завершённые ("delivered")
             orders_completed_value=(
                 Count(
                     "orders_as_carrier",
@@ -92,7 +81,6 @@ class RatingUserViewSet(viewsets.ReadOnlyModelViewSet):
                     distinct=True,
                 )
             ),
-            # В процессе ("in_process")
             orders_in_progress_value=(
                 Count(
                     "orders_as_carrier",
@@ -105,7 +93,6 @@ class RatingUserViewSet(viewsets.ReadOnlyModelViewSet):
                     distinct=True,
                 )
             ),
-            # В очереди ("pending")
             orders_queued_value=(
                 Count(
                     "orders_as_carrier",
@@ -118,7 +105,6 @@ class RatingUserViewSet(viewsets.ReadOnlyModelViewSet):
                     distinct=True,
                 )
             ),
-            # Отличные (score = 5)
             orders_excellent_value=Count(
                 "ratings_received",
                 filter=Q(ratings_received__score=5),
@@ -126,9 +112,6 @@ class RatingUserViewSet(viewsets.ReadOnlyModelViewSet):
             ),
         )
 
-        # -----------------------------
-        # Только для перевозчиков: дистанция
-        # -----------------------------
         if role == "CARRIER":
             qs = qs.annotate(
                 total_distance_value=Sum(
@@ -136,3 +119,5 @@ class RatingUserViewSet(viewsets.ReadOnlyModelViewSet):
                     filter=Q(orders_as_carrier__status="delivered"),
                 )
             )
+
+        return qs

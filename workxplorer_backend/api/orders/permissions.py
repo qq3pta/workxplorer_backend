@@ -29,7 +29,16 @@ class IsOrderParticipant(BasePermission):
             return True
 
         if role == "LOGISTIC":
-            return obj.created_by_id == u.id
+            return (
+                obj.logistic_id == u.id
+                or obj.created_by_id == u.id
+                or obj.cargo.created_by_id == u.id
+                or (
+                    obj.offer
+                    and (obj.offer.logistic_id == u.id or obj.offer.intermediary_id == u.id)
+                )
+                or obj.customer_id == u.id
+            )
 
         if role == "CUSTOMER":
             return obj.customer_id == u.id

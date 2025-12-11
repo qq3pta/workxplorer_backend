@@ -49,7 +49,6 @@ class OrdersViewSet(viewsets.ModelViewSet):
                 | models.Q(cargo__created_by=user)
                 | models.Q(offer__logistic=user)
                 | models.Q(offer__intermediary=user)
-                | models.Q(intermediary=user)
                 | models.Q(customer=user)
             ).distinct()
 

@@ -114,6 +114,7 @@ class OfferInviteSerializer(serializers.Serializer):
 
     def create(self, validated_data):
         cargo = validated_data["cargo"]
+        carrier = validated_data["carrier"]
 
         logistic_user = None
         if cargo.created_by and getattr(cargo.created_by, "role", None) == "LOGISTIC":
@@ -122,7 +123,11 @@ class OfferInviteSerializer(serializers.Serializer):
         offer = Offer.objects.create(
             initiator=Offer.Initiator.CUSTOMER,
             logistic=logistic_user,
-            **validated_data,
+            carrier=carrier,
+            cargo=cargo,
+            price_value=validated_data.get("price_value"),
+            price_currency=validated_data.get("price_currency", Currency.UZS),
+            message=validated_data.get("message", ""),
         )
 
         offer.send_invite_notifications()

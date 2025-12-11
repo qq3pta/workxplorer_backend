@@ -166,7 +166,7 @@ class OfferShortSerializer(serializers.ModelSerializer):
     carrier_full_name = serializers.SerializerMethodField()
     carrier_id = serializers.IntegerField(read_only=True)
     carrier_rating = serializers.FloatField(read_only=True)
-
+    invite_token = serializers.SerializerMethodField()
     phone = serializers.SerializerMethodField()
     email = serializers.SerializerMethodField()
     route_km = serializers.SerializerMethodField()
@@ -216,6 +216,7 @@ class OfferShortSerializer(serializers.ModelSerializer):
             "source_status",
             "message",
             "created_at",
+            "invite_token",
         )
         read_only_fields = fields
 
@@ -407,6 +408,15 @@ class OfferShortSerializer(serializers.ModelSerializer):
                 Decimal("0.01"), rounding=ROUND_HALF_UP
             )
         except Exception:
+            return None
+
+    def get_invite_token(self, obj):
+        from api.orders.models import Order
+
+        try:
+            order = Order.objects.get(cargo=obj.cargo)
+            return str(order.invite_token) if order.invite_token else None
+        except Order.DoesNotExist:
             return None
 
 

@@ -120,14 +120,15 @@ class OfferInviteSerializer(serializers.Serializer):
         if cargo.created_by and getattr(cargo.created_by, "role", None) == "LOGISTIC":
             logistic_user = cargo.created_by
 
+        # --- Создаём оффер корректно ---
         offer = Offer.objects.create(
-            initiator=Offer.Initiator.CUSTOMER,
-            logistic=logistic_user,
-            carrier=carrier,
             cargo=cargo,
+            carrier=carrier,
             price_value=validated_data.get("price_value"),
             price_currency=validated_data.get("price_currency", Currency.UZS),
             message=validated_data.get("message", ""),
+            initiator=Offer.Initiator.CUSTOMER,
+            logistic=logistic_user,
         )
 
         offer.send_invite_notifications()

@@ -248,6 +248,47 @@ class Offer(models.Model):
             cargo=self.cargo,
         )
 
+    def reject_by(self, user):
+        """
+        Отклонение оффера одной из сторон.
+        """
+        role = getattr(user, "role", None)
+
+        if not self.is_active:
+            raise ValidationError("Оффер уже неактивен.")
+
+        # --- CUSTOMER ---
+        if role == "CUSTOMER" and user.id == self.cargo.customer_id:
+            self.is_active = False
+            self.accepted_by_customer = False
+
+        # --- CARRIER ---
+        elif role == "CARRIER" and user.id == self.carrier_id:
+            self.is_active = False
+            self.accepted_by_carrier = False
+
+        # --- LOGISTIC ---
+        elif role == "LOGISTIC" and (
+            user.id == self.logistic_id or user.id == self.intermediary_id
+        ):
+            self.is_active = False
+            self.accepted_by_logistic = False
+
+        else:
+            raise PermissionDenied("Вы не можете отклонить этот оффер.")
+
+        self.save(
+            update_fields=[
+                "is_active",
+                "accepted_by_customer",
+                "accepted_by_carrier",
+                "accepted_by_logistic",
+                "updated_at",
+            ]
+        )
+
+        self.send_reject_notifications(user)
+
     def make_counter(
         self,
         *,

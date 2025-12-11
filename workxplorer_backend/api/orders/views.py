@@ -205,14 +205,17 @@ class OrdersViewSet(viewsets.ModelViewSet):
             return Response({"detail": "Перевозчик с таким ID не найден"}, status=404)
 
         order.invited_carrier = carrier
-        order.save(update_fields=["invited_carrier"])
 
-        # --- Создаём оффер так, чтобы он сразу появился в incoming у перевозчика ---
+        # Генерируем токен
+        token = uuid.uuid4()
+        order.invite_token = token
+        order.save(update_fields=["invited_carrier", "invite_token"])
+
         offer, created = Offer.objects.get_or_create(
             cargo=order.cargo,
             carrier=carrier,
             defaults={
-                "initiator": Offer.Initiator.CUSTOMER,  # ← теперь перевозчик увидит в incoming
+                "initiator": Offer.Initiator.CUSTOMER,
                 "logistic": user,
                 "price_value": order.price_total or 0,
                 "price_currency": order.currency,
@@ -221,12 +224,15 @@ class OrdersViewSet(viewsets.ModelViewSet):
             },
         )
 
-        # Если нужно уведомление
         if created:
             offer.send_create_notifications()
 
         return Response(
-            {"detail": "Перевозчик приглашён и оффер создан", "offer_id": offer.id},
+            {
+                "detail": "Перевозчик приглашён",
+                "offer_id": offer.id,
+                "invite_token": str(token),
+            },
             status=200,
         )
 

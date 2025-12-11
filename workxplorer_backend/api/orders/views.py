@@ -47,7 +47,9 @@ class OrdersViewSet(viewsets.ModelViewSet):
                 models.Q(logistic=user)
                 | models.Q(created_by=user)
                 | models.Q(cargo__created_by=user)
-            )
+                | models.Q(offer__logistic=user)
+                | models.Q(offer__intermediary=user)
+            ).distinct()
 
         if role == "CUSTOMER":
             return qs.filter(customer=user)

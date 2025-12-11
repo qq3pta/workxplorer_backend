@@ -197,23 +197,22 @@ class OrdersViewSet(viewsets.ModelViewSet):
         driver_id = ser.validated_data["driver_id"]
 
         try:
-            driver = User.objects.get(id=driver_id, role="CARRIER")
+            carrier = User.objects.get(id=driver_id, role="CARRIER")
         except User.DoesNotExist:
             return Response({"detail": "Перевозчик с таким ID не найден"}, status=404)
 
-        # Присваиваем invited_carrier
-        order.invited_carrier = driver
+        order.invited_carrier = carrier
         order.save(update_fields=["invited_carrier"])
 
-        # --- Новое: создаём оффер для отображения в /offers/incoming ---
-        Offer.objects.create(
+        Offer.objects.get_or_create(
             cargo=order.cargo,
-            customer=order.customer,
-            carrier=driver,
-            source_status="Предложение от посредника",
-            price=order.price_total,
-            route_distance_km=order.route_distance_km,
-            order=order,
+            carrier=carrier,
+            defaults={
+                "initiator": Offer.Initiator.LOGISTIC,
+                "logistic": user,
+                "price_value": order.price_total,
+                "price_currency": order.currency,
+            },
         )
 
         return Response({"detail": "Перевозчик приглашён и оффер создан"}, status=200)

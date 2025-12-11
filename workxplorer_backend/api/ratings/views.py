@@ -29,7 +29,7 @@ class UserRatingViewSet(viewsets.ModelViewSet):
         if rated_by:
             qs = qs.filter(rated_by_id=rated_by)
 
-        return qs.filter(Q(order__customer=user) | Q(order__carrier=user))
+        return qs.filter(Q(order__customer=user) | Q(order__carrier=user) | Q(order__logistic=user))
 
     def perform_create(self, serializer):
         serializer.save()

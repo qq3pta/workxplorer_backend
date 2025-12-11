@@ -28,15 +28,29 @@ class UserRatingSerializer(serializers.ModelSerializer):
         order = attrs["order"]
         rated_user = attrs["rated_user"]
 
-        if user not in (order.customer, order.carrier):
-            raise serializers.ValidationError("Вы не участвуете в этом заказе.")
+        # 1. Определяем список всех участников, которым разрешено давать оценку
+        # Используем set() для уникальности, хотя можно и list, но set безопаснее
+        participants = {order.customer, order.carrier, order.logistic}
+        allowed_users = {
+            p for p in participants if p is not None
+        }  # Отфильтровываем None, если логист не назначен
 
+        # 2. Проверка: может ли текущий пользователь давать оценку? (Он должен быть участником)
+        if user not in allowed_users:
+            raise serializers.ValidationError(
+                "Вы не участвуете в этом заказе."
+            )  # ЭТО ИСПРАВЛЯЕТ ВАШУ ОШИБКУ
+
+        # 3. Проверка: нельзя оценить самого себя
         if rated_user == user:
             raise serializers.ValidationError("Нельзя оценить самого себя.")
 
-        if rated_user not in (order.customer, order.carrier):
+        # 4. Проверка: оцениваемый пользователь должен быть участником заказа
+        # (Например, если Посредник оценивает Заказчика, Заказчик должен быть в заказе)
+        if rated_user not in allowed_users:
             raise serializers.ValidationError("Пользователь не участвует в заказе.")
 
+        # 5. Проверка: уникальность оценки
         if UserRating.objects.filter(rated_user=rated_user, order=order).exists():
             raise serializers.ValidationError("Пользователь уже был оценён в этом заказе.")
 

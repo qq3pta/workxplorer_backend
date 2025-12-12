@@ -6,13 +6,14 @@ from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.exceptions import ValidationError
+from drf_spectacular.utils import extend_schema
+
+# from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from django.db import models
 
 from .filters import OrderFilter
 from .models import Order, OrderStatusHistory
-from api.offers.models import Offer
 from .permissions import IsOrderParticipant
 from .serializers import (
     OrderDetailSerializer,
@@ -60,33 +61,33 @@ class OrdersViewSet(viewsets.ModelViewSet):
 
         return qs.none()
 
-    def perform_create(self, serializer):
-        user = self.request.user
-        offer = serializer.validated_data.get("offer")
+    # def perform_create(self, serializer):
+    #    user = self.request.user
+    #    offer = serializer.validated_data.get("offer")
 
-        # CASE 1: Customer manually confirms offer → creates order
-        if offer and user.role == "CUSTOMER":
-            logistic_user = offer.intermediary or offer.logistic
+    # CASE 1: Customer manually confirms offer → creates order
+    #    if offer and user.role == "CUSTOMER":
+    #        logistic_user = offer.intermediary or offer.logistic
 
-            return Order.objects.create(
-                cargo=offer.cargo,
-                customer=offer.customer,
-                created_by=logistic_user or offer.customer,
-                logistic=logistic_user,
-                status=Order.OrderStatus.NO_DRIVER,
-                currency=offer.currency,
-                price_total=offer.price,
-                route_distance_km=offer.route_distance_km,
-            )
+    #        return Order.objects.create(
+    #            cargo=offer.cargo,
+    #            customer=offer.customer,
+    #            created_by=logistic_user or offer.customer,
+    #            logistic=logistic_user,
+    #            status=Order.OrderStatus.NO_DRIVER,
+    #            currency=offer.currency,
+    #            price_total=offer.price,
+    #            route_distance_km=offer.route_distance_km,
+    #        )
 
-        # CASE 2: Logistic cannot create order manually — only through accepting an offer
-        if user.role == "LOGISTIC":
-            raise ValidationError(
-                "Логисты не создают заказ вручную — заказ создаётся автоматически при принятии оффера."
-            )
+    # CASE 2: Logistic cannot create order manually — only through accepting an offer
+    #    if user.role == "LOGISTIC":
+    #        raise ValidationError(
+    #            "Логисты не создают заказ вручную — заказ создаётся автоматически при принятии оффера."
+    #        )
 
-        # CASE 3: Carrier cannot create orders manually either
-        raise ValidationError("Создание заказа возможно только через оффер.")
+    # CASE 3: Carrier cannot create orders manually either
+    #    raise ValidationError("Создание заказа возможно только через оффер.")
 
     def get_serializer_class(self):
         if self.action == "list":
@@ -171,6 +172,40 @@ class OrdersViewSet(viewsets.ModelViewSet):
 
         return Response(ser.data, http_status.HTTP_201_CREATED)
 
+    @extend_schema(
+        tags=["orders"],
+        summary="Подтверждение условий заказа Перевозчиком/Водителем",
+        description="Перевозчик, принявший инвайт, подтверждает условия и переводит заказ в рабочий статус.",
+        # Предполагается, что OrderDetailSerializer существует
+        responses={200: OrderDetailSerializer},
+    )
+    @action(detail=True, methods=["post"], url_path="confirm-terms")
+    def confirm_terms(self, request, pk=None):
+        order = self.get_object()
+        user = request.user
+
+        # 1. Проверка доступа: должен быть назначенным перевозчиком
+        if user.role != "CARRIER" or order.carrier != user:
+            return Response(
+                {"detail": "Только назначенный перевозчик может подтвердить условия."},
+                status=http_status.HTTP_403_FORBIDDEN,
+            )
+
+        # 2. Проверка статуса (должен быть назначен, но не запущен)
+        if order.status != Order.OrderStatus.NO_DRIVER:
+            return Response(
+                {"detail": "Заказ уже в работе или условия были подтверждены ранее."},
+                status=http_status.HTTP_400_BAD_REQUEST,
+            )
+
+        # 3. Установка флага и перевод в рабочий статус
+        order.carrier_accepted_terms = True
+        order.status = Order.OrderStatus.PENDING  # Переводим в рабочий статус
+        order.save(update_fields=["carrier_accepted_terms", "status"])
+
+        serializer = self.get_serializer(order)
+        return Response(serializer.data, status=http_status.HTTP_200_OK)
+
     @action(detail=True, methods=["get"], url_path="status-history")
     def status_history(self, request, pk=None):
         order = self.get_object()
@@ -211,30 +246,30 @@ class OrdersViewSet(viewsets.ModelViewSet):
         order.invite_token = token
         order.save(update_fields=["invited_carrier", "invite_token"])
 
-        offer, created = Offer.objects.get_or_create(
-            cargo=order.cargo,
-            carrier=carrier,
-            defaults={
-                "initiator": Offer.Initiator.CUSTOMER,
-                "logistic": user,
-                "price_value": order.price_total or 0,
-                "price_currency": order.currency,
-                "message": "Приглашение через заказ",
-                "is_active": True,
-            },
-        )
+        # offer, created = Offer.objects.get_or_create(
+        #    cargo=order.cargo,
+        #    carrier=carrier,
+        #    defaults={
+        #        "initiator": Offer.Initiator.CUSTOMER,
+        #        "logistic": user,
+        #        "price_value": order.price_total or 0,
+        #        "price_currency": order.currency,
+        #        "message": "Приглашение через заказ",
+        #        "is_active": True,
+        #    },
+        # )
 
-        if created:
-            offer.send_create_notifications()
+        # if created:
+        #    offer.send_create_notifications()
 
-        return Response(
-            {
-                "detail": "Перевозчик приглашён",
-                "offer_id": offer.id,
-                "invite_token": str(token),
-            },
-            status=200,
-        )
+        # return Response(
+        #    {
+        #        "detail": "Перевозчик приглашён",
+        #        "offer_id": offer.id,
+        #        "invite_token": str(token),
+        #    },
+        #    status=200,
+        # )
 
     @action(detail=True, methods=["post"], url_path="generate-invite")
     def generate_invite(self, request, pk=None):
@@ -273,10 +308,25 @@ class OrdersViewSet(viewsets.ModelViewSet):
         if user.role != "CARRIER":
             return Response({"detail": "Только перевозчики могут принять заказ"}, status=403)
 
-        # назначаем перевозчика
+        # Назначаем перевозчика
         order.carrier = user
-        order.status = Order.OrderStatus.PENDING
-        order.invite_token = None  # токен больше не нужен
-        order.save(update_fields=["carrier", "status", "invite_token"])
+        order.invite_token = None
+        order.save(update_fields=["carrier", "invite_token"])
 
-        return Response({"detail": "Вы назначены перевозчиком заказа", "order_id": order.id})
+        # --- Локальный импорт для устранения циклического импорта ---
+        from api.agreements.models import Agreement
+        from api.offers.models import Offer
+
+        offer = getattr(order, "offer", None)
+        if offer:
+            Agreement.get_or_create_from_offer(offer)
+        # --------------------------------------------------------------
+
+        return Response(
+            {
+                "detail": "Приглашение принято. Пожалуйста, подтвердите условия заказа.",
+                "order_id": order.id,
+                "requires_terms_confirmation": True,
+            },
+            status=200,
+        )

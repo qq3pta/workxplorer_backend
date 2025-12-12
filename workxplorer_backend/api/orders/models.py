@@ -79,6 +79,11 @@ class Order(models.Model):
         "offers.Offer", on_delete=models.SET_NULL, null=True, blank=True, related_name="order"
     )
 
+    carrier_accepted_terms = models.BooleanField(
+        default=False,
+        verbose_name=_("Перевозчик/Водитель принял условия заказа"),
+    )
+
     status = models.CharField(
         max_length=20,
         choices=OrderStatus.choices,

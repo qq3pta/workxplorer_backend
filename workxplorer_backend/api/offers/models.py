@@ -9,9 +9,12 @@ from django.db import models, transaction
 from django.db.models import Q, UniqueConstraint
 
 from api.loads.choices import Currency
-from api.loads.models import Cargo, CargoStatus
+from api.loads.models import Cargo
+
+# from api.loads.models import Cargo, CargoStatus
 from api.orders.models import Order
 from api.notifications.services import notify
+from api.agreements.models import Agreement
 
 
 class Offer(models.Model):
@@ -337,29 +340,21 @@ class Offer(models.Model):
 
         # CUSTOMER принимает
         if user.role == "CUSTOMER" and user.id == self.cargo.customer_id:
-            if not self.accepted_by_customer:
-                self.accepted_by_customer = True
+            self.accepted_by_customer = True
 
         # CARRIER принимает
         elif user.role == "CARRIER" and user.id == self.carrier_id:
-            if not self.accepted_by_carrier:
-                self.accepted_by_carrier = True
+            self.accepted_by_carrier = True
 
         # LOGISTIC принимает
         elif user.role == "LOGISTIC":
-            # ЛОГИСТ ПРЕДСТАВЛЯЕТ ЗАКАЗЧИКА (customer → logistic)
-            if user.id == self.cargo.customer_id:  # <--- ИСПРАВЛЕНИЕ ТУТ
-                if not self.accepted_by_customer:
-                    self.accepted_by_customer = True
-
-                # ЛОГИСТ – ПОСРЕДНИК / ВТОРОЙ ЛОГИСТ (logistic → logistic)
+            if user.id == self.cargo.customer_id:
+                # Логист действует от имени заказчика
+                self.accepted_by_customer = True
             else:
-                if not self.accepted_by_logistic:
-                    self.accepted_by_logistic = True
-
+                self.accepted_by_logistic = True
                 if self.intermediary is None:
                     self.intermediary = user
-
         else:
             raise PermissionDenied("Нельзя принять оффер: вы не участник сделки.")
 
@@ -374,146 +369,184 @@ class Offer(models.Model):
                 ]
             )
 
+            # Отправка уведомлений
             self.send_accept_notifications(user)
 
-            print(
-                f"ОТЛАДКА: Оффер {self.id} принят пользователем с ролью {user.role}, ID: {user.id}"
-            )
-            print(f"ОТЛАДКА: Результат is_handshake: {self.is_handshake}")
-            print(
-                f"ОТЛАДКА: Флаги - заказчик: {self.accepted_by_customer}, логист: {self.accepted_by_logistic}, перевозчик: {self.accepted_by_carrier}"
-            )
-            print(
-                f"ОТЛАДКА: Связанные ID - Логист_1: {self.logistic_id}, Логист_2 (Посредник): {self.intermediary_id}"
-            )
-
+            # Проверка handshake
             if self.is_handshake:
-                cargo_locked = (
-                    Cargo.objects.select_for_update()
-                    .only("id", "status", "assigned_carrier", "chosen_offer")
-                    .get(pk=self.cargo_id)
-                )
+                # Создаём соглашение
+                agreement = Agreement.get_or_create_from_offer(self)
 
-                if cargo_locked.status == CargoStatus.MATCHED and getattr(
-                    cargo_locked, "chosen_offer_id", None
+                # Получаем объекты участников
+                cargo = self.cargo
+                customer = cargo.customer
+                carrier = self.carrier
+                logistic = self.intermediary or self.logistic
+
+                # Проверка статусов и создание ордера
+                if (
+                    agreement.accepted_by_customer
+                    and (agreement.accepted_by_carrier or carrier is None)
+                    and (agreement.accepted_by_logistic or logistic is None)
                 ):
-                    return
+                    # Защита от двойного создания
+                    if cargo.status != "MATCHED" or cargo.chosen_offer_id != self.id:
+                        cargo.status = "MATCHED"
+                        cargo.assigned_carrier = carrier
+                        cargo.chosen_offer = self
+                        cargo.save(update_fields=["status", "assigned_carrier", "chosen_offer"])
 
-                print("ОТЛАДКА: *** ВЫЗЫВАЕМ _FINALIZE_HANDSHAKE ***")
-                self._finalize_handshake(cargo_locked=cargo_locked)
+                        Order.objects.create(
+                            cargo=cargo,
+                            customer=customer,
+                            logistic=logistic,
+                            carrier=carrier,
+                            created_by=logistic or customer,
+                            offer=self,
+                            status=Order.OrderStatus.NO_DRIVER
+                            if carrier is None
+                            else Order.OrderStatus.PENDING,
+                        )
+                        # Деактивируем оффер
+                        self.is_active = False
+                        self.save(update_fields=["is_active"])
 
-    def _finalize_handshake(self, *, cargo_locked):
-        customer = cargo_locked.customer
-        intermediary = self.intermediary
-        carrier = self.carrier
+        print(f"ОТЛАДКА: Оффер {self.id} принят пользователем с ролью {user.role}, ID: {user.id}")
+        print(f"ОТЛАДКА: Результат is_handshake: {self.is_handshake}")
+        print(
+            f"ОТЛАДКА: Флаги - заказчик: {self.accepted_by_customer}, логист: {self.accepted_by_logistic}, перевозчик: {self.accepted_by_carrier}"
+        )
+        print(
+            f"ОТЛАДКА: Связанные ID - Логист_1: {self.logistic_id}, Логист_2 (Посредник): {self.intermediary_id}"
+        )
 
-        creator = getattr(cargo_locked, "created_by", None)
+        # if self.is_handshake:
+        #    cargo_locked = (
+        #        Cargo.objects.select_for_update()
+        #        .only("id", "status", "assigned_carrier", "chosen_offer")
+        #        .get(pk=self.cargo_id)
+        #    )
 
-        if creator is None:
-            creator = customer
+        #    if cargo_locked.status == CargoStatus.MATCHED and getattr(
+        #        cargo_locked, "chosen_offer_id", None
+        #    ):
+        #        return
 
-        # ---------------------------------------------
-        # CASE 1 — CUSTOMER → CARRIER
-        # ---------------------------------------------
-        if creator.role == "CUSTOMER" and self.accepted_by_carrier:
-            cargo_locked.status = CargoStatus.MATCHED
-            cargo_locked.assigned_carrier_id = carrier.id
-            cargo_locked.chosen_offer_id = self.id
-            cargo_locked.save(update_fields=["status", "assigned_carrier_id", "chosen_offer_id"])
+        #    print("ОТЛАДКА: *** ВЫЗЫВАЕМ _FINALIZE_HANDSHAKE ***")
+        #    self._finalize_handshake(cargo_locked=cargo_locked)
 
-            Order.objects.create(
-                cargo=cargo_locked,
-                customer=customer,
-                logistic=None,
-                carrier=carrier,
-                created_by=customer,
-                offer=self,
-                status=Order.OrderStatus.PENDING,
-                driver_status=Order.DriverStatus.STOPPED,  # <-- ИСПРАВЛЕНО
-            )
-            return
+    # def _finalize_handshake(self, *, cargo_locked):
+    #    customer = cargo_locked.customer
+    #    intermediary = self.intermediary
+    #    carrier = self.carrier
 
-        # ---------------------------------------------
-        # CASE 2 — LOGISTIC → CARRIER
-        # ---------------------------------------------
-        # Создатель заявки — логист, принял перевозчик
-        if creator.role == "LOGISTIC" and self.accepted_by_carrier:
-            cargo_locked.status = CargoStatus.MATCHED
-            cargo_locked.assigned_carrier_id = carrier.id
-            cargo_locked.chosen_offer_id = self.id
-            cargo_locked.save(update_fields=["status", "assigned_carrier_id", "chosen_offer_id"])
+    #    creator = getattr(cargo_locked, "created_by", None)
 
-            Order.objects.create(
-                cargo=cargo_locked,
-                customer=customer,
-                logistic=creator,
-                carrier=carrier,
-                created_by=creator,
-                offer=self,
-                status=Order.OrderStatus.PENDING,
-                driver_status=Order.DriverStatus.STOPPED,
-            )
-            return
+    #    if creator is None:
+    #        creator = customer
 
-        # ---------------------------------------------
-        # CASE 3 — CUSTOMER → LOGISTIC
-        # ---------------------------------------------
-        # Создатель — заказчик, принял логист
-        if (
-            creator.role == "CUSTOMER"
-            and self.accepted_by_customer
-            and self.accepted_by_logistic
-            and not self.accepted_by_carrier
-        ):
-            cargo_locked.status = CargoStatus.MATCHED
-            cargo_locked.chosen_offer_id = self.id
-            cargo_locked.save(update_fields=["status", "chosen_offer_id"])
+    # ---------------------------------------------
+    # CASE 1 — CUSTOMER → CARRIER
+    # ---------------------------------------------
+    #    if creator.role == "CUSTOMER" and self.accepted_by_carrier:
+    #        cargo_locked.status = CargoStatus.MATCHED
+    #        cargo_locked.assigned_carrier_id = carrier.id
+    #        cargo_locked.chosen_offer_id = self.id
+    #        cargo_locked.save(update_fields=["status", "assigned_carrier_id", "chosen_offer_id"])
 
-            Order.objects.create(
-                cargo=cargo_locked,
-                customer=customer,
-                logistic=intermediary,  # <-- ИСПРАВЛЕНО: Теперь используется intermediary
-                carrier=None,
-                created_by=intermediary,  # <-- ИСПРАВЛЕНО: Теперь используется intermediary
-                offer=self,
-                status=Order.OrderStatus.NO_DRIVER,
-                driver_status=Order.DriverStatus.STOPPED,  # <-- ИСПРАВЛЕНО
-            )
-            return
+    #        Order.objects.create(
+    #            cargo=cargo_locked,
+    #            customer=customer,
+    #            logistic=None,
+    #            carrier=carrier,
+    #            created_by=customer,
+    #            offer=self,
+    #            status=Order.OrderStatus.PENDING,
+    #            driver_status=Order.DriverStatus.STOPPED,  # <-- ИСПРАВЛЕНО
+    #        )
+    #        return
 
-        # ---------------------------------------------
-        # CASE 4 — LOGISTIC → LOGISTIC
-        # ---------------------------------------------
-        # Создатель — логист 1, принял логист 2
-        if (
-            creator.role == "LOGISTIC"
-            and intermediary
-            and self.accepted_by_customer
-            and self.accepted_by_logistic
-            and not self.accepted_by_carrier
-        ):
-            print("ОТЛАДКА: !!! ПОПАЛИ В КЕЙС 4 - СОЗДАНИЕ ЗАКАЗА !!!")
-            print(
-                f"ОТЛАДКА: Роль Создателя: {creator.role}, ID Посредника: {intermediary.id}, ID Логиста_1: {self.logistic_id}"
-            )
+    # ---------------------------------------------
+    # CASE 2 — LOGISTIC → CARRIER
+    # ---------------------------------------------
+    # Создатель заявки — логист, принял перевозчик
+    #    if creator.role == "LOGISTIC" and self.accepted_by_carrier:
+    #        cargo_locked.status = CargoStatus.MATCHED
+    #        cargo_locked.assigned_carrier_id = carrier.id
+    #        cargo_locked.chosen_offer_id = self.id
+    #        cargo_locked.save(update_fields=["status", "assigned_carrier_id", "chosen_offer_id"])
 
-            cargo_locked.status = CargoStatus.MATCHED
-            cargo_locked.chosen_offer_id = self.id
-            cargo_locked.save(update_fields=["status", "chosen_offer_id"])
+    #        Order.objects.create(
+    #            cargo=cargo_locked,
+    #            customer=customer,
+    #            logistic=creator,
+    #            carrier=carrier,
+    #            created_by=creator,
+    #            offer=self,
+    #            status=Order.OrderStatus.PENDING,
+    #            driver_status=Order.DriverStatus.STOPPED,
+    #        )
+    #        return
 
-            Order.objects.create(
-                cargo=cargo_locked,
-                customer=customer,
-                logistic=intermediary,
-                carrier=None,
-                created_by=intermediary,
-                offer=self,
-                status=Order.OrderStatus.NO_DRIVER,
-                driver_status=Order.DriverStatus.STOPPED,
-            )
-            print("ОТЛАДКА: ЗАКАЗ УСПЕШНО СОЗДАН (Кейс 4)")
-            return
+    # ---------------------------------------------
+    # CASE 3 — CUSTOMER → LOGISTIC
+    # ---------------------------------------------
+    # Создатель — заказчик, принял логист
+    #    if (
+    #        creator.role == "CUSTOMER"
+    #        and self.accepted_by_customer
+    #        and self.accepted_by_logistic
+    #        and not self.accepted_by_carrier
+    #    ):
+    #        cargo_locked.status = CargoStatus.MATCHED
+    #        cargo_locked.chosen_offer_id = self.id
+    #        cargo_locked.save(update_fields=["status", "chosen_offer_id"])
 
-        # Если ни один из кейсов не сработал — НИЧЕГО не создаём
-        print("ОТЛАДКА: Завершение сделки НЕ УДАЛОСЬ - Ни один кейс не сработал.")
-        return
+    #        Order.objects.create(
+    #            cargo=cargo_locked,
+    #            customer=customer,
+    #            logistic=intermediary,  # <-- ИСПРАВЛЕНО: Теперь используется intermediary
+    #            carrier=None,
+    #            created_by=intermediary,  # <-- ИСПРАВЛЕНО: Теперь используется intermediary
+    #            offer=self,
+    #            status=Order.OrderStatus.NO_DRIVER,
+    #            driver_status=Order.DriverStatus.STOPPED,  # <-- ИСПРАВЛЕНО
+    #        )
+    #        return
+
+    # ---------------------------------------------
+    # CASE 4 — LOGISTIC → LOGISTIC
+    # ---------------------------------------------
+    # Создатель — логист 1, принял логист 2
+    #    if (
+    #        creator.role == "LOGISTIC"
+    #        and intermediary
+    #        and self.accepted_by_customer
+    #        and self.accepted_by_logistic
+    #        and not self.accepted_by_carrier
+    #    ):
+    #        print("ОТЛАДКА: !!! ПОПАЛИ В КЕЙС 4 - СОЗДАНИЕ ЗАКАЗА !!!")
+    #        print(
+    #            f"ОТЛАДКА: Роль Создателя: {creator.role}, ID Посредника: {intermediary.id}, ID Логиста_1: {self.logistic_id}"
+    #        )
+
+    #        cargo_locked.status = CargoStatus.MATCHED
+    #        cargo_locked.chosen_offer_id = self.id
+    #        cargo_locked.save(update_fields=["status", "chosen_offer_id"])
+
+    #        Order.objects.create(
+    #            cargo=cargo_locked,
+    #            customer=customer,
+    #            logistic=intermediary,
+    #            carrier=None,
+    #            created_by=intermediary,
+    #            offer=self,
+    #            status=Order.OrderStatus.NO_DRIVER,
+    #            driver_status=Order.DriverStatus.STOPPED,
+    #        )
+    #        print("ОТЛАДКА: ЗАКАЗ УСПЕШНО СОЗДАН (Кейс 4)")
+    #        return
+
+    #    # Если ни один из кейсов не сработал — НИЧЕГО не создаём
+    #    print("ОТЛАДКА: Завершение сделки НЕ УДАЛОСЬ - Ни один кейс не сработал.")
+    #    return

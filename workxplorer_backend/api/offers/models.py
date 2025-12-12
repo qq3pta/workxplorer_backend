@@ -8,13 +8,13 @@ from django.core.validators import MinValueValidator
 from django.db import models, transaction
 from django.db.models import Q, UniqueConstraint
 
+from api.agreements.models import Agreement
 from api.loads.choices import Currency
 from api.loads.models import Cargo
+from api.notifications.services import notify
 
 # from api.loads.models import Cargo, CargoStatus
 from api.orders.models import Order
-from api.notifications.services import notify
-from api.agreements.models import Agreement
 
 
 class Offer(models.Model):

@@ -1,5 +1,6 @@
 from django.urls import path
-from .views import PaymentCreateView, ConfirmByCustomerView, ConfirmByCarrierView
+
+from .views import ConfirmByCarrierView, ConfirmByCustomerView, PaymentCreateView
 
 urlpatterns = [
     path("create/", PaymentCreateView.as_view()),

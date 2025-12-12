@@ -11,7 +11,6 @@ from django.db.models import (
     Func,
     Q,
 )
-
 from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -19,6 +18,9 @@ from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import generics, status
 from rest_framework import serializers as drf_serializers
 from rest_framework.response import Response
+
+from api.loads.models import LoadInvite
+from api.offers.models import Offer
 
 from ..accounts.permissions import (
     IsAuthenticatedAndVerified,
@@ -28,8 +30,6 @@ from ..accounts.permissions import (
 from .choices import ModerationStatus
 from .models import Cargo, CargoStatus
 from .serializers import CargoListSerializer, CargoPublishSerializer
-from api.loads.models import LoadInvite
-from api.offers.models import Offer
 
 INVITE_BASE_URL = "https://logistic-omega-eight.vercel.app/dashboard/desk/invite"
 

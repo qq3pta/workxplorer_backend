@@ -1,15 +1,16 @@
 from django.urls import path
+
 from .views import (
     CargoCancelView,
     CargoDetailView,
+    CargoInviteGenerateView,
+    CargoInviteOpenView,
     CargoRefreshView,
+    CargoVisibilityView,
     MyCargosBoardView,
     MyCargosView,
     PublicLoadsView,
     PublishCargoView,
-    CargoVisibilityView,
-    CargoInviteGenerateView,
-    CargoInviteOpenView,
 )
 
 app_name = "loads"

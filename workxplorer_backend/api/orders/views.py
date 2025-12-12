@@ -1,27 +1,28 @@
 import uuid
+
 from django.contrib.auth import get_user_model
+from django.db import models
 from django_filters.rest_framework import DjangoFilterBackend
+from drf_spectacular.utils import extend_schema
 from rest_framework import status as http_status
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
-from drf_spectacular.utils import extend_schema
 
 # from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
-from django.db import models
 
 from .filters import OrderFilter
 from .models import Order, OrderStatusHistory
 from .permissions import IsOrderParticipant
 from .serializers import (
+    InviteByIdSerializer,
     OrderDetailSerializer,
     OrderDocumentSerializer,
+    OrderDriverStatusUpdateSerializer,
     OrderListSerializer,
     OrderStatusHistorySerializer,
-    OrderDriverStatusUpdateSerializer,
-    InviteByIdSerializer,
 )
 
 User = get_user_model()
@@ -315,7 +316,7 @@ class OrdersViewSet(viewsets.ModelViewSet):
 
         # --- Локальный импорт для устранения циклического импорта ---
         from api.agreements.models import Agreement
-        from api.offers.models import Offer
+        # from api.offers.models import Offer
 
         offer = getattr(order, "offer", None)
         if offer:

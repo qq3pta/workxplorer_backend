@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from datetime import timedelta
 
+from django.core.exceptions import ValidationError
 from django.db import models, transaction
 from django.utils import timezone
-from django.core.exceptions import ValidationError
+
+from api.loads.models import Cargo, CargoStatus
 
 # from api.offers.models import Offer
 from api.orders.models import Order
-from api.loads.models import Cargo, CargoStatus
 
 
 class Agreement(models.Model):
@@ -53,7 +54,7 @@ class Agreement(models.Model):
     # ------------------------------------------------------------------
 
     @classmethod
-    def get_or_create_from_offer(cls, offer_id) -> "Agreement":
+    def get_or_create_from_offer(cls, offer_id) -> Agreement:
         """
         Создаёт соглашение при is_handshake.
         Повторно не создаётся.
@@ -160,7 +161,7 @@ class Agreement(models.Model):
             if cargo.status == CargoStatus.MATCHED and cargo.chosen_offer_id:
                 return
 
-            order = Order.objects.create(
+            Order.objects.create(
                 cargo=cargo,
                 customer=cargo.customer,
                 carrier=offer.carrier,

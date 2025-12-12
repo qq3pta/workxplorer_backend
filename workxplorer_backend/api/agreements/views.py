@@ -4,11 +4,11 @@ from rest_framework.response import Response
 from rest_framework.viewsets import ReadOnlyModelViewSet
 
 from .models import Agreement
-from .serializers import (
-    AgreementListSerializer,
-    AgreementActionSerializer,
-)
 from .permissions import IsAgreementParticipant
+from .serializers import (
+    AgreementActionSerializer,
+    AgreementListSerializer,
+)
 
 
 class AgreementViewSet(ReadOnlyModelViewSet):

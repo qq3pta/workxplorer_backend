@@ -1,7 +1,7 @@
-from firebase_admin import messaging
-from django.core.mail import send_mail
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
+from django.core.mail import send_mail
+from firebase_admin import messaging
 
 from .models import Notification
 

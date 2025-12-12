@@ -2,7 +2,6 @@ from django.contrib.auth import get_user_model
 from django.db.models import Avg, Count, Q, Sum
 from rest_framework import permissions, viewsets
 
-
 from .models import UserRating
 from .serializers import RatingUserListSerializer, UserRatingSerializer
 

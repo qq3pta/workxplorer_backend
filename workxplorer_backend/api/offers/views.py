@@ -1,7 +1,7 @@
+from django.contrib.gis.db.models.functions import Distance
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
-from django.db.models import Avg, Q, F, FloatField
-from django.contrib.gis.db.models.functions import Distance
+from django.db.models import Avg, F, FloatField, Q
 from django.db.models.functions import Coalesce
 from drf_spectacular.utils import (
     OpenApiParameter,
@@ -14,13 +14,14 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
+from api.orders.models import Order
+
 from ..accounts.permissions import (
     IsAuthenticatedAndVerified,
     IsCustomer,
     IsCustomerOrCarrierOrLogistic,
 )
 from .models import Offer
-from api.orders.models import Order
 from .serializers import (
     OfferAcceptResponseSerializer,
     OfferCounterSerializer,

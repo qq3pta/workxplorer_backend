@@ -14,7 +14,7 @@ from api.loads.models import Cargo
 from api.notifications.services import notify
 
 # from api.loads.models import Cargo, CargoStatus
-from api.orders.models import Order
+# from api.orders.models import Order
 
 
 class Offer(models.Model):

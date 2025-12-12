@@ -345,15 +345,14 @@ class Offer(models.Model):
         elif user.role == "CARRIER" and user.id == self.carrier_id:
             self.accepted_by_carrier = True
 
-        # LOGISTIC принимает
+        # LOGISTIC принимает (ВСЕГДА как логист)
         elif user.role == "LOGISTIC":
-            if user.id == self.cargo.customer_id:
-                # Логист действует от имени заказчика
-                self.accepted_by_customer = True
-            else:
-                self.accepted_by_logistic = True
-                if self.intermediary is None:
-                    self.intermediary = user
+            self.accepted_by_logistic = True
+
+            # фиксируем логиста в оффере, если ещё не зафиксирован
+            if self.logistic_id is None and self.intermediary_id is None:
+                self.logistic = user
+
         else:
             raise PermissionDenied("Нельзя принять оффер: вы не участник сделки.")
 

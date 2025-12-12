@@ -374,43 +374,38 @@ class Offer(models.Model):
 
             # Проверка handshake
             if self.is_handshake:
-                # Создаём соглашение
-                agreement = Agreement.get_or_create_from_offer(self)
-
-                # Сразу назначаем всех участников соглашения
-                agreement.customer = self.cargo.customer
-                agreement.carrier = self.carrier
-                agreement.logistic = self.intermediary or self.logistic
-                agreement.save(update_fields=["customer", "carrier", "logistic"])
+                customer = self.cargo.customer
+                carrier = self.carrier
+                logistic = (
+                    self.intermediary or self.logistic
+                )  # <-- обязательно учитываем intermediary
 
                 # Проверка статусов и создание ордера
                 if (
-                    agreement.accepted_by_customer
-                    and (agreement.accepted_by_carrier or self.carrier is None)
-                    and (
-                        agreement.accepted_by_logistic
-                        or (self.intermediary or self.logistic) is None
-                    )
+                    self.accepted_by_customer
+                    and (self.accepted_by_carrier or carrier is None)
+                    and (self.accepted_by_logistic or logistic is None)
                 ):
-                    # Защита от двойного создания
                     if self.cargo.status != "MATCHED" or self.cargo.chosen_offer_id != self.id:
+                        # Создаём заказ
+                        Order.objects.create(
+                            cargo=self.cargo,
+                            customer=customer,
+                            carrier=carrier,
+                            logistic=logistic,
+                            created_by=logistic or customer,
+                            offer=self,
+                            status=Order.OrderStatus.NO_DRIVER
+                            if carrier is None
+                            else Order.OrderStatus.PENDING,
+                        )
+
+                        # Обновляем статус груза и привязку оффера
                         self.cargo.status = "MATCHED"
-                        self.cargo.assigned_carrier = self.carrier
+                        self.cargo.assigned_carrier = carrier
                         self.cargo.chosen_offer = self
                         self.cargo.save(
                             update_fields=["status", "assigned_carrier", "chosen_offer"]
-                        )
-
-                        Order.objects.create(
-                            cargo=self.cargo,
-                            customer=self.cargo.customer,
-                            logistic=self.intermediary or self.logistic,
-                            carrier=self.carrier,
-                            created_by=self.intermediary or self.logistic or self.cargo.customer,
-                            offer=self,
-                            status=Order.OrderStatus.NO_DRIVER
-                            if self.carrier is None
-                            else Order.OrderStatus.PENDING,
                         )
 
                         # Деактивируем оффер

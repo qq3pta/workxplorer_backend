@@ -21,6 +21,10 @@ class IsAgreementParticipant(BasePermission):
             return u.id == offer.carrier_id
 
         if u.role == "LOGISTIC":
-            return u.id in (offer.logistic_id, offer.intermediary_id)
+            return (
+                u.id == offer.logistic_id
+                or u.id == offer.intermediary_id
+                or u.id == offer.cargo.customer_id
+            )
 
         return False

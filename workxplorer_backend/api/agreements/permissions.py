@@ -24,7 +24,7 @@ class IsAgreementParticipant(BasePermission):
             return (
                 u.id == offer.logistic_id
                 or u.id == offer.intermediary_id
-                or u.id == offer.cargo.customer_id
+                or u.id == offer.cargo.created_by_id
             )
 
         return False

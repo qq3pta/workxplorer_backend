@@ -1,3 +1,4 @@
+from django.db import models
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -33,12 +34,28 @@ class AgreementViewSet(ReadOnlyModelViewSet):
         if u.role == "CARRIER":
             return qs.filter(offer__carrier=u)
 
-        if u.role == "LOGISTIC":
-            return (
-                qs.filter(offer__logistic=u)
-                | qs.filter(offer__intermediary=u)
-                | qs.filter(offer__cargo__customer=u)
-            ).distinct()
+        def get_queryset(self):
+            u = self.request.user
+            qs = Agreement.objects.select_related("offer", "offer__cargo")
+
+            # показываем ТОЛЬКО pending
+            qs = qs.filter(status=Agreement.Status.PENDING)
+
+            if u.role == "CUSTOMER":
+                return qs.filter(offer__cargo__customer=u)
+
+            if u.role == "CARRIER":
+                return qs.filter(offer__carrier=u)
+
+            if u.role == "LOGISTIC":
+                return qs.filter(
+                    models.Q(offer__logistic=u)
+                    | models.Q(offer__intermediary=u)
+                    | models.Q(offer__cargo__customer=u)
+                    | models.Q(offer__cargo__created_by=u)
+                ).distinct()
+
+            return qs.none()
 
         return qs.none()
 

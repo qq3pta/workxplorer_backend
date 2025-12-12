@@ -337,21 +337,21 @@ class Offer(models.Model):
         if not self.is_active:
             raise ValidationError("Нельзя принять неактивный оффер.")
 
-        # CUSTOMER принимает
-        if user.role == "CUSTOMER" and user.id == self.cargo.customer_id:
+        cargo = self.cargo
+
+        # 1️⃣ ЗАКАЗЧИК — по контексту, а не по роли
+        if user.id == cargo.customer_id:
             self.accepted_by_customer = True
 
-        # CARRIER принимает
+        # 2️⃣ ПЕРЕВОЗЧИК
         elif user.role == "CARRIER" and user.id == self.carrier_id:
             self.accepted_by_carrier = True
 
-        # LOGISTIC принимает (ВСЕГДА как логист)
+        # 3️⃣ ЛОГИСТ (НЕ заказчик)
         elif user.role == "LOGISTIC":
             self.accepted_by_logistic = True
-
-            # фиксируем логиста в оффере, если ещё не зафиксирован
-            if self.logistic_id is None and self.intermediary_id is None:
-                self.logistic = user
+            if self.intermediary is None:
+                self.intermediary = user
 
         else:
             raise PermissionDenied("Нельзя принять оффер: вы не участник сделки.")

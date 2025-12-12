@@ -5,7 +5,7 @@ from datetime import timedelta
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
 from django.utils import timezone
-
+from django.core.exceptions import PermissionDenied
 from api.loads.models import Cargo, CargoStatus
 
 # from api.offers.models import Offer
@@ -82,33 +82,35 @@ class Agreement(models.Model):
 
     def accept_by(self, user):
         if self.status != self.Status.PENDING:
-            raise ValidationError("Соглашение уже неактивно.")
+            raise ValidationError("Соглашение уже обработано")
 
         offer = self.offer
+        cargo = offer.cargo
 
         # CUSTOMER
-        if user.role == "CUSTOMER" and user.id == offer.cargo.customer_id:
+        if user.role == "CUSTOMER" and cargo.customer_id == user.id:
+            self.accepted_by_customer = True
+
+        # LOGISTIC действует как CUSTOMER
+        elif user.role == "LOGISTIC" and cargo.customer_id == user.id:
             self.accepted_by_customer = True
 
         # CARRIER
-        elif user.role == "CARRIER" and user.id == offer.carrier_id:
+        elif user.role == "CARRIER" and offer.carrier_id == user.id:
             self.accepted_by_carrier = True
 
-        # LOGISTIC
-        elif user.role == "LOGISTIC" and (
-            user.id == offer.logistic_id or user.id == offer.intermediary_id
-        ):
+        # LOGISTIC как посредник
+        elif user.role == "LOGISTIC":
             self.accepted_by_logistic = True
 
         else:
-            raise ValidationError("Вы не участник данного соглашения.")
+            raise PermissionDenied("Вы не участник соглашения")
 
         self.save(
             update_fields=[
                 "accepted_by_customer",
                 "accepted_by_carrier",
                 "accepted_by_logistic",
-                "updated_at",
             ]
         )
 
@@ -142,7 +144,7 @@ class Agreement(models.Model):
 
         offer = self.offer
 
-        logistic_required = bool(offer.logistic or offer.intermediary)
+        logistic_required = bool(offer.intermediary)
 
         if not self.accepted_by_customer:
             return

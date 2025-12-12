@@ -351,11 +351,6 @@ class Offer(models.Model):
             if user.id == self.cargo.customer_id:
                 # Логист действует от имени заказчика
                 self.accepted_by_customer = True
-
-                # ✅ КРИТИЧЕСКИ ВАЖНО
-                if self.logistic is None:
-                    self.logistic = user
-
             else:
                 self.accepted_by_logistic = True
                 if self.intermediary is None:

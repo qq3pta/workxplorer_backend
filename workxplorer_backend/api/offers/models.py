@@ -8,7 +8,7 @@ from django.core.validators import MinValueValidator
 from django.db import models, transaction
 from django.db.models import Q, UniqueConstraint
 
-# from api.agreements.models import Agreement
+from api.agreements.models import Agreement
 from api.loads.choices import Currency
 from api.loads.models import Cargo
 from api.notifications.services import notify
@@ -374,33 +374,20 @@ class Offer(models.Model):
 
             # Проверка handshake
             if self.is_handshake:
+                agreement = Agreement.get_or_create_from_offer(self)
+
                 customer = self.cargo.customer
                 carrier = self.carrier
-                logistic = (
-                    self.intermediary or self.logistic
-                )  # <-- обязательно учитываем intermediary
+                logistic = self.intermediary or self.logistic
 
-                # Проверка статусов и создание ордера
+                # Сохраняем только если все подтвердили
                 if (
                     self.accepted_by_customer
                     and (self.accepted_by_carrier or carrier is None)
                     and (self.accepted_by_logistic or logistic is None)
                 ):
+                    # Защита от двойного создания
                     if self.cargo.status != "MATCHED" or self.cargo.chosen_offer_id != self.id:
-                        # Создаём заказ
-                        Order.objects.create(
-                            cargo=self.cargo,
-                            customer=customer,
-                            carrier=carrier,
-                            logistic=logistic,
-                            created_by=logistic or customer,
-                            offer=self,
-                            status=Order.OrderStatus.NO_DRIVER
-                            if carrier is None
-                            else Order.OrderStatus.PENDING,
-                        )
-
-                        # Обновляем статус груза и привязку оффера
                         self.cargo.status = "MATCHED"
                         self.cargo.assigned_carrier = carrier
                         self.cargo.chosen_offer = self
@@ -408,7 +395,18 @@ class Offer(models.Model):
                             update_fields=["status", "assigned_carrier", "chosen_offer"]
                         )
 
-                        # Деактивируем оффер
+                        Order.objects.create(
+                            cargo=self.cargo,
+                            customer=customer,
+                            logistic=logistic,
+                            carrier=carrier,
+                            created_by=logistic or customer,
+                            offer=self,
+                            status=Order.OrderStatus.NO_DRIVER
+                            if carrier is None
+                            else Order.OrderStatus.PENDING,
+                        )
+
                         self.is_active = False
                         self.save(update_fields=["is_active"])
 

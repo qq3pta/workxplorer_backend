@@ -377,12 +377,7 @@ class Offer(models.Model):
                 # Создаём соглашение, если ещё нет
                 agreement = Agreement.get_or_create_from_offer(self)
 
-                # Назначаем участников
-                agreement_customer = self.cargo.customer
-                agreement_carrier = self.carrier
-                agreement_logistic = self.intermediary or self.logistic
-
-                # Сохраняем участников в agreement
+                # Обновляем участников
                 agreement.accepted_by_customer = self.accepted_by_customer
                 agreement.accepted_by_carrier = self.accepted_by_carrier
                 agreement.accepted_by_logistic = self.accepted_by_logistic
@@ -394,34 +389,8 @@ class Offer(models.Model):
                     ]
                 )
 
-                # Создаём Order только если все участники подтвердили
-                if (
-                    agreement.accepted_by_customer
-                    and (agreement.accepted_by_carrier or agreement_carrier is None)
-                    and (agreement.accepted_by_logistic or agreement_logistic is None)
-                ):
-                    if self.cargo.status != "MATCHED" or self.cargo.chosen_offer_id != self.id:
-                        self.cargo.status = "MATCHED"
-                        self.cargo.assigned_carrier = agreement_carrier
-                        self.cargo.chosen_offer = self
-                        self.cargo.save(
-                            update_fields=["status", "assigned_carrier", "chosen_offer"]
-                        )
-
-                        Order.objects.create(
-                            cargo=self.cargo,
-                            customer=agreement_customer,
-                            logistic=agreement_logistic,
-                            carrier=agreement_carrier,
-                            created_by=agreement_logistic or agreement_customer,
-                            offer=self,
-                            status=Order.OrderStatus.PENDING
-                            if agreement_carrier
-                            else Order.OrderStatus.NO_DRIVER,
-                        )
-
-                        self.is_active = False
-                        self.save(update_fields=["is_active"])
+                # Попытка финализировать соглашение и создать Order
+                agreement.try_finalize()
 
         print(f"ОТЛАДКА: Оффер {self.id} принят пользователем с ролью {user.role}, ID: {user.id}")
         print(f"ОТЛАДКА: Результат is_handshake: {self.is_handshake}")

@@ -372,25 +372,8 @@ class Offer(models.Model):
             # Отправка уведомлений
             self.send_accept_notifications(user)
 
-            # Проверка handshake
             if self.is_handshake:
-                # Создаём соглашение, если ещё нет
-                agreement = Agreement.get_or_create_from_offer(self)
-
-                # Обновляем участников
-                agreement.accepted_by_customer = self.accepted_by_customer
-                agreement.accepted_by_carrier = self.accepted_by_carrier
-                agreement.accepted_by_logistic = self.accepted_by_logistic
-                agreement.save(
-                    update_fields=[
-                        "accepted_by_customer",
-                        "accepted_by_carrier",
-                        "accepted_by_logistic",
-                    ]
-                )
-
-                # Попытка финализировать соглашение и создать Order
-                agreement.try_finalize()
+                Agreement.get_or_create_from_offer(self)
 
         print(f"ОТЛАДКА: Оффер {self.id} принят пользователем с ролью {user.role}, ID: {user.id}")
         print(f"ОТЛАДКА: Результат is_handshake: {self.is_handshake}")

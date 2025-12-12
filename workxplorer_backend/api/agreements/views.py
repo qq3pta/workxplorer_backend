@@ -34,7 +34,11 @@ class AgreementViewSet(ReadOnlyModelViewSet):
             return qs.filter(offer__carrier=u)
 
         if u.role == "LOGISTIC":
-            return qs.filter(offer__logistic=u) | qs.filter(offer__intermediary=u)
+            return (
+                qs.filter(offer__logistic=u)
+                | qs.filter(offer__intermediary=u)
+                | qs.filter(offer__cargo__customer=u)
+            ).distinct()
 
         return qs.none()
 

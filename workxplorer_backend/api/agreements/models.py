@@ -144,13 +144,19 @@ class Agreement(models.Model):
 
         offer = self.offer
 
-        logistic_required = bool(offer.intermediary)
+        kind = offer.offer_kind()
 
-        if not self.accepted_by_customer:
-            return
-        if not self.accepted_by_carrier:
-            return
-        if logistic_required and not self.accepted_by_logistic:
+        # CASE 1 и 2: есть перевозчик
+        if kind in {"CUSTOMER_CARRIER", "LOGISTIC_CARRIER"}:
+            if not (self.accepted_by_customer and self.accepted_by_carrier):
+                return
+
+        # CASE 3 и 4: перевозчика нет
+        elif kind == "CUSTOMER_LOGISTIC":
+            if not (self.accepted_by_customer and self.accepted_by_logistic):
+                return
+
+        else:
             return
 
         with transaction.atomic():
@@ -166,18 +172,22 @@ class Agreement(models.Model):
             Order.objects.create(
                 cargo=cargo,
                 customer=cargo.customer,
-                carrier=offer.carrier,
+                carrier=offer.carrier if kind != "CUSTOMER_LOGISTIC" else None,
                 logistic=offer.intermediary or offer.logistic,
                 created_by=offer.intermediary or offer.logistic or cargo.customer,
                 offer=offer,
-                status=Order.OrderStatus.NO_DRIVER,
+                status=(
+                    Order.OrderStatus.NO_DRIVER
+                    if kind == "CUSTOMER_LOGISTIC"
+                    else Order.OrderStatus.PENDING
+                ),
                 currency=offer.price_currency,
                 price_total=offer.price_value or 0,
                 route_distance_km=getattr(cargo, "route_km_cached", 0) or 0,
             )
 
             cargo.status = CargoStatus.MATCHED
-            cargo.assigned_carrier = offer.carrier
+            cargo.assigned_carrier = offer.carrier if kind != "CUSTOMER_LOGISTIC" else None
             cargo.chosen_offer = offer
             cargo.save(update_fields=["status", "assigned_carrier", "chosen_offer"])
 

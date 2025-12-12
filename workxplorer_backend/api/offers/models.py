@@ -103,33 +103,32 @@ class Offer(models.Model):
             f"Offer#{self.pk} cargo={self.cargo_id} carrier={self.carrier_id} by={self.initiator}"
         )
 
+    def offer_kind(self) -> str:
+        """
+        Определяет сценарий сделки
+        """
+        if self.carrier_id and not (self.logistic or self.intermediary):
+            return "CUSTOMER_CARRIER"
+
+        if self.carrier_id and (self.logistic or self.intermediary):
+            return "LOGISTIC_CARRIER"
+
+        if (self.logistic or self.intermediary) and not self.carrier_id:
+            return "CUSTOMER_LOGISTIC"
+
+        return "UNKNOWN"
+
     @property
-    def is_handshake(self):
-        # CASE 1 — customer + carrier
-        if self.accepted_by_customer and self.accepted_by_carrier:
-            return True
+    def is_handshake(self) -> bool:
+        kind = self.offer_kind()
 
-        # CASE 2 — logistic(creator) + carrier
-        if self.logistic and self.accepted_by_logistic and self.accepted_by_carrier:
-            return True
+        # CASE 1 и 2: есть перевозчик
+        if kind in {"CUSTOMER_CARRIER", "LOGISTIC_CARRIER"}:
+            return self.accepted_by_customer and self.accepted_by_carrier
 
-        # CASE 3 — customer + logistic (NO_DRIVER)
-        if (
-            self.logistic is None
-            and not self.accepted_by_carrier
-            and self.accepted_by_customer
-            and self.accepted_by_logistic
-        ):
-            return True
-
-        # CASE 4 — logistic + logistic (NO_DRIVER)
-        if (
-            self.intermediary is not None
-            and self.accepted_by_customer
-            and self.accepted_by_logistic
-            and not self.accepted_by_carrier
-        ):
-            return True
+        # CASE 3 и 4: перевозчика ещё нет
+        if kind == "CUSTOMER_LOGISTIC":
+            return self.accepted_by_customer and self.accepted_by_logistic
 
         return False
 

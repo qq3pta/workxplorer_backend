@@ -312,15 +312,18 @@ class OrdersViewSet(viewsets.ModelViewSet):
         # Назначаем перевозчика
         order.carrier = user
         order.invite_token = None
-        order.save(update_fields=["carrier", "invite_token"])
+        order.status = Order.OrderStatus.NO_DRIVER
+        order.carrier_accepted_terms = False
 
-        # --- Локальный импорт для устранения циклического импорта ---
-        from api.agreements.models import Agreement
-        # from api.offers.models import Offer
+        order.save(
+            update_fields=[
+                "carrier",
+                "invite_token",
+                "status",
+                "carrier_accepted_terms",
+            ]
+        )
 
-        offer = getattr(order, "offer", None)
-        if offer:
-            Agreement.get_or_create_from_offer(offer)
         # --------------------------------------------------------------
 
         return Response(

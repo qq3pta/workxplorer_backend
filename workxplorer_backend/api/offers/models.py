@@ -337,9 +337,9 @@ class Offer(models.Model):
         if not self.is_active:
             raise ValidationError("Нельзя принять неактивный оффер.")
 
-        cargo = self.cargo
+        cargo = self.cargo  # <-- ВАЖНО: именно self.cargo
 
-        # 1️⃣ ЗАКАЗЧИК — по контексту, а не по роли
+        # 1️⃣ ЗАКАЗЧИК (КОНТЕКСТ ВЫШЕ РОЛИ)
         if user.id == cargo.customer_id:
             self.accepted_by_customer = True
 
@@ -362,13 +362,11 @@ class Offer(models.Model):
                     "accepted_by_customer",
                     "accepted_by_carrier",
                     "accepted_by_logistic",
-                    "logistic",
                     "intermediary",
                     "updated_at",
                 ]
             )
 
-            # Отправка уведомлений
             self.send_accept_notifications(user)
 
             if self.is_handshake:

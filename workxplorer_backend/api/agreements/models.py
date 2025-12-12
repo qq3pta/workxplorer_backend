@@ -87,19 +87,15 @@ class Agreement(models.Model):
         offer = self.offer
         cargo = offer.cargo
 
-        # CUSTOMER
-        if user.role == "CUSTOMER" and cargo.customer_id == user.id:
+        # 1️⃣ ЗАКАЗЧИК (НЕ СМОТРИМ НА РОЛЬ)
+        if user.id == cargo.customer_id:
             self.accepted_by_customer = True
 
-        # LOGISTIC действует как CUSTOMER
-        elif user.role == "LOGISTIC" and cargo.customer_id == user.id:
-            self.accepted_by_customer = True
-
-        # CARRIER
+        # 2️⃣ ПЕРЕВОЗЧИК
         elif user.role == "CARRIER" and offer.carrier_id == user.id:
             self.accepted_by_carrier = True
 
-        # LOGISTIC как посредник
+        # 3️⃣ ЛОГИСТ (НЕ заказчик)
         elif user.role == "LOGISTIC":
             self.accepted_by_logistic = True
 

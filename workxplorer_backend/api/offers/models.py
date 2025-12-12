@@ -374,7 +374,7 @@ class Offer(models.Model):
 
             # Проверка handshake
             if self.is_handshake:
-                agreement = Agreement.get_or_create_from_offer(self)
+                Agreement.get_or_create_from_offer(self)  # убрали присвоение
 
                 customer = self.cargo.customer
                 carrier = self.carrier

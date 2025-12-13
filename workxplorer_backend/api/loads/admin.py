@@ -119,12 +119,6 @@ class CargoAdmin(admin.ModelAdmin):
     age_minutes_display.short_description = "Опубликовано"
     age_minutes_display.admin_order_field = "refreshed_at"
 
-    def save_model(self, request, obj, form, change):
-        if change:
-            old = Cargo.objects.get(pk=obj.pk)
-            obj.is_hidden = old.is_hidden
-        super().save_model(request, obj, form, change)
-
     def price_uzs_display(self, obj):
         """Показывает цену в сумах с форматированием и подсветкой валюты."""
         if obj.price_uzs:

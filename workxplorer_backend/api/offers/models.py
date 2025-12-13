@@ -116,10 +116,19 @@ class Offer(models.Model):
     @property
     def is_handshake(self) -> bool:
         kind = self.deal_type
-        if kind in {self.DealType.CUSTOMER_CARRIER, self.DealType.LOGISTIC_CARRIER}:
+
+        if kind in {
+            self.DealType.CUSTOMER_CARRIER,
+            self.DealType.LOGISTIC_CARRIER,
+        }:
             return self.accepted_by_customer and self.accepted_by_carrier
-        if kind in {self.DealType.CUSTOMER_LOGISTIC, self.DealType.LOGISTIC_LOGISTIC}:
+
+        if kind == self.DealType.CUSTOMER_LOGISTIC:
             return self.accepted_by_customer and self.accepted_by_logistic
+
+        if kind == self.DealType.LOGISTIC_LOGISTIC:
+            return self.accepted_by_logistic
+
         return False
 
     # ---------------- Notifications ----------------
@@ -383,12 +392,13 @@ class Offer(models.Model):
     def _accept_case_customer_logistic(self, user):
         cargo = self.cargo
 
-        # ✔️ Заказчик
-        if user.id == cargo.customer_id:
+        if user.id in (cargo.customer_id, cargo.created_by_id):
             self.accepted_by_customer = True
 
-        # ✔️ Логист оффера
-        elif user.role == "LOGISTIC" and user.id == self.logistic_id:
+        elif user.role == "LOGISTIC" and user.id in (
+            self.logistic_id,
+            self.intermediary_id,
+        ):
             self.accepted_by_logistic = True
 
         else:

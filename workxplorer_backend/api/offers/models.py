@@ -308,11 +308,14 @@ class Offer(models.Model):
                 return Offer.DealType.CUSTOMER_LOGISTIC
             return Offer.DealType.CUSTOMER_CARRIER
 
-        # Логист
+        # ЛОГИСТ
         if role == "LOGISTIC":
-            if carrier:
-                return Offer.DealType.LOGISTIC_CARRIER
-            return Offer.DealType.CUSTOMER_LOGISTIC
+            # 🔑 КЕЙС 3: логист → заказчик (без перевозчика)
+            if not carrier:
+                return Offer.DealType.CUSTOMER_LOGISTIC
+
+            # логист + перевозчик
+            return Offer.DealType.LOGISTIC_CARRIER
 
         raise ValidationError("Невозможно определить тип сделки")
 
@@ -380,22 +383,13 @@ class Offer(models.Model):
     def _accept_case_customer_logistic(self, user):
         cargo = self.cargo
 
-        # ✅ ЗАКАЗЧИК
-        if user.id == cargo.customer_id:
+        # ЗАКАЗЧИК
+        if user.id in (cargo.customer_id, cargo.created_by_id):
             self.accepted_by_customer = True
 
-        # ✅ ЛОГИСТ — участник оффера
-        elif user.role == "LOGISTIC":
-            if user.id in (self.logistic_id, self.intermediary_id):
-                self.accepted_by_logistic = True
-
-            # логист ещё не назначен → становится intermediary
-            elif self.intermediary is None:
-                self.accepted_by_logistic = True
-                self.intermediary = user
-
-            else:
-                raise PermissionDenied("Логист не является участником этого оффера")
+        # ЛОГИСТ
+        elif user.role == "LOGISTIC" and user.id in (self.logistic_id, self.intermediary_id):
+            self.accepted_by_logistic = True
 
         else:
             raise PermissionDenied("Недопустимый участник для данного кейса")
@@ -405,7 +399,6 @@ class Offer(models.Model):
                 update_fields=[
                     "accepted_by_customer",
                     "accepted_by_logistic",
-                    "intermediary",
                     "updated_at",
                 ]
             )

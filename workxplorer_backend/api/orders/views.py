@@ -338,7 +338,7 @@ class OrdersViewSet(viewsets.ModelViewSet):
         # Назначаем перевозчика
         order.carrier = user
         order.invite_token = None
-        order.status = Order.OrderStatus.NO_DRIVER
+        order.status = Order.OrderStatus.EN_ROUTE
         order.carrier_accepted_terms = False
 
         order.save(

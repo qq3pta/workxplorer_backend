@@ -277,6 +277,7 @@ class PublicLoadsView(generics.ListAPIView):
             Cargo.objects.filter(
                 moderation_status=ModerationStatus.APPROVED,
                 is_hidden=False,
+                status=CargoStatus.POSTED,
             )
             .annotate(
                 offers_active=Count("offers", filter=Q(offers__is_active=True)),

@@ -564,6 +564,36 @@ class Offer(models.Model):
         if user.id in (cargo.customer_id, cargo.created_by_id):
             print("✔ CUSTOMER SIDE ACCEPT (by id)")
             self.accepted_by_customer = True
+
+            print(
+                "flags AFTER:",
+                "customer =",
+                self.accepted_by_customer,
+                "logistic =",
+                self.accepted_by_logistic,
+            )
+
+            with transaction.atomic():
+                print("→ SAVE OFFER")
+                self.save(
+                    update_fields=[
+                        "accepted_by_customer",
+                        "accepted_by_logistic",
+                        "updated_at",
+                    ]
+                )
+
+                print("→ SEND NOTIFICATIONS")
+                self.send_accept_notifications(user)
+
+                if self.accepted_by_customer and self.accepted_by_logistic:
+                    print("✅ HANDSHAKE TRUE → CREATE AGREEMENT")
+                    from api.agreements.models import Agreement
+
+                    Agreement.get_or_create_from_offer(self)
+                else:
+                    print("⏳ HANDSHAKE FALSE")
+
             return
 
         # 🟢 ЗАКАЗЧИК

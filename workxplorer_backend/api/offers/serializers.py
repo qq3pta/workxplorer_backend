@@ -144,7 +144,9 @@ class OfferInviteSerializer(serializers.Serializer):
         if carrier.id == user.id:
             raise serializers.ValidationError({"carrier_id": "Нельзя приглашать самого себя."})
 
-        if getattr(cargo, "is_hidden", False):
+        request = self.context.get("request")
+
+        if cargo.is_hidden and request.user not in (cargo.customer, cargo.created_by):
             raise serializers.ValidationError({"cargo": "Заявка скрыта."})
         if cargo.moderation_status != ModerationStatus.APPROVED:
             raise serializers.ValidationError({"cargo": "Заявка не прошла модерацию."})

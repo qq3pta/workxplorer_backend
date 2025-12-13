@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+import logging
+
 from django.conf import settings
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.validators import MinValueValidator
@@ -14,6 +16,8 @@ from api.notifications.services import notify
 
 # from api.loads.models import Cargo, CargoStatus
 # from api.orders.models import Order
+
+logger = logging.getLogger(__name__)
 
 
 class Offer(models.Model):
@@ -392,24 +396,31 @@ class Offer(models.Model):
     def _accept_case_customer_logistic(self, user):
         cargo = self.cargo
 
-        # 🧪 DEBUG — СРАБАТЫВАЕТ ПРИ КАЖДОМ ACCEPT
-        print("\n[DEBUG CASE customer_logistic]")
-        print("user.id =", user.id, "role =", user.role)
-        print("cargo.customer_id =", cargo.customer_id)
-        print("cargo.created_by_id =", cargo.created_by_id)
-        print("offer.logistic_id =", self.logistic_id)
-        print("offer.intermediary_id =", self.intermediary_id)
-        print(
-            "flags BEFORE:",
-            "customer =",
+        logger.warning("=== DEBUG CASE customer_logistic ===")
+        logger.warning(
+            "user.id=%s role=%s",
+            user.id,
+            user.role,
+        )
+        logger.warning(
+            "cargo.customer_id=%s cargo.created_by_id=%s",
+            cargo.customer_id,
+            cargo.created_by_id,
+        )
+        logger.warning(
+            "offer.logistic_id=%s offer.intermediary_id=%s",
+            self.logistic_id,
+            self.intermediary_id,
+        )
+        logger.warning(
+            "flags BEFORE: customer=%s logistic=%s",
             self.accepted_by_customer,
-            "logistic =",
             self.accepted_by_logistic,
         )
 
-        # 🟢 ЗАКАЗЧИК (не логист и не перевозчик)
+        # 🟢 ЗАКАЗЧИК
         if user.role == "CUSTOMER":
-            print("[DEBUG] user recognized as CUSTOMER")
+            logger.warning("USER IS CUSTOMER → accepted_by_customer=True")
             self.accepted_by_customer = True
 
         # 🟢 ЛОГИСТ
@@ -417,23 +428,21 @@ class Offer(models.Model):
             self.logistic_id,
             self.intermediary_id,
         ):
-            print("[DEBUG] user recognized as LOGISTIC")
+            logger.warning("USER IS LOGISTIC → accepted_by_logistic=True")
             self.accepted_by_logistic = True
 
         else:
-            print("[DEBUG ❌] INVALID PARTICIPANT")
+            logger.warning("❌ INVALID PARTICIPANT")
             raise PermissionDenied("Недопустимый участник для данного кейса")
 
-        print(
-            "flags AFTER:",
-            "customer =",
+        logger.warning(
+            "flags AFTER: customer=%s logistic=%s",
             self.accepted_by_customer,
-            "logistic =",
             self.accepted_by_logistic,
         )
 
         with transaction.atomic():
-            print("[DEBUG] saving offer")
+            logger.warning("saving offer")
             self.save(
                 update_fields=[
                     "accepted_by_customer",
@@ -442,16 +451,16 @@ class Offer(models.Model):
                 ]
             )
 
-            print("[DEBUG] sending accept notifications")
+            logger.warning("sending accept notifications")
             self.send_accept_notifications(user)
 
             if self.accepted_by_customer and self.accepted_by_logistic:
-                print("[DEBUG ✅] HANDSHAKE TRUE → create Agreement")
+                logger.warning("✅ HANDSHAKE TRUE → create Agreement")
                 from api.agreements.models import Agreement
 
                 Agreement.get_or_create_from_offer(self)
             else:
-                print("[DEBUG ⏳] HANDSHAKE FALSE")
+                logger.warning("⏳ HANDSHAKE FALSE")
 
     def _accept_case_logistic_logistic(self, user):
         if user.role == "LOGISTIC":

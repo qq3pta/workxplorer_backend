@@ -220,15 +220,27 @@ class OrdersViewSet(viewsets.ModelViewSet):
         url_path="invite-by-id",
         serializer_class=InviteByIdSerializer,
     )
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path="invite-by-id",
+        serializer_class=InviteByIdSerializer,
+    )
     def invite_by_id(self, request, pk=None):
         order = self.get_object()
         user = request.user
 
         if order.created_by_id != user.id:
-            return Response({"detail": "Можно приглашать только в свои заказы"}, status=403)
+            return Response(
+                {"detail": "Можно приглашать только в свои заказы"},
+                status=403,
+            )
 
         if order.status != Order.OrderStatus.NO_DRIVER:
-            return Response({"detail": "У заказа уже есть водитель"}, status=400)
+            return Response(
+                {"detail": "У заказа уже есть водитель"},
+                status=400,
+            )
 
         ser = InviteByIdSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
@@ -238,7 +250,10 @@ class OrdersViewSet(viewsets.ModelViewSet):
         try:
             carrier = User.objects.get(id=driver_id, role="CARRIER")
         except User.DoesNotExist:
-            return Response({"detail": "Перевозчик с таким ID не найден"}, status=404)
+            return Response(
+                {"detail": "Перевозчик с таким ID не найден"},
+                status=404,
+            )
 
         order.invited_carrier = carrier
 
@@ -246,6 +261,17 @@ class OrdersViewSet(viewsets.ModelViewSet):
         token = uuid.uuid4()
         order.invite_token = token
         order.save(update_fields=["invited_carrier", "invite_token"])
+
+        # ✅ ВОТ ЭТОГО НЕ ХВАТАЛО
+        return Response(
+            {
+                "detail": "Перевозчик успешно приглашён",
+                "order_id": order.id,
+                "carrier_id": carrier.id,
+                "invite_token": str(token),
+            },
+            status=200,
+        )
 
         # offer, created = Offer.objects.get_or_create(
         #    cargo=order.cargo,

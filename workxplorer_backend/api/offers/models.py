@@ -23,6 +23,17 @@ class Offer(models.Model):
         CARRIER = "CARRIER", "Перевозчик"
         LOGISTIC = "LOGISTIC", "Логист"
 
+    class DealType(models.TextChoices):
+        CUSTOMER_CARRIER = "customer_carrier"
+        LOGISTIC_CARRIER = "logistic_carrier"
+        CUSTOMER_LOGISTIC = "customer_logistic"
+        LOGISTIC_LOGISTIC = "logistic_logistic"
+
+    deal_type = models.CharField(
+        max_length=32,
+        choices=DealType.choices,
+    )
+
     cargo = models.ForeignKey(
         Cargo,
         on_delete=models.CASCADE,
@@ -103,40 +114,19 @@ class Offer(models.Model):
             f"Offer#{self.pk} cargo={self.cargo_id} carrier={self.carrier_id} by={self.initiator}"
         )
 
-    def offer_kind(self) -> str:
-        """
-        Определяет сценарий сделки
-        """
-        if self.carrier_id and not (self.logistic or self.intermediary):
-            return "CUSTOMER_CARRIER"
-
-        if self.carrier_id and (self.logistic or self.intermediary):
-            return "LOGISTIC_CARRIER"
-
-        if (self.logistic or self.intermediary) and not self.carrier_id:
-            return "CUSTOMER_LOGISTIC"
-
-        return "UNKNOWN"
-
     @property
     def is_handshake(self) -> bool:
-        kind = self.offer_kind()
-
-        # CASE 1 и 2: есть перевозчик
-        if kind in {"CUSTOMER_CARRIER", "LOGISTIC_CARRIER"}:
+        kind = self.deal_type
+        if kind in {self.DealType.CUSTOMER_CARRIER, self.DealType.LOGISTIC_CARRIER}:
             return self.accepted_by_customer and self.accepted_by_carrier
-
-        # CASE 3 и 4: перевозчика ещё нет
-        if kind == "CUSTOMER_LOGISTIC":
+        if kind in {self.DealType.CUSTOMER_LOGISTIC, self.DealType.LOGISTIC_LOGISTIC}:
             return self.accepted_by_customer and self.accepted_by_logistic
-
         return False
 
+    # ---------------- Notifications ----------------
     def send_create_notifications(self):
-        """Вызывается вручную из create() сериализатора."""
         customer = self.cargo.customer
         carrier = self.carrier
-
         notify(
             user=carrier,
             type="offer_sent",
@@ -145,7 +135,6 @@ class Offer(models.Model):
             offer=self,
             cargo=self.cargo,
         )
-
         notify(
             user=customer,
             type="offer_received_from_carrier",
@@ -158,7 +147,6 @@ class Offer(models.Model):
     def send_invite_notifications(self):
         customer = self.cargo.customer
         carrier = self.carrier
-
         notify(
             user=customer,
             type="offer_sent",
@@ -167,7 +155,6 @@ class Offer(models.Model):
             offer=self,
             cargo=self.cargo,
         )
-
         notify(
             user=carrier,
             type="offer_from_customer",
@@ -180,7 +167,6 @@ class Offer(models.Model):
     def send_counter_notifications(self, by_user):
         customer = self.cargo.customer
         carrier = self.carrier
-
         notify(
             user=by_user,
             type="offer_my_response_sent",
@@ -189,9 +175,7 @@ class Offer(models.Model):
             offer=self,
             cargo=self.cargo,
         )
-
         other = customer if by_user.id == carrier.id else carrier
-
         notify(
             user=other,
             type="offer_response_to_me",
@@ -204,7 +188,6 @@ class Offer(models.Model):
     def send_accept_notifications(self, accepted_by):
         customer = self.cargo.customer
         carrier = self.carrier
-
         if self.is_handshake:
             notify(
                 user=customer,
@@ -223,9 +206,7 @@ class Offer(models.Model):
                 cargo=self.cargo,
             )
             return
-
         other = customer if accepted_by.id == carrier.id else carrier
-
         notify(
             user=other,
             type="deal_confirm_required_by_other",
@@ -238,9 +219,7 @@ class Offer(models.Model):
     def send_reject_notifications(self, rejected_by):
         customer = self.cargo.customer
         carrier = self.carrier
-
         other = customer if rejected_by.id == carrier.id else carrier
-
         notify(
             user=other,
             type="deal_rejected_by_other",
@@ -250,35 +229,22 @@ class Offer(models.Model):
             cargo=self.cargo,
         )
 
+    # ---------------- Reject ----------------
     def reject_by(self, user):
-        """
-        Отклонение оффера одной из сторон.
-        """
         role = getattr(user, "role", None)
-
         if not self.is_active:
             raise ValidationError("Оффер уже неактивен.")
-
-        # --- CUSTOMER ---
         if role == "CUSTOMER" and user.id == self.cargo.customer_id:
             self.is_active = False
             self.accepted_by_customer = False
-
-        # --- CARRIER ---
         elif role == "CARRIER" and user.id == self.carrier_id:
             self.is_active = False
             self.accepted_by_carrier = False
-
-        # --- LOGISTIC ---
-        elif role == "LOGISTIC" and (
-            user.id == self.logistic_id or user.id == self.intermediary_id
-        ):
+        elif role == "LOGISTIC" and user.id in (self.logistic_id, self.intermediary_id):
             self.is_active = False
             self.accepted_by_logistic = False
-
         else:
             raise PermissionDenied("Вы не можете отклонить этот оффер.")
-
         self.save(
             update_fields=[
                 "is_active",
@@ -288,9 +254,9 @@ class Offer(models.Model):
                 "updated_at",
             ]
         )
-
         self.send_reject_notifications(user)
 
+    # ---------------- Make Counter ----------------
     def make_counter(
         self,
         *,
@@ -305,7 +271,6 @@ class Offer(models.Model):
             self.price_currency = price_currency
         if message is not None:
             self.message = message
-
         if by_user is not None:
             if by_user.role == "LOGISTIC":
                 self.initiator = self.Initiator.LOGISTIC
@@ -313,11 +278,9 @@ class Offer(models.Model):
                 self.initiator = self.Initiator.CUSTOMER
             else:
                 self.initiator = self.Initiator.CARRIER
-
         self.accepted_by_customer = False
         self.accepted_by_carrier = False
         self.accepted_by_logistic = False
-
         self.save(
             update_fields=[
                 "price_value",
@@ -330,186 +293,107 @@ class Offer(models.Model):
                 "updated_at",
             ]
         )
-
         self.send_counter_notifications(by_user)
 
+    # ---------------- Accept Dispatcher ----------------
     def accept_by(self, user) -> None:
         if not self.is_active:
             raise ValidationError("Нельзя принять неактивный оффер.")
 
-        cargo = self.cargo  # <-- ВАЖНО: именно self.cargo
+        handlers = {
+            self.DealType.CUSTOMER_CARRIER: self._accept_case_customer_carrier,
+            self.DealType.LOGISTIC_CARRIER: self._accept_case_logistic_carrier,
+            self.DealType.CUSTOMER_LOGISTIC: self._accept_case_customer_logistic,
+            self.DealType.LOGISTIC_LOGISTIC: self._accept_case_logistic_logistic,
+        }
+        handler = handlers.get(self.deal_type)
+        if not handler:
+            raise ValidationError("Неизвестный тип сделки")
+        handler(user)
 
-        # 1️⃣ ЗАКАЗЧИК (КОНТЕКСТ ВЫШЕ РОЛИ)
-        if user.id == cargo.customer_id or user.id == cargo.created_by_id:
+    # ---------------- CASES ----------------
+    def _accept_case_customer_carrier(self, user):
+        cargo = self.cargo
+        if user.id in (cargo.customer_id, cargo.created_by_id):
             self.accepted_by_customer = True
-
-        # 2️⃣ ПЕРЕВОЗЧИК
         elif user.role == "CARRIER" and user.id == self.carrier_id:
             self.accepted_by_carrier = True
+        else:
+            raise PermissionDenied("Недопустимый участник для данного кейса")
+        with transaction.atomic():
+            self.save(update_fields=["accepted_by_customer", "accepted_by_carrier", "updated_at"])
+            self.send_accept_notifications(user)
+            if self.accepted_by_customer and self.accepted_by_carrier:
+                Agreement.get_or_create_from_offer(self)
 
-        # 3️⃣ ЛОГИСТ (НЕ заказчик)
-        elif user.role == "LOGISTIC":
+    def _accept_case_logistic_carrier(self, user):
+        cargo = self.cargo
+        if user.role == "LOGISTIC":
             if user.id in (self.logistic_id, self.intermediary_id):
                 self.accepted_by_logistic = True
             elif self.intermediary is None:
-                # логист-автор оффера
                 self.accepted_by_logistic = True
                 self.intermediary = user
             else:
                 raise PermissionDenied("Логист не является участником этого оффера")
+        elif user.role == "CARRIER" and user.id == self.carrier_id:
+            self.accepted_by_carrier = True
+        else:
+            raise PermissionDenied("Недопустимый участник для данного кейса")
+        with transaction.atomic():
+            self.save(
+                update_fields=[
+                    "accepted_by_logistic",
+                    "accepted_by_carrier",
+                    "intermediary",
+                    "updated_at",
+                ]
+            )
+            self.send_accept_notifications(user)
+            if self.accepted_by_logistic and self.accepted_by_carrier:
+                Agreement.get_or_create_from_offer(self)
 
+    def _accept_case_customer_logistic(self, user):
+        cargo = self.cargo
+        if user.id in (cargo.customer_id, cargo.created_by_id):
+            self.accepted_by_customer = True
+        elif user.role == "LOGISTIC":
+            if user.id in (self.logistic_id, self.intermediary_id):
+                self.accepted_by_logistic = True
+            elif self.intermediary is None:
+                self.accepted_by_logistic = True
+                self.intermediary = user
+            else:
+                raise PermissionDenied("Логист не является участником этого оффера")
+        else:
+            raise PermissionDenied("Недопустимый участник для данного кейса")
         with transaction.atomic():
             self.save(
                 update_fields=[
                     "accepted_by_customer",
-                    "accepted_by_carrier",
                     "accepted_by_logistic",
                     "intermediary",
                     "updated_at",
                 ]
             )
-
             self.send_accept_notifications(user)
-
-            if self.is_handshake:
+            if self.accepted_by_customer and self.accepted_by_logistic:
                 Agreement.get_or_create_from_offer(self)
 
-        print(f"ОТЛАДКА: Оффер {self.id} принят пользователем с ролью {user.role}, ID: {user.id}")
-        print(f"ОТЛАДКА: Результат is_handshake: {self.is_handshake}")
-        print(
-            f"ОТЛАДКА: Флаги - заказчик: {self.accepted_by_customer}, логист: {self.accepted_by_logistic}, перевозчик: {self.accepted_by_carrier}"
-        )
-        print(
-            f"ОТЛАДКА: Связанные ID - Логист_1: {self.logistic_id}, Логист_2 (Посредник): {self.intermediary_id}"
-        )
-
-        # if self.is_handshake:
-        #    cargo_locked = (
-        #        Cargo.objects.select_for_update()
-        #        .only("id", "status", "assigned_carrier", "chosen_offer")
-        #        .get(pk=self.cargo_id)
-        #    )
-
-        #    if cargo_locked.status == CargoStatus.MATCHED and getattr(
-        #        cargo_locked, "chosen_offer_id", None
-        #    ):
-        #        return
-
-        #    print("ОТЛАДКА: *** ВЫЗЫВАЕМ _FINALIZE_HANDSHAKE ***")
-        #    self._finalize_handshake(cargo_locked=cargo_locked)
-
-    # def _finalize_handshake(self, *, cargo_locked):
-    #    customer = cargo_locked.customer
-    #    intermediary = self.intermediary
-    #    carrier = self.carrier
-
-    #    creator = getattr(cargo_locked, "created_by", None)
-
-    #    if creator is None:
-    #        creator = customer
-
-    # ---------------------------------------------
-    # CASE 1 — CUSTOMER → CARRIER
-    # ---------------------------------------------
-    #    if creator.role == "CUSTOMER" and self.accepted_by_carrier:
-    #        cargo_locked.status = CargoStatus.MATCHED
-    #        cargo_locked.assigned_carrier_id = carrier.id
-    #        cargo_locked.chosen_offer_id = self.id
-    #        cargo_locked.save(update_fields=["status", "assigned_carrier_id", "chosen_offer_id"])
-
-    #        Order.objects.create(
-    #            cargo=cargo_locked,
-    #            customer=customer,
-    #            logistic=None,
-    #            carrier=carrier,
-    #            created_by=customer,
-    #            offer=self,
-    #            status=Order.OrderStatus.PENDING,
-    #            driver_status=Order.DriverStatus.STOPPED,  # <-- ИСПРАВЛЕНО
-    #        )
-    #        return
-
-    # ---------------------------------------------
-    # CASE 2 — LOGISTIC → CARRIER
-    # ---------------------------------------------
-    # Создатель заявки — логист, принял перевозчик
-    #    if creator.role == "LOGISTIC" and self.accepted_by_carrier:
-    #        cargo_locked.status = CargoStatus.MATCHED
-    #        cargo_locked.assigned_carrier_id = carrier.id
-    #        cargo_locked.chosen_offer_id = self.id
-    #        cargo_locked.save(update_fields=["status", "assigned_carrier_id", "chosen_offer_id"])
-
-    #        Order.objects.create(
-    #            cargo=cargo_locked,
-    #            customer=customer,
-    #            logistic=creator,
-    #            carrier=carrier,
-    #            created_by=creator,
-    #            offer=self,
-    #            status=Order.OrderStatus.PENDING,
-    #            driver_status=Order.DriverStatus.STOPPED,
-    #        )
-    #        return
-
-    # ---------------------------------------------
-    # CASE 3 — CUSTOMER → LOGISTIC
-    # ---------------------------------------------
-    # Создатель — заказчик, принял логист
-    #    if (
-    #        creator.role == "CUSTOMER"
-    #        and self.accepted_by_customer
-    #        and self.accepted_by_logistic
-    #        and not self.accepted_by_carrier
-    #    ):
-    #        cargo_locked.status = CargoStatus.MATCHED
-    #        cargo_locked.chosen_offer_id = self.id
-    #        cargo_locked.save(update_fields=["status", "chosen_offer_id"])
-
-    #        Order.objects.create(
-    #            cargo=cargo_locked,
-    #            customer=customer,
-    #            logistic=intermediary,  # <-- ИСПРАВЛЕНО: Теперь используется intermediary
-    #            carrier=None,
-    #            created_by=intermediary,  # <-- ИСПРАВЛЕНО: Теперь используется intermediary
-    #            offer=self,
-    #            status=Order.OrderStatus.NO_DRIVER,
-    #            driver_status=Order.DriverStatus.STOPPED,  # <-- ИСПРАВЛЕНО
-    #        )
-    #        return
-
-    # ---------------------------------------------
-    # CASE 4 — LOGISTIC → LOGISTIC
-    # ---------------------------------------------
-    # Создатель — логист 1, принял логист 2
-    #    if (
-    #        creator.role == "LOGISTIC"
-    #        and intermediary
-    #        and self.accepted_by_customer
-    #        and self.accepted_by_logistic
-    #        and not self.accepted_by_carrier
-    #    ):
-    #        print("ОТЛАДКА: !!! ПОПАЛИ В КЕЙС 4 - СОЗДАНИЕ ЗАКАЗА !!!")
-    #        print(
-    #            f"ОТЛАДКА: Роль Создателя: {creator.role}, ID Посредника: {intermediary.id}, ID Логиста_1: {self.logistic_id}"
-    #        )
-
-    #        cargo_locked.status = CargoStatus.MATCHED
-    #        cargo_locked.chosen_offer_id = self.id
-    #        cargo_locked.save(update_fields=["status", "chosen_offer_id"])
-
-    #        Order.objects.create(
-    #            cargo=cargo_locked,
-    #            customer=customer,
-    #            logistic=intermediary,
-    #            carrier=None,
-    #            created_by=intermediary,
-    #            offer=self,
-    #            status=Order.OrderStatus.NO_DRIVER,
-    #            driver_status=Order.DriverStatus.STOPPED,
-    #        )
-    #        print("ОТЛАДКА: ЗАКАЗ УСПЕШНО СОЗДАН (Кейс 4)")
-    #        return
-
-    #    # Если ни один из кейсов не сработал — НИЧЕГО не создаём
-    #    print("ОТЛАДКА: Завершение сделки НЕ УДАЛОСЬ - Ни один кейс не сработал.")
-    #    return
+    def _accept_case_logistic_logistic(self, user):
+        cargo = self.cargo
+        if user.role == "LOGISTIC":
+            if user.id in (self.logistic_id, self.intermediary_id):
+                self.accepted_by_logistic = True
+            elif self.intermediary is None:
+                self.accepted_by_logistic = True
+                self.intermediary = user
+            else:
+                raise PermissionDenied("Логист не является участником этого оффера")
+        else:
+            raise PermissionDenied("Недопустимый участник для данного кейса")
+        with transaction.atomic():
+            self.save(update_fields=["accepted_by_logistic", "intermediary", "updated_at"])
+            self.send_accept_notifications(user)
+            if self.accepted_by_customer and self.accepted_by_logistic:
+                Agreement.get_or_create_from_offer(self)

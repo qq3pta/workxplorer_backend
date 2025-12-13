@@ -249,15 +249,9 @@ class MyCargosBoardView(generics.ListAPIView):
     def get_queryset(self):
         user = self.request.user
 
+        # 🔑 Автор всегда видит свои заявки (и скрытые, и нет)
         qs = Cargo.objects.filter(Q(customer=user) | Q(created_by=user))
 
-        qs = qs.filter(
-            Q(status=CargoStatus.HIDDEN, customer=user)
-            | Q(status=CargoStatus.HIDDEN, created_by=user)
-            | ~Q(status=CargoStatus.HIDDEN)
-        )
-
-        # твои аннотации:
         qs = qs.annotate(
             path_m=Distance(F("origin_point"), F("dest_point")),
         ).annotate(
@@ -282,8 +276,8 @@ class PublicLoadsView(generics.ListAPIView):
         qs = (
             Cargo.objects.filter(
                 moderation_status=ModerationStatus.APPROVED,
+                is_hidden=False,
             )
-            .exclude(status=CargoStatus.HIDDEN)
             .annotate(
                 offers_active=Count("offers", filter=Q(offers__is_active=True)),
                 age_minutes_anno=ExtractMinutes(F("refreshed_at")),
@@ -464,31 +458,24 @@ class CargoVisibilityView(generics.GenericAPIView):
         cargo = get_object_or_404(Cargo, uuid=uuid)
         user = request.user
 
-        # Проверка доступа
+        # доступ — только автор
         if user.role == "customer" and cargo.customer_id != user.id:
-            return Response({"detail": "Вы можете скрывать только свои заявки"}, status=403)
+            return Response({"detail": "Нет доступа"}, status=403)
 
         if user.role == "logistic" and cargo.created_by_id != user.id:
-            return Response(
-                {"detail": "Вы можете скрывать только созданные вами заявки"},
-                status=403,
-            )
+            return Response({"detail": "Нет доступа"}, status=403)
 
         is_hidden = request.data.get("is_hidden")
-        if is_hidden not in (True, False):
-            return Response({"detail": "is_hidden must be true or false"}, status=400)
+        if not isinstance(is_hidden, bool):
+            return Response({"detail": "is_hidden must be boolean"}, status=400)
 
-        if is_hidden:
-            cargo.status = CargoStatus.HIDDEN
-        else:
-            cargo.status = CargoStatus.POSTED
-
-        cargo.save(update_fields=["status"])
+        cargo.is_hidden = is_hidden
+        cargo.save(update_fields=["is_hidden"])
 
         return Response(
             {
                 "detail": "Видимость обновлена",
-                "is_hidden_for_me": is_hidden,
+                "is_hidden": cargo.is_hidden,
             },
             status=200,
         )

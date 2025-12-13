@@ -306,7 +306,7 @@ class CargoListSerializer(RouteKmMixin, serializers.ModelSerializer):
 
     weight_t = serializers.SerializerMethodField()
     price_per_km = serializers.SerializerMethodField()
-    is_hidden_for_me = serializers.SerializerMethodField()
+    is_hidden = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = Cargo
@@ -350,7 +350,7 @@ class CargoListSerializer(RouteKmMixin, serializers.ModelSerializer):
             "origin_dist_km",
             "origin_radius_km",
             "dest_radius_km",
-            "is_hidden_for_me",
+            "is_hidden",
             "user_name",
             "user_id",
         )
@@ -384,13 +384,6 @@ class CargoListSerializer(RouteKmMixin, serializers.ModelSerializer):
 
     def get_email(self, obj) -> str:
         return getattr(obj.customer, "email", "") or ""
-
-    def get_is_hidden_for_me(self, obj: Cargo):
-        """
-        ➤ Возвращает True, если текущий пользователь внесён в hidden_for.
-        """
-        user = self.context["request"].user
-        return obj.hidden_for.filter(id=user.id).exists()
 
     @extend_schema_field(float)
     def get_weight_t(self, obj):

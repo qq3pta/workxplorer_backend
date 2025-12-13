@@ -23,7 +23,6 @@ class CargoStatus(models.TextChoices):
     DELIVERED = "DELIVERED", "Доставлено"
     COMPLETED = "COMPLETED", "Завершено"
     CANCELLED = "CANCELLED", "Отменена"
-    HIDDEN = "HIDDEN", "Скрыта"
 
 
 class PaymentMethod(models.TextChoices):
@@ -89,11 +88,9 @@ class Cargo(models.Model):
 
     contact_pref = models.CharField(max_length=10, choices=ContactPref.choices)
 
-    hidden_for = models.ManyToManyField(
-        settings.AUTH_USER_MODEL,
-        related_name="hidden_cargos",
-        blank=True,
-        verbose_name="Скрыто для",
+    is_hidden = models.BooleanField(
+        default=False,
+        verbose_name="Скрыта от других пользователей",
     )
 
     moderation_status = models.CharField(

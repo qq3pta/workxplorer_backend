@@ -81,6 +81,7 @@ class CargoAdmin(admin.ModelAdmin):
         "route_km_cached",
         "route_duration_min_cached",
         "price_uzs",
+        "is_hidden",
     )
 
     actions = ("recalculate_route_km", "recalculate_price_uzs")

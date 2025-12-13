@@ -392,19 +392,48 @@ class Offer(models.Model):
     def _accept_case_customer_logistic(self, user):
         cargo = self.cargo
 
-        if user.id in (cargo.customer_id, cargo.created_by_id):
+        # 🧪 DEBUG — СРАБАТЫВАЕТ ПРИ КАЖДОМ ACCEPT
+        print("\n[DEBUG CASE customer_logistic]")
+        print("user.id =", user.id, "role =", user.role)
+        print("cargo.customer_id =", cargo.customer_id)
+        print("cargo.created_by_id =", cargo.created_by_id)
+        print("offer.logistic_id =", self.logistic_id)
+        print("offer.intermediary_id =", self.intermediary_id)
+        print(
+            "flags BEFORE:",
+            "customer =",
+            self.accepted_by_customer,
+            "logistic =",
+            self.accepted_by_logistic,
+        )
+
+        # 🟢 ЗАКАЗЧИК (не логист и не перевозчик)
+        if user.role == "CUSTOMER":
+            print("[DEBUG] user recognized as CUSTOMER")
             self.accepted_by_customer = True
 
+        # 🟢 ЛОГИСТ
         elif user.role == "LOGISTIC" and user.id in (
             self.logistic_id,
             self.intermediary_id,
         ):
+            print("[DEBUG] user recognized as LOGISTIC")
             self.accepted_by_logistic = True
 
         else:
+            print("[DEBUG ❌] INVALID PARTICIPANT")
             raise PermissionDenied("Недопустимый участник для данного кейса")
 
+        print(
+            "flags AFTER:",
+            "customer =",
+            self.accepted_by_customer,
+            "logistic =",
+            self.accepted_by_logistic,
+        )
+
         with transaction.atomic():
+            print("[DEBUG] saving offer")
             self.save(
                 update_fields=[
                     "accepted_by_customer",
@@ -413,12 +442,16 @@ class Offer(models.Model):
                 ]
             )
 
+            print("[DEBUG] sending accept notifications")
             self.send_accept_notifications(user)
 
             if self.accepted_by_customer and self.accepted_by_logistic:
+                print("[DEBUG ✅] HANDSHAKE TRUE → create Agreement")
                 from api.agreements.models import Agreement
 
                 Agreement.get_or_create_from_offer(self)
+            else:
+                print("[DEBUG ⏳] HANDSHAKE FALSE")
 
     def _accept_case_logistic_logistic(self, user):
         if user.role == "LOGISTIC":

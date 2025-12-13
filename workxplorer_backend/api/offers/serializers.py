@@ -60,19 +60,37 @@ class OfferCreateSerializer(serializers.ModelSerializer):
         user = self.context["request"].user
         cargo = validated_data["cargo"]
 
+        print("\n[SERIALIZER CREATE OFFER]")
+        print("user.id =", user.id, "role =", user.role)
+        print("cargo.customer_id =", cargo.customer_id)
+        print("cargo.created_by_id =", cargo.created_by_id)
+
+        # логист, если заказ создан логистом
         logistic_user = None
         if cargo.created_by and getattr(cargo.created_by, "role", None) == "LOGISTIC":
             logistic_user = cargo.created_by
 
-        deal_type = Offer.resolve_deal_type(
-            initiator_user=user,
-            carrier=user,
-            logistic=logistic_user,
-        )
+        # 🔥 КЕЙС 3: CUSTOMER ↔ LOGISTIC
+        if user.role == "LOGISTIC" and cargo.customer_id:
+            deal_type = Offer.DealType.CUSTOMER_LOGISTIC
+            initiator = Offer.Initiator.LOGISTIC
+            carrier = None
+
+        # 🔁 остальные кейсы — как раньше
+        else:
+            deal_type = Offer.resolve_deal_type(
+                initiator_user=user,
+                carrier=user if user.role == "CARRIER" else None,
+                logistic=logistic_user,
+            )
+            initiator = Offer.Initiator.CARRIER
+            carrier = user
+
+        print("deal_type =", deal_type)
 
         offer = Offer.objects.create(
-            carrier=user,
-            initiator=Offer.Initiator.CARRIER,
+            carrier=carrier,
+            initiator=initiator,
             logistic=logistic_user,
             deal_type=deal_type,
             **validated_data,

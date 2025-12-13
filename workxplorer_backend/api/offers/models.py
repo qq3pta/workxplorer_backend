@@ -349,12 +349,14 @@ class Offer(models.Model):
 
         # 3️⃣ ЛОГИСТ (НЕ заказчик)
         elif user.role == "LOGISTIC":
-            self.accepted_by_logistic = True
-            if self.intermediary is None:
+            if user.id in (self.logistic_id, self.intermediary_id):
+                self.accepted_by_logistic = True
+            elif self.intermediary is None:
+                # логист-автор оффера
+                self.accepted_by_logistic = True
                 self.intermediary = user
-
-        else:
-            raise PermissionDenied("Нельзя принять оффер: вы не участник сделки.")
+            else:
+                raise PermissionDenied("Логист не является участником этого оффера")
 
         with transaction.atomic():
             self.save(

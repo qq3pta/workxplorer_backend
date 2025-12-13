@@ -383,6 +383,32 @@ class OfferViewSet(ModelViewSet):
     @action(detail=True, methods=["post"])
     def accept(self, request, pk=None):
         offer = self.get_object()
+        print("\n[VIEW accept]")
+        print("offer.id =", offer.id, "deal_type =", offer.deal_type)
+        print("user.id =", request.user.id, "role =", getattr(request.user, "role", None))
+        print(
+            "flags BEFORE:",
+            "customer =",
+            offer.accepted_by_customer,
+            "carrier =",
+            offer.accepted_by_carrier,
+            "logistic =",
+            offer.accepted_by_logistic,
+        )
+        print(
+            "offer.carrier_id =",
+            offer.carrier_id,
+            "offer.logistic_id =",
+            offer.logistic_id,
+            "offer.intermediary_id =",
+            offer.intermediary_id,
+        )
+        print(
+            "cargo.customer_id =",
+            getattr(offer.cargo, "customer_id", None),
+            "cargo.created_by_id =",
+            getattr(offer.cargo, "created_by_id", None),
+        )
 
         try:
             offer.accept_by(request.user)
@@ -391,6 +417,17 @@ class OfferViewSet(ModelViewSet):
 
         # Обновляем offer, чтобы увидеть созданный Order
         offer.refresh_from_db()
+        print(
+            "[VIEW accept] flags AFTER:",
+            "customer =",
+            offer.accepted_by_customer,
+            "carrier =",
+            offer.accepted_by_carrier,
+            "logistic =",
+            offer.accepted_by_logistic,
+        )
+        print("[VIEW accept] is_handshake =", offer.is_handshake)
+        print("[VIEW accept] order_id =", getattr(getattr(offer, "order", None), "id", None))
 
         order = getattr(offer, "order", None)
 

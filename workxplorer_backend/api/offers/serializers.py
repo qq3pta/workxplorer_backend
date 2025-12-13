@@ -61,41 +61,61 @@ class OfferCreateSerializer(serializers.ModelSerializer):
         cargo = validated_data["cargo"]
 
         print("\n[SERIALIZER CREATE OFFER]")
-        print("user.id =", user.id, "role =", user.role)
-        print("cargo.customer_id =", cargo.customer_id)
-        print("cargo.created_by_id =", cargo.created_by_id)
+        print("user.id =", user.id, "role =", getattr(user, "role", None))
+        print("cargo.customer_id =", getattr(cargo, "customer_id", None))
+        print("cargo.created_by_id =", getattr(cargo, "created_by_id", None))
 
-        # логист, если заказ создан логистом
+        # кто участвует в оффере
+        carrier_user = None
         logistic_user = None
-        if cargo.created_by and getattr(cargo.created_by, "role", None) == "LOGISTIC":
-            logistic_user = cargo.created_by
+        initiator = None
 
-        # 🔥 КЕЙС 3: CUSTOMER ↔ LOGISTIC
-        if user.role == "LOGISTIC" and cargo.customer_id:
-            deal_type = Offer.DealType.CUSTOMER_LOGISTIC
-            initiator = Offer.Initiator.LOGISTIC
-            carrier = None
+        role = getattr(user, "role", None)
 
-        # 🔁 остальные кейсы — как раньше
-        else:
-            deal_type = Offer.resolve_deal_type(
-                initiator_user=user,
-                carrier=user if user.role == "CARRIER" else None,
-                logistic=logistic_user,
-            )
+        if role == "CARRIER":
+            carrier_user = user
             initiator = Offer.Initiator.CARRIER
-            carrier = user
+
+            # если заявку создал логист - можно сохранить как logistic
+            if cargo.created_by and getattr(cargo.created_by, "role", None) == "LOGISTIC":
+                logistic_user = cargo.created_by
+
+        elif role == "LOGISTIC":
+            # логист создаёт оффер заказчику -> carrier тут НЕ должен ставиться
+            logistic_user = user
+            carrier_user = None
+            initiator = Offer.Initiator.LOGISTIC
+
+        else:
+            # если хочешь запретить CUSTOMER создавать оффер через этот endpoint
+            raise serializers.ValidationError("Только CARRIER или LOGISTIC могут создавать оффер.")
+
+        deal_type = Offer.resolve_deal_type(
+            initiator_user=user,
+            carrier=carrier_user,
+            logistic=logistic_user,
+        )
 
         print("deal_type =", deal_type)
+        print(
+            "carrier_user =", getattr(carrier_user, "id", None), getattr(carrier_user, "role", None)
+        )
+        print(
+            "logistic_user =",
+            getattr(logistic_user, "id", None),
+            getattr(logistic_user, "role", None),
+        )
+        print("initiator =", initiator)
 
         offer = Offer.objects.create(
-            carrier=carrier,
-            initiator=initiator,
+            carrier=carrier_user,
             logistic=logistic_user,
+            initiator=initiator,
             deal_type=deal_type,
             **validated_data,
         )
 
+        print("[SERIALIZER CREATE OFFER] created offer.id =", offer.id)
         offer.send_create_notifications()
         return offer
 

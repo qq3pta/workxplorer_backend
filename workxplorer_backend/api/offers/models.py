@@ -139,50 +139,73 @@ class Offer(models.Model):
     def send_create_notifications(self):
         customer = self.cargo.customer
         carrier = self.carrier
-        logistic = self.logistic or self.intermediary
+        logistic_user = self.intermediary or self.logistic
 
-        print("\n[NOTIFY CREATE OFFER]")
-        print("deal_type =", self.deal_type)
-        print("customer =", getattr(customer, "id", None))
-        print("carrier =", getattr(carrier, "id", None))
-        print("logistic =", getattr(logistic, "id", None))
+        print("\n[MODEL send_create_notifications]")
+        print("offer.id =", self.id, "deal_type =", self.deal_type, "initiator =", self.initiator)
+        print("customer.id =", getattr(customer, "id", None))
+        print("carrier.id =", getattr(carrier, "id", None))
+        print("logistic.id =", getattr(logistic_user, "id", None))
 
-        # 🟢 CUSTOMER ← LOGISTIC
-        if self.deal_type == Offer.DealType.CUSTOMER_LOGISTIC:
-            notify(
-                user=customer,
-                type="offer_received_from_logistic",
-                title="Новое предложение",
-                message="Вы получили предложение от логиста.",
-                offer=self,
-                cargo=self.cargo,
-            )
-
-        # 🟢 CUSTOMER ← CARRIER
-        elif self.deal_type == Offer.DealType.CUSTOMER_CARRIER:
-            notify(
-                user=customer,
-                type="offer_received_from_carrier",
-                title="Новое предложение",
-                message="Вы получили предложение от перевозчика.",
-                offer=self,
-                cargo=self.cargo,
-            )
-
-        # 🟢 CARRIER ← CUSTOMER (invite)
-        elif self.deal_type == Offer.DealType.LOGISTIC_CARRIER:
+        # 1) Оффер от перевозчика заказчику
+        if self.initiator == self.Initiator.CARRIER:
             if carrier:
                 notify(
                     user=carrier,
-                    type="offer_invite",
-                    title="Вас пригласили к заказу",
-                    message="Заказчик пригласил вас к заказу.",
+                    type="offer_sent",
+                    title="Предложение отправлено",
+                    message="Вы отправили предложение заказчику.",
                     offer=self,
                     cargo=self.cargo,
                 )
+            else:
+                print("[MODEL send_create_notifications] SKIP notify carrier (carrier is None)")
 
-        else:
-            print("⚠️ Unknown deal_type → notifications skipped")
+            if customer:
+                notify(
+                    user=customer,
+                    type="offer_received_from_carrier",
+                    title="Новое предложение",
+                    message="Вы получили предложение от перевозчика.",
+                    offer=self,
+                    cargo=self.cargo,
+                )
+            else:
+                print("[MODEL send_create_notifications] SKIP notify customer (customer is None)")
+
+            return
+
+        # 2) Оффер от логиста заказчику
+        if self.initiator == self.Initiator.LOGISTIC:
+            if logistic_user:
+                notify(
+                    user=logistic_user,
+                    type="offer_sent",
+                    title="Предложение отправлено",
+                    message="Вы отправили предложение заказчику.",
+                    offer=self,
+                    cargo=self.cargo,
+                )
+            else:
+                print(
+                    "[MODEL send_create_notifications] SKIP notify logistic_user (logistic_user is None)"
+                )
+
+            if customer:
+                notify(
+                    user=customer,
+                    type="offer_received_from_logistic",
+                    title="Новое предложение",
+                    message="Вы получили предложение от логиста.",
+                    offer=self,
+                    cargo=self.cargo,
+                )
+            else:
+                print("[MODEL send_create_notifications] SKIP notify customer (customer is None)")
+
+            return
+
+        print("[MODEL send_create_notifications] Unknown initiator -> no notifications")
 
     def send_invite_notifications(self):
         customer = self.cargo.customer
@@ -228,25 +251,110 @@ class Offer(models.Model):
     def send_accept_notifications(self, accepted_by):
         customer = self.cargo.customer
         carrier = self.carrier
+        logistic_user = self.intermediary or self.logistic
+
+        print("\n[MODEL send_accept_notifications]")
+        print("offer.id =", self.id, "deal_type =", self.deal_type)
+        print(
+            "accepted_by.id =",
+            getattr(accepted_by, "id", None),
+            "role =",
+            getattr(accepted_by, "role", None),
+        )
+        print("customer.id =", getattr(customer, "id", None))
+        print("carrier.id =", getattr(carrier, "id", None))
+        print("logistic.id =", getattr(logistic_user, "id", None))
+        print("is_handshake =", self.is_handshake)
+
+        # === SUCCESS ===
         if self.is_handshake:
-            notify(
-                user=customer,
-                type="deal_success",
-                title="Сделка подтверждена",
-                message="Перевозчик подтвердил сделку.",
-                offer=self,
-                cargo=self.cargo,
-            )
-            notify(
-                user=carrier,
-                type="deal_success",
-                title="Сделка подтверждена",
-                message="Заказчик подтвердил сделку.",
-                offer=self,
-                cargo=self.cargo,
-            )
+            # customer <-> carrier
+            if self.deal_type in {self.DealType.CUSTOMER_CARRIER, self.DealType.LOGISTIC_CARRIER}:
+                if customer:
+                    notify(
+                        user=customer,
+                        type="deal_success",
+                        title="Сделка подтверждена",
+                        message="Перевозчик подтвердил сделку.",
+                        offer=self,
+                        cargo=self.cargo,
+                    )
+                if carrier:
+                    notify(
+                        user=carrier,
+                        type="deal_success",
+                        title="Сделка подтверждена",
+                        message="Заказчик подтвердил сделку.",
+                        offer=self,
+                        cargo=self.cargo,
+                    )
+                return
+
+            # customer <-> logistic
+            if self.deal_type == self.DealType.CUSTOMER_LOGISTIC:
+                if customer:
+                    notify(
+                        user=customer,
+                        type="deal_success",
+                        title="Сделка подтверждена",
+                        message="Логист подтвердил сделку.",
+                        offer=self,
+                        cargo=self.cargo,
+                    )
+                if logistic_user:
+                    notify(
+                        user=logistic_user,
+                        type="deal_success",
+                        title="Сделка подтверждена",
+                        message="Заказчик подтвердил сделку.",
+                        offer=self,
+                        cargo=self.cargo,
+                    )
+                return
+
+            # logistic only
+            if self.deal_type == self.DealType.LOGISTIC_LOGISTIC:
+                if logistic_user:
+                    notify(
+                        user=logistic_user,
+                        type="deal_success",
+                        title="Сделка подтверждена",
+                        message="Соглашение подтверждено.",
+                        offer=self,
+                        cargo=self.cargo,
+                    )
+                return
+
+        # === CONFIRM REQUIRED ===
+        # определяем "другую сторону"
+        other = None
+
+        if self.deal_type in {self.DealType.CUSTOMER_CARRIER, self.DealType.LOGISTIC_CARRIER}:
+            # сравнение делаем безопасно, без carrier.id если carrier=None
+            if carrier and accepted_by and accepted_by.id == carrier.id:
+                other = customer
+            else:
+                other = carrier
+
+        elif self.deal_type == self.DealType.CUSTOMER_LOGISTIC:
+            if accepted_by and accepted_by.id == getattr(customer, "id", None):
+                other = logistic_user
+            else:
+                other = customer
+
+        elif self.deal_type == self.DealType.LOGISTIC_LOGISTIC:
+            other = logistic_user
+
+        print(
+            "[MODEL send_accept_notifications] other.id =",
+            getattr(other, "id", None),
+            getattr(other, "role", None),
+        )
+
+        if not other:
+            print("[MODEL send_accept_notifications] SKIP notify other (other is None)")
             return
-        other = customer if accepted_by.id == carrier.id else carrier
+
         notify(
             user=other,
             type="deal_confirm_required_by_other",

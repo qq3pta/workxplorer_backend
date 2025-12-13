@@ -8,7 +8,6 @@ from django.core.validators import MinValueValidator
 from django.db import models, transaction
 from django.db.models import Q, UniqueConstraint
 
-from api.agreements.models import Agreement
 from api.loads.choices import Currency
 from api.loads.models import Cargo
 from api.notifications.services import notify
@@ -346,6 +345,8 @@ class Offer(models.Model):
             self.save(update_fields=["accepted_by_customer", "accepted_by_carrier", "updated_at"])
             self.send_accept_notifications(user)
             if self.accepted_by_customer and self.accepted_by_carrier:
+                from api.agreements.models import Agreement
+
                 Agreement.get_or_create_from_offer(self)
 
     def _accept_case_logistic_carrier(self, user):
@@ -372,6 +373,8 @@ class Offer(models.Model):
             )
             self.send_accept_notifications(user)
             if self.accepted_by_logistic and self.accepted_by_carrier:
+                from api.agreements.models import Agreement
+
                 Agreement.get_or_create_from_offer(self)
 
     def _accept_case_customer_logistic(self, user):
@@ -399,6 +402,8 @@ class Offer(models.Model):
             )
             self.send_accept_notifications(user)
             if self.accepted_by_customer and self.accepted_by_logistic:
+                from api.agreements.models import Agreement
+
                 Agreement.get_or_create_from_offer(self)
 
     def _accept_case_logistic_logistic(self, user):
@@ -416,4 +421,6 @@ class Offer(models.Model):
             self.save(update_fields=["accepted_by_logistic", "intermediary", "updated_at"])
             self.send_accept_notifications(user)
             if self.accepted_by_customer and self.accepted_by_logistic:
+                from api.agreements.models import Agreement
+
                 Agreement.get_or_create_from_offer(self)

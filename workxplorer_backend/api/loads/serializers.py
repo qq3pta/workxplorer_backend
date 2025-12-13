@@ -83,6 +83,7 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
             "price_uzs",
             "contact_pref",
             "payment_method",
+            "is_hidden",
         )
         read_only_fields = ("route_km", "price_uzs", "uuid")
 

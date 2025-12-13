@@ -327,7 +327,6 @@ class Offer(models.Model):
                 Agreement.get_or_create_from_offer(self)
 
     def _accept_case_logistic_carrier(self, user):
-        cargo = self.cargo
         if user.role == "LOGISTIC":
             if user.id in (self.logistic_id, self.intermediary_id):
                 self.accepted_by_logistic = True
@@ -381,7 +380,6 @@ class Offer(models.Model):
                 Agreement.get_or_create_from_offer(self)
 
     def _accept_case_logistic_logistic(self, user):
-        cargo = self.cargo
         if user.role == "LOGISTIC":
             if user.id in (self.logistic_id, self.intermediary_id):
                 self.accepted_by_logistic = True

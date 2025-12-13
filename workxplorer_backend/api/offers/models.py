@@ -564,6 +564,7 @@ class Offer(models.Model):
         if user.id in (cargo.customer_id, cargo.created_by_id):
             print("✔ CUSTOMER SIDE ACCEPT (by id)")
             self.accepted_by_customer = True
+            return
 
         # 🟢 ЗАКАЗЧИК
         if user.role == "CUSTOMER":

@@ -383,12 +383,12 @@ class Offer(models.Model):
     def _accept_case_customer_logistic(self, user):
         cargo = self.cargo
 
-        # ЗАКАЗЧИК
-        if user.id in (cargo.customer_id, cargo.created_by_id):
+        # ✔️ Заказчик
+        if user.id == cargo.customer_id:
             self.accepted_by_customer = True
 
-        # ЛОГИСТ
-        elif user.role == "LOGISTIC" and user.id in (self.logistic_id, self.intermediary_id):
+        # ✔️ Логист оффера
+        elif user.role == "LOGISTIC" and user.id == self.logistic_id:
             self.accepted_by_logistic = True
 
         else:
@@ -402,6 +402,7 @@ class Offer(models.Model):
                     "updated_at",
                 ]
             )
+
             self.send_accept_notifications(user)
 
             if self.accepted_by_customer and self.accepted_by_logistic:

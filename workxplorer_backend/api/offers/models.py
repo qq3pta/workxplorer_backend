@@ -379,18 +379,27 @@ class Offer(models.Model):
 
     def _accept_case_customer_logistic(self, user):
         cargo = self.cargo
-        if user.id in (cargo.customer_id, cargo.created_by_id):
+
+        # ✅ ЗАКАЗЧИК
+        if user.id == cargo.customer_id:
             self.accepted_by_customer = True
+
+        # ✅ ЛОГИСТ — участник оффера
         elif user.role == "LOGISTIC":
             if user.id in (self.logistic_id, self.intermediary_id):
                 self.accepted_by_logistic = True
+
+            # логист ещё не назначен → становится intermediary
             elif self.intermediary is None:
                 self.accepted_by_logistic = True
                 self.intermediary = user
+
             else:
                 raise PermissionDenied("Логист не является участником этого оффера")
+
         else:
             raise PermissionDenied("Недопустимый участник для данного кейса")
+
         with transaction.atomic():
             self.save(
                 update_fields=[
@@ -401,6 +410,7 @@ class Offer(models.Model):
                 ]
             )
             self.send_accept_notifications(user)
+
             if self.accepted_by_customer and self.accepted_by_logistic:
                 from api.agreements.models import Agreement
 

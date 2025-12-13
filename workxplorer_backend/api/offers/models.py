@@ -559,6 +559,12 @@ class Offer(models.Model):
             self.accepted_by_logistic,
         )
 
+        # 🆕 ДОБАВЛЕНО: заказчик может быть LOGISTIC (кейс 4)
+        # ==========================================================
+        if user.id in (cargo.customer_id, cargo.created_by_id):
+            print("✔ CUSTOMER SIDE ACCEPT (by id)")
+            self.accepted_by_customer = True
+
         # 🟢 ЗАКАЗЧИК
         if user.role == "CUSTOMER":
             print("✔ CUSTOMER ACCEPT")

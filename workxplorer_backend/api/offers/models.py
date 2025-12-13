@@ -139,22 +139,50 @@ class Offer(models.Model):
     def send_create_notifications(self):
         customer = self.cargo.customer
         carrier = self.carrier
-        notify(
-            user=carrier,
-            type="offer_sent",
-            title="Предложение отправлено",
-            message="Вы отправили предложение заказчику.",
-            offer=self,
-            cargo=self.cargo,
-        )
-        notify(
-            user=customer,
-            type="offer_received_from_carrier",
-            title="Новое предложение",
-            message="Вы получили предложение от перевозчика.",
-            offer=self,
-            cargo=self.cargo,
-        )
+        logistic = self.logistic or self.intermediary
+
+        print("\n[NOTIFY CREATE OFFER]")
+        print("deal_type =", self.deal_type)
+        print("customer =", getattr(customer, "id", None))
+        print("carrier =", getattr(carrier, "id", None))
+        print("logistic =", getattr(logistic, "id", None))
+
+        # 🟢 CUSTOMER ← LOGISTIC
+        if self.deal_type == Offer.DealType.CUSTOMER_LOGISTIC:
+            notify(
+                user=customer,
+                type="offer_received_from_logistic",
+                title="Новое предложение",
+                message="Вы получили предложение от логиста.",
+                offer=self,
+                cargo=self.cargo,
+            )
+
+        # 🟢 CUSTOMER ← CARRIER
+        elif self.deal_type == Offer.DealType.CUSTOMER_CARRIER:
+            notify(
+                user=customer,
+                type="offer_received_from_carrier",
+                title="Новое предложение",
+                message="Вы получили предложение от перевозчика.",
+                offer=self,
+                cargo=self.cargo,
+            )
+
+        # 🟢 CARRIER ← CUSTOMER (invite)
+        elif self.deal_type == Offer.DealType.LOGISTIC_CARRIER:
+            if carrier:
+                notify(
+                    user=carrier,
+                    type="offer_invite",
+                    title="Вас пригласили к заказу",
+                    message="Заказчик пригласил вас к заказу.",
+                    offer=self,
+                    cargo=self.cargo,
+                )
+
+        else:
+            print("⚠️ Unknown deal_type → notifications skipped")
 
     def send_invite_notifications(self):
         customer = self.cargo.customer

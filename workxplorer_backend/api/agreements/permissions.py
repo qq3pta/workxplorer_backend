@@ -10,22 +10,15 @@ class IsAgreementParticipant(BasePermission):
     def has_object_permission(self, request, view, obj):
         u = request.user
         offer = obj.offer
+        cargo = offer.cargo
 
         if not u or not u.is_authenticated:
             return False
 
-        if u.role == "CUSTOMER":
-            return u.id == offer.cargo.customer_id
-
-        if u.role == "CARRIER":
-            return u.id == offer.carrier_id
-
-        if u.role == "LOGISTIC":
-            # логист = заказчик, если он создал заявку
-            if u.id == offer.cargo.created_by_id:
-                return True
-
-            # логист как участник сделки
-            return u.id == offer.logistic_id or u.id == offer.intermediary_id
-
-        return False
+        return (
+            u.id == cargo.customer_id  # обычный заказчик
+            or u.id == cargo.created_by_id  # логист-заказчик (кейс 2)
+            or u.id == offer.carrier_id  # перевозчик
+            or u.id == offer.logistic_id  # логист-участник
+            or u.id == offer.intermediary_id  # логист-посредник
+        )

@@ -2,6 +2,7 @@ from django.contrib.gis.db.models.functions import Distance
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.db.models import Avg, F, FloatField, Q
+
 from django.db.models.functions import Coalesce
 from drf_spectacular.utils import (
     OpenApiParameter,
@@ -13,6 +14,7 @@ from rest_framework import serializers, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
+from .permissions import IsOfferParticipant
 
 from api.orders.models import Order
 
@@ -251,14 +253,21 @@ class OfferViewSet(ModelViewSet):
         }.get(self.action, OfferDetailSerializer)
 
     def get_permissions(self):
-        if self.action in {"create", "my"}:
+        if self.action == "create":
             classes = [IsAuthenticatedAndVerified, IsCustomerOrCarrierOrLogistic]
-        elif self.action == "incoming":
-            classes = [IsAuthenticatedAndVerified]  # доступно всем ролям внутри системы
+
+        elif self.action in {"accept", "reject", "counter", "retrieve"}:
+            classes = [
+                IsAuthenticatedAndVerified,
+                IsOfferParticipant,
+            ]
+
         elif self.action == "invite":
             classes = [IsAuthenticatedAndVerified, IsCustomer]
+
         else:
             classes = [IsAuthenticatedAndVerified]
+
         return [cls() for cls in classes]
 
     def get_queryset(self):
@@ -287,7 +296,12 @@ class OfferViewSet(ModelViewSet):
             elif getattr(u, "is_customer", False) or getattr(u, "role", None) == "CUSTOMER":
                 qs = qs.filter(cargo__customer=u)
             elif getattr(u, "is_logistic", False):
-                qs = qs.filter(Q(cargo__customer=u) | Q(carrier=u))
+                qs = qs.filter(
+                    Q(cargo__customer=u)  # логист = заказчик
+                    | Q(cargo__created_by=u)  # логист создал заявку
+                    | Q(logistic=u)  # логист оффера
+                    | Q(intermediary=u)  # логист-посредник
+                ).distinct()
             else:
                 qs = qs.none()
 
@@ -334,8 +348,16 @@ class OfferViewSet(ModelViewSet):
                 initiator__in=[Offer.Initiator.CUSTOMER, Offer.Initiator.LOGISTIC],
             )
         else:
-            # Для заказчика/логиста — офферы от перевозчиков
-            qs = qs.filter(cargo__customer=u, is_active=True)
+            qs = (
+                qs.filter(is_active=True)
+                .filter(
+                    Q(cargo__customer=u)
+                    | Q(cargo__created_by=u)
+                    | Q(logistic=u)
+                    | Q(intermediary=u)
+                )
+                .distinct()
+            )
 
         qs = _apply_common_filters(qs, request.query_params)
         page = self.paginate_queryset(qs)
@@ -345,11 +367,6 @@ class OfferViewSet(ModelViewSet):
     @extend_schema(responses=OfferDetailSerializer)
     def retrieve(self, request, *args, **kwargs):
         obj = self.get_object()
-        u = request.user
-        if u.id not in (obj.carrier_id, obj.cargo.customer_id) and not getattr(
-            u, "is_logistic", False
-        ):
-            raise PermissionDenied("Нет доступа к офферу")
         return Response(self.get_serializer(obj).data)
 
     @extend_schema(
@@ -448,11 +465,6 @@ class OfferViewSet(ModelViewSet):
     @action(detail=True, methods=["post"])
     def counter(self, request, pk=None):
         offer = self.get_object()
-        u = request.user
-        if u.id not in (offer.cargo.customer_id, offer.carrier_id) and not getattr(
-            u, "is_staff", False
-        ):
-            return Response({"detail": "Forbidden"}, status=status.HTTP_403_FORBIDDEN)
 
         ser = self.get_serializer(data=request.data)
         ser.is_valid(raise_exception=True)
@@ -465,7 +477,10 @@ class OfferViewSet(ModelViewSet):
                 by_user=request.user,
             )
 
-        return Response(OfferDetailSerializer(offer).data, status=status.HTTP_200_OK)
+        return Response(
+            OfferDetailSerializer(offer).data,
+            status=status.HTTP_200_OK,
+        )
 
     @extend_schema(
         tags=["offers"],

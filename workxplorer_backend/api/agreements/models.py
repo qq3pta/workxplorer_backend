@@ -66,19 +66,18 @@ class Agreement(models.Model):
         cargo = offer.cargo
         accepted_as_participant = False
 
-        if user.role == "CUSTOMER":
-            if user.id in (cargo.customer_id, cargo.created_by_id):
-                self.accepted_by_customer = True
-                accepted_as_participant = True
+        # ✅ ЗАКАЗЧИК ПО ID (включая LOGISTIC-заказчика)
+        if user.id in (cargo.customer_id, cargo.created_by_id):
+            self.accepted_by_customer = True
+            accepted_as_participant = True
 
-        elif user.role == "CARRIER" and user.id == offer.carrier_id:
+        # ✅ ПЕРЕВОЗЧИК
+        elif user.id == offer.carrier_id:
             self.accepted_by_carrier = True
             accepted_as_participant = True
 
-        elif user.role == "LOGISTIC" and user.id in (
-            offer.logistic_id,
-            offer.intermediary_id,
-        ):
+        # ✅ ЛОГИСТ / ПОСРЕДНИК
+        elif user.id in (offer.logistic_id, offer.intermediary_id):
             self.accepted_by_logistic = True
             accepted_as_participant = True
 

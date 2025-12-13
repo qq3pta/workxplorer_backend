@@ -88,7 +88,7 @@ class Agreement(models.Model):
         cargo = offer.cargo
 
         # 1️⃣ ЗАКАЗЧИК (НЕ СМОТРИМ НА РОЛЬ)
-        if user.id == cargo.customer_id:
+        if user.id == cargo.customer_id or user.id == cargo.created_by_id:
             self.accepted_by_customer = True
 
         # 2️⃣ ПЕРЕВОЗЧИК

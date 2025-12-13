@@ -340,7 +340,7 @@ class Offer(models.Model):
         cargo = self.cargo  # <-- ВАЖНО: именно self.cargo
 
         # 1️⃣ ЗАКАЗЧИК (КОНТЕКСТ ВЫШЕ РОЛИ)
-        if user.id == cargo.customer_id:
+        if user.id == cargo.customer_id or user.id == cargo.created_by_id:
             self.accepted_by_customer = True
 
         # 2️⃣ ПЕРЕВОЗЧИК

@@ -8,7 +8,7 @@ from django.utils import timezone
 from django.core.exceptions import PermissionDenied
 from api.loads.models import Cargo, CargoStatus
 
-# from api.offers.models import Offer
+from api.offers.models import Offer
 from api.orders.models import Order
 
 
@@ -85,6 +85,7 @@ class Agreement(models.Model):
             raise ValidationError("Соглашение уже обработано")
 
         offer = self.offer
+        kind = offer.deal_type
         cargo = offer.cargo
 
         # 1️⃣ ЗАКАЗЧИК (НЕ СМОТРИМ НА РОЛЬ)
@@ -96,7 +97,7 @@ class Agreement(models.Model):
             self.accepted_by_carrier = True
 
         # 3️⃣ ЛОГИСТ (НЕ заказчик)
-        elif user.role == "LOGISTIC":
+        elif user.role == "LOGISTIC" and user.id in (offer.logistic_id, offer.intermediary_id):
             self.accepted_by_logistic = True
 
         else:
@@ -139,17 +140,22 @@ class Agreement(models.Model):
             return
 
         offer = self.offer
+        kind = offer.deal_type
 
-        kind = offer.offer_kind()
-
-        # CASE 1 и 2: есть перевозчик
-        if kind in {"CUSTOMER_CARRIER", "LOGISTIC_CARRIER"}:
+        if kind in {
+            Offer.DealType.CUSTOMER_CARRIER,
+            Offer.DealType.LOGISTIC_CARRIER,
+        }:
             if not (self.accepted_by_customer and self.accepted_by_carrier):
                 return
 
         # CASE 3 и 4: перевозчика нет
-        elif kind == "CUSTOMER_LOGISTIC":
+        elif kind == Offer.DealType.CUSTOMER_LOGISTIC:
             if not (self.accepted_by_customer and self.accepted_by_logistic):
+                return
+
+        elif kind == Offer.DealType.LOGISTIC_LOGISTIC:
+            if not self.accepted_by_logistic:
                 return
 
         else:
@@ -168,13 +174,13 @@ class Agreement(models.Model):
             Order.objects.create(
                 cargo=cargo,
                 customer=cargo.customer,
-                carrier=offer.carrier if kind != "CUSTOMER_LOGISTIC" else None,
+                carrier=(offer.carrier if kind != Offer.DealType.CUSTOMER_LOGISTIC else None),
                 logistic=offer.intermediary or offer.logistic,
                 created_by=offer.intermediary or offer.logistic or cargo.customer,
                 offer=offer,
                 status=(
                     Order.OrderStatus.NO_DRIVER
-                    if kind == "CUSTOMER_LOGISTIC"
+                    if kind == Offer.DealType.CUSTOMER_LOGISTIC
                     else Order.OrderStatus.PENDING
                 ),
                 currency=offer.price_currency,
@@ -183,7 +189,9 @@ class Agreement(models.Model):
             )
 
             cargo.status = CargoStatus.MATCHED
-            cargo.assigned_carrier = offer.carrier if kind != "CUSTOMER_LOGISTIC" else None
+            cargo.assigned_carrier = (
+                offer.carrier if kind != Offer.DealType.CUSTOMER_LOGISTIC else None
+            )
             cargo.chosen_offer = offer
             cargo.save(update_fields=["status", "assigned_carrier", "chosen_offer"])
 

@@ -64,21 +64,26 @@ class Agreement(models.Model):
 
         offer = self.offer
         cargo = offer.cargo
+        accepted_as_participant = False
 
-        if user.id in (cargo.customer_id, cargo.created_by_id):
-            self.accepted_by_customer = True
+        if user.role == "CUSTOMER":
+            if user.id in (cargo.customer_id, cargo.created_by_id):
+                self.accepted_by_customer = True
+                accepted_as_participant = True
 
         elif user.role == "CARRIER" and user.id == offer.carrier_id:
             self.accepted_by_carrier = True
+            accepted_as_participant = True
 
         elif user.role == "LOGISTIC" and user.id in (
             offer.logistic_id,
             offer.intermediary_id,
         ):
             self.accepted_by_logistic = True
+            accepted_as_participant = True
 
-        else:
-            raise PermissionDenied("Вы не участник соглашения")
+        if not accepted_as_participant:
+            raise PermissionDenied("Вы не участник соглашения или не имеете прав на акцепт.")
 
         self.save()
         self.try_finalize()

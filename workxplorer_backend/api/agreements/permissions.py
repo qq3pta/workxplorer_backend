@@ -21,10 +21,11 @@ class IsAgreementParticipant(BasePermission):
             return u.id == offer.carrier_id
 
         if u.role == "LOGISTIC":
-            return (
-                u.id == offer.logistic_id
-                or u.id == offer.intermediary_id
-                or u.id == offer.cargo.created_by_id
-            )
+            # логист = заказчик, если он создал заявку
+            if u.id == offer.cargo.created_by_id:
+                return True
+
+            # логист как участник сделки
+            return u.id == offer.logistic_id or u.id == offer.intermediary_id
 
         return False

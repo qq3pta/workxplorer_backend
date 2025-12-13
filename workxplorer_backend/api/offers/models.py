@@ -295,6 +295,28 @@ class Offer(models.Model):
         )
         self.send_counter_notifications(by_user)
 
+    @staticmethod
+    def resolve_deal_type(*, initiator_user, carrier=None, logistic=None) -> str:
+        role = getattr(initiator_user, "role", None)
+
+        # Перевозчик → всегда заказчику
+        if role == "CARRIER":
+            return Offer.DealType.CUSTOMER_CARRIER
+
+        # Заказчик
+        if role == "CUSTOMER":
+            if logistic and not carrier:
+                return Offer.DealType.CUSTOMER_LOGISTIC
+            return Offer.DealType.CUSTOMER_CARRIER
+
+        # Логист
+        if role == "LOGISTIC":
+            if carrier:
+                return Offer.DealType.LOGISTIC_CARRIER
+            return Offer.DealType.CUSTOMER_LOGISTIC
+
+        raise ValidationError("Невозможно определить тип сделки")
+
     # ---------------- Accept Dispatcher ----------------
     def accept_by(self, user) -> None:
         if not self.is_active:

@@ -64,10 +64,17 @@ class OfferCreateSerializer(serializers.ModelSerializer):
         if cargo.created_by and getattr(cargo.created_by, "role", None) == "LOGISTIC":
             logistic_user = cargo.created_by
 
+        deal_type = Offer.resolve_deal_type(
+            initiator_user=user,
+            carrier=user,
+            logistic=logistic_user,
+        )
+
         offer = Offer.objects.create(
             carrier=user,
             initiator=Offer.Initiator.CARRIER,
             logistic=logistic_user,
+            deal_type=deal_type,
             **validated_data,
         )
 
@@ -121,6 +128,14 @@ class OfferInviteSerializer(serializers.Serializer):
             logistic_user = cargo.created_by
 
         # --- Создаём оффер корректно ---
+        initiator_user = self.context["request"].user
+
+        deal_type = Offer.resolve_deal_type(
+            initiator_user=initiator_user,
+            carrier=carrier,
+            logistic=logistic_user,
+        )
+
         offer = Offer.objects.create(
             cargo=cargo,
             carrier=carrier,
@@ -129,6 +144,7 @@ class OfferInviteSerializer(serializers.Serializer):
             message=validated_data.get("message", ""),
             initiator=Offer.Initiator.CUSTOMER,
             logistic=logistic_user,
+            deal_type=deal_type,
         )
 
         offer.send_invite_notifications()

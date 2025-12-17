@@ -471,6 +471,16 @@ class Offer(models.Model):
     # ---------------- Accept Dispatcher ----------------
     def accept_by(self, user) -> None:
         print("\n[MODEL accept_by]")
+
+        if not self.deal_type:
+            logger.warning("Offer %s has empty deal_type. Resolving automatically.", self.id)
+            self.deal_type = Offer.resolve_deal_type(
+                initiator_user=self.cargo.customer,
+                carrier=self.carrier,
+                logistic=self.logistic or self.intermediary,
+            )
+            self.save(update_fields=["deal_type"])
+
         print("user.id =", user.id, "role =", user.role)
         print("deal_type =", self.deal_type)
         print(
@@ -492,9 +502,11 @@ class Offer(models.Model):
             self.DealType.CUSTOMER_LOGISTIC: self._accept_case_customer_logistic,
             self.DealType.LOGISTIC_LOGISTIC: self._accept_case_logistic_logistic,
         }
+
         handler = handlers.get(self.deal_type)
         if not handler:
             raise ValidationError("Неизвестный тип сделки")
+
         handler(user)
 
     # ---------------- CASES ----------------

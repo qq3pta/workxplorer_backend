@@ -429,6 +429,8 @@ class Offer(models.Model):
         self.accepted_by_customer = False
         self.accepted_by_carrier = False
         self.accepted_by_logistic = False
+        self.is_counter = True
+
         self.save(
             update_fields=[
                 "price_value",
@@ -438,9 +440,12 @@ class Offer(models.Model):
                 "accepted_by_customer",
                 "accepted_by_carrier",
                 "accepted_by_logistic",
+                "is_counter",
                 "updated_at",
             ]
         )
+        if by_user is not None:
+            _ = self.get_response_status_for(by_user)
         self.send_counter_notifications(by_user)
 
     @staticmethod

@@ -709,7 +709,7 @@ class Offer(models.Model):
         waiting — пользователь уже ответил, ждёт другую сторону
         action_required — пользователю нужно ответить
         rejected — оффер отклонён / неактивен
-        counter_from_customer — контр от заказчика (видят все, если инициатор заказчик или логист-заказчик)
+        counter_from_customer — контр от заказчика
         counter — контр от логиста/перевозчика
         """
         if not self.is_active:
@@ -719,13 +719,10 @@ class Offer(models.Model):
 
         # ---------------- Counter Logic ----------------
         if self.is_counter:
-            # Контр от заказчика
-            if self.initiator == self.Initiator.CUSTOMER:
-                return "counter_from_customer"
-
-            # Контр от логиста, который является владельцем груза (логист-заказчик)
-            if self.initiator == self.Initiator.LOGISTIC and self.cargo.customer_id == getattr(
-                self.logistic, "id", None
+            # Контр от заказчика или логиста, который является владельцем груза
+            if self.initiator == self.Initiator.CUSTOMER or (
+                self.initiator == self.Initiator.LOGISTIC
+                and self.cargo.customer_id == getattr(self.logistic, "id", None)
             ):
                 return "counter_from_customer"
 
@@ -734,12 +731,12 @@ class Offer(models.Model):
 
         # ---------------- Regular Response Logic ----------------
         if role == "CUSTOMER":
-            return "waiting" if self.accepted_by_customer else "action_required"
+            return "waiting" if not self.accepted_by_customer else "waiting"
 
         if role == "CARRIER":
-            return "waiting" if self.accepted_by_carrier else "action_required"
+            return "waiting" if not self.accepted_by_carrier else "waiting"
 
         if role == "LOGISTIC":
-            return "waiting" if self.accepted_by_logistic else "action_required"
+            return "waiting" if not self.accepted_by_logistic else "waiting"
 
         return "waiting"

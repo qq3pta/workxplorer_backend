@@ -693,11 +693,22 @@ class Offer(models.Model):
 
         role = getattr(user, "role", None)
 
+        # ---------------- Counter Logic ----------------
         if self.is_counter:
+            # Контр от заказчика
             if self.initiator == self.Initiator.CUSTOMER:
                 return "counter_from_customer"
-            return "counter"  # логист/перевозчик
 
+            # Контр от логиста, который является владельцем груза (заказчик-логист)
+            if self.initiator == self.Initiator.LOGISTIC and self.cargo.customer_id == getattr(
+                self.initiator, "id", None
+            ):
+                return "counter_from_customer"
+
+            # Контр от логиста/перевозчика
+            return "counter"
+
+        # ---------------- Regular Response Logic ----------------
         if role == "CUSTOMER":
             return "waiting" if self.accepted_by_customer else "action_required"
 

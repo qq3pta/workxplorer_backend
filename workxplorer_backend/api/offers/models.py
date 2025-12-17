@@ -93,6 +93,12 @@ class Offer(models.Model):
         default=Initiator.CARRIER,
     )
 
+    response_status = models.CharField(
+        max_length=32,
+        blank=True,
+        null=True,
+        default="",
+    )
     is_counter = models.BooleanField(default=False)
 
     is_active = models.BooleanField(default=True)
@@ -462,7 +468,7 @@ class Offer(models.Model):
                 "accepted_by_carrier",
                 "accepted_by_logistic",
                 "is_counter",
-                "response_status",  # <- добавлено поле
+                "response_status",
                 "updated_at",
             ]
         )

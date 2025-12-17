@@ -93,6 +93,8 @@ class Offer(models.Model):
         default=Initiator.CARRIER,
     )
 
+    is_counter = models.BooleanField(default=False)
+
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

@@ -689,6 +689,9 @@ class Offer(models.Model):
         if not self.is_active:
             return "rejected"
 
+        if self.is_counter:
+            return "counter"
+
         role = getattr(user, "role", None)
 
         if role == "CUSTOMER":

@@ -719,15 +719,14 @@ class Offer(models.Model):
 
         # ---------------- Counter Logic ----------------
         if self.is_counter:
-            # Контр от заказчика
-            if self.initiator == self.Initiator.CUSTOMER:
+            # Контр от заказчика или логиста-заказчика
+            if self.initiator == self.Initiator.CUSTOMER or (
+                self.initiator == self.Initiator.LOGISTIC
+                and self.cargo.customer_id in [self.logistic_id, getattr(user, "id", None)]
+            ):
                 return "counter_from_customer"
 
-            # Контр от логиста, который является владельцем груза (логист-заказчик)
-            if self.initiator == self.Initiator.LOGISTIC and self.cargo.customer_id == user.id:
-                return "counter_from_customer"
-
-            # Для всех остальных участников (водитель, другой логист) — обычный counter
+            # Для всех остальных участников — обычный counter
             return "counter"
 
         # ---------------- Regular Response Logic ----------------

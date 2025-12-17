@@ -685,14 +685,18 @@ class Offer(models.Model):
         waiting — пользователь уже ответил, ждёт другую сторону
         action_required — пользователю нужно ответить
         rejected — оффер отклонён / неактивен
+        counter_from_customer — контр от заказчика
+        counter — контр от логиста/перевозчика
         """
         if not self.is_active:
             return "rejected"
 
-        if self.is_counter:
-            return "counter"
-
         role = getattr(user, "role", None)
+
+        if self.is_counter:
+            if self.initiator == self.Initiator.CUSTOMER:
+                return "counter_from_customer"
+            return "counter"  # логист/перевозчик
 
         if role == "CUSTOMER":
             return "waiting" if self.accepted_by_customer else "action_required"

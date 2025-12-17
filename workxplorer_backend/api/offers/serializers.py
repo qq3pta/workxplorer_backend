@@ -228,6 +228,7 @@ class OfferShortSerializer(serializers.ModelSerializer):
     route_km = serializers.SerializerMethodField()
     payment_method = serializers.SerializerMethodField()
     source_status = serializers.SerializerMethodField()
+    response_status = serializers.SerializerMethodField()
     price_per_km = serializers.SerializerMethodField()
 
     status_display = serializers.SerializerMethodField()
@@ -270,6 +271,7 @@ class OfferShortSerializer(serializers.ModelSerializer):
             "status_display",
             "is_handshake",
             "source_status",
+            "response_status",
             "message",
             "created_at",
             "invite_token",
@@ -420,6 +422,19 @@ class OfferShortSerializer(serializers.ModelSerializer):
         if code in ("CARRIER", "BROKER", "INTERMEDIARY", "FROM_BROKER"):
             return "Предложение от посредника"
         return ""
+
+    @extend_schema_field(str)
+    def get_response_status(self, obj: Offer) -> str:
+        """
+        - waiting — пользователь уже ответил, ждёт другую сторону
+        - action_required — пользователю нужно ответить
+        - rejected — оффер отклонён / неактивен
+        """
+        request = self.context.get("request")
+        if not request:
+            return "action_required"
+
+        return obj.get_response_status_for(request.user)
 
     def get_is_handshake(self, obj: Offer) -> bool:
         """

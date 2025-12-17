@@ -297,18 +297,24 @@ class OfferViewSet(ModelViewSet):
                 qs = qs.filter(cargo__customer=u)
             elif getattr(u, "is_logistic", False):
                 qs = qs.filter(
-                    Q(cargo__customer=u)  # логист = заказчик
-                    | Q(cargo__created_by=u)  # логист создал заявку
-                    | Q(logistic=u)  # логист оффера
-                    | Q(intermediary=u)  # логист-посредник
+                    Q(cargo__customer=u)
+                    | Q(cargo__created_by=u)
+                    | Q(logistic=u)
+                    | Q(intermediary=u)
                 ).distinct()
             else:
                 qs = qs.none()
 
         qs = _apply_common_filters(qs, request.query_params)
 
+        # ------------------ Фильтр по response_status ------------------
+        response_status = request.query_params.get("response_status")
+        if response_status:
+            qs = [o for o in qs if o.get_response_status_for(u) == response_status]
+        # ----------------------------------------------------------------
+
         page = self.paginate_queryset(qs)
-        ser = OfferShortSerializer(page or qs, many=True)
+        ser = OfferShortSerializer(page or qs, many=True, context={"request": request})
         return self.get_paginated_response(ser.data) if page is not None else Response(ser.data)
 
     @extend_schema(

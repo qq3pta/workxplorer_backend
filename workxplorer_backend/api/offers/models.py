@@ -672,3 +672,25 @@ class Offer(models.Model):
                 from api.agreements.models import Agreement
 
                 Agreement.get_or_create_from_offer(self)
+
+    def get_response_status_for(self, user) -> str:
+        """
+        waiting — пользователь уже ответил, ждёт другую сторону
+        action_required — пользователю нужно ответить
+        rejected — оффер отклонён / неактивен
+        """
+        if not self.is_active:
+            return "rejected"
+
+        role = getattr(user, "role", None)
+
+        if role == "CUSTOMER":
+            return "waiting" if self.accepted_by_customer else "action_required"
+
+        if role == "CARRIER":
+            return "waiting" if self.accepted_by_carrier else "action_required"
+
+        if role == "LOGISTIC":
+            return "waiting" if self.accepted_by_logistic else "action_required"
+
+        return "waiting"

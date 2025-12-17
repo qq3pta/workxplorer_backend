@@ -448,10 +448,7 @@ class Offer(models.Model):
                 self.response_status = "counter_from_customer"
 
             # Контр от логиста, который является владельцем груза (заказчик-логист)
-            elif (
-                self.initiator == self.Initiator.LOGISTIC
-                and getattr(self.logistic, "id", None) == self.cargo.customer_id
-            ):
+            elif self.initiator == self.Initiator.LOGISTIC and by_user.id == self.cargo.customer_id:
                 self.response_status = "counter_from_customer"
 
             # Контр от логиста/перевозчика
@@ -727,10 +724,7 @@ class Offer(models.Model):
                 return "counter_from_customer"
 
             # Контр от логиста, который является владельцем груза (заказчик-логист)
-            if (
-                self.initiator == self.Initiator.LOGISTIC
-                and getattr(self.logistic, "id", None) == self.cargo.customer_id
-            ):
+            if self.initiator == self.Initiator.LOGISTIC and user.id == self.cargo.customer_id:
                 return "counter_from_customer"
 
             # Контр от логиста/перевозчика

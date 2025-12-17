@@ -249,8 +249,10 @@ class MyCargosBoardView(generics.ListAPIView):
     def get_queryset(self):
         user = self.request.user
 
-        # 🔑 Автор всегда видит свои заявки (и скрытые, и нет)
-        qs = Cargo.objects.filter(Q(customer=user) | Q(created_by=user))
+        qs = Cargo.objects.filter(
+            Q(customer=user) | Q(created_by=user),
+            status=CargoStatus.POSTED,  # ← ВАЖНО
+        )
 
         qs = qs.annotate(
             path_m=Distance(F("origin_point"), F("dest_point")),

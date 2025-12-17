@@ -428,10 +428,29 @@ class Offer(models.Model):
                 self.initiator = self.Initiator.CUSTOMER
             else:
                 self.initiator = self.Initiator.CARRIER
+
+        # Сброс всех флагов при новом контрпредложении
         self.accepted_by_customer = False
         self.accepted_by_carrier = False
         self.accepted_by_logistic = False
         self.is_counter = True
+
+        # Установка response_status в зависимости от роли инициатора
+        if by_user is not None:
+            # Контр от заказчика
+            if self.initiator == self.Initiator.CUSTOMER:
+                self.response_status = "counter_from_customer"
+
+            # Контр от логиста, который является владельцем груза (заказчик-логист)
+            elif (
+                self.initiator == self.Initiator.LOGISTIC
+                and getattr(self.logistic, "id", None) == self.cargo.customer_id
+            ):
+                self.response_status = "counter_from_customer"
+
+            # Контр от логиста/перевозчика
+            else:
+                self.response_status = "counter"
 
         self.save(
             update_fields=[
@@ -443,9 +462,11 @@ class Offer(models.Model):
                 "accepted_by_carrier",
                 "accepted_by_logistic",
                 "is_counter",
+                "response_status",  # <- добавлено поле
                 "updated_at",
             ]
         )
+
         if by_user is not None:
             _ = self.get_response_status_for(by_user)
         self.send_counter_notifications(by_user)
@@ -700,8 +721,9 @@ class Offer(models.Model):
                 return "counter_from_customer"
 
             # Контр от логиста, который является владельцем груза (заказчик-логист)
-            if self.initiator == self.Initiator.LOGISTIC and self.cargo.customer_id == getattr(
-                self.initiator, "id", None
+            if (
+                self.initiator == self.Initiator.LOGISTIC
+                and getattr(self.logistic, "id", None) == self.cargo.customer_id
             ):
                 return "counter_from_customer"
 

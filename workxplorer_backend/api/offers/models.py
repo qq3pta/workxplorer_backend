@@ -709,7 +709,7 @@ class Offer(models.Model):
         waiting — пользователь уже ответил, ждёт другую сторону
         action_required — пользователю нужно ответить
         rejected — оффер отклонён / неактивен
-        counter_from_customer — контр от заказчика
+        counter_from_customer — контр от заказчика (видят все, если инициатор заказчик или логист-заказчик)
         counter — контр от логиста/перевозчика
         """
         if not self.is_active:
@@ -723,13 +723,13 @@ class Offer(models.Model):
             if self.initiator == self.Initiator.CUSTOMER:
                 return "counter_from_customer"
 
-            # Контр от логиста, который является владельцем груза
-            if self.initiator == self.Initiator.LOGISTIC:
-                if user.id == self.cargo.customer_id:
-                    return "counter_from_customer"  # для владельца заявки
-                return "counter"
+            # Контр от логиста, который является владельцем груза (логист-заказчик)
+            if self.initiator == self.Initiator.LOGISTIC and self.cargo.customer_id == getattr(
+                self.logistic, "id", None
+            ):
+                return "counter_from_customer"
 
-            # Контр от логиста/перевозчика
+            # Для всех остальных участников (водитель, другой логист) — обычный counter
             return "counter"
 
         # ---------------- Regular Response Logic ----------------

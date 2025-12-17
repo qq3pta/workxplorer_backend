@@ -723,8 +723,10 @@ class Offer(models.Model):
             if self.initiator == self.Initiator.CUSTOMER:
                 return "counter_from_customer"
 
-            # Контр от логиста, который является владельцем груза (заказчик-логист)
-            if self.initiator == self.Initiator.LOGISTIC and user.id == self.cargo.customer_id:
+            # Контр от логиста, который владелец груза (заказчик-логист)
+            if self.initiator == self.Initiator.LOGISTIC and self.cargo.customer_id == getattr(
+                self.initiator, "id", None
+            ):
                 return "counter_from_customer"
 
             # Контр от логиста/перевозчика

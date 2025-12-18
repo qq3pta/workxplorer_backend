@@ -228,23 +228,27 @@ class Offer(models.Model):
 
     def send_invite_notifications(self):
         customer = self.cargo.customer
-        carrier = self.carrier
-        notify(
-            user=customer,
-            type="offer_sent",
-            title="Инвайт отправлен",
-            message="Вы отправили предложение перевозчику.",
-            offer=self,
-            cargo=self.cargo,
-        )
-        notify(
-            user=carrier,
-            type="offer_from_customer",
-            title="Новое предложение от заказчика",
-            message="Заказчик отправил вам предложение.",
-            offer=self,
-            cargo=self.cargo,
-        )
+        recipient = self.carrier or self.logistic or self.intermediary
+
+        if customer:
+            notify(
+                user=customer,
+                type="offer_sent",
+                title="Инвайт отправлен",
+                message="Вы отправили предложение.",
+                offer=self,
+                cargo=self.cargo,
+            )
+
+        if recipient:
+            notify(
+                user=recipient,
+                type="offer_from_customer",
+                title="Новое предложение",
+                message="Вам отправлено новое предложение.",
+                offer=self,
+                cargo=self.cargo,
+            )
 
     def send_counter_notifications(self, by_user):
         customer = self.cargo.customer

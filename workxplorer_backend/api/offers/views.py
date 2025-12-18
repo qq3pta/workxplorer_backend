@@ -263,7 +263,7 @@ class OfferViewSet(ModelViewSet):
             ]
 
         elif self.action == "invite":
-            classes = [IsAuthenticatedAndVerified, IsCustomer]
+            classes = [IsAuthenticatedAndVerified, IsCustomerOrCarrierOrLogistic]
 
         else:
             classes = [IsAuthenticatedAndVerified]

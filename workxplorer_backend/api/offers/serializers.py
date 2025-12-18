@@ -425,11 +425,9 @@ class OfferShortSerializer(serializers.ModelSerializer):
 
     @extend_schema_field(str)
     def get_response_status(self, obj: Offer) -> str:
-        """
-        - waiting — пользователь уже ответил, ждёт другую сторону
-        - action_required — пользователю нужно ответить
-        - rejected — оффер отклонён / неактивен
-        """
+        if obj.is_counter and obj.response_status:
+            return obj.response_status
+
         request = self.context.get("request")
         if not request:
             return "action_required"

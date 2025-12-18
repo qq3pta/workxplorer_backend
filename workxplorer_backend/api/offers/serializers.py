@@ -238,7 +238,10 @@ class OfferShortSerializer(serializers.ModelSerializer):
     phone = serializers.SerializerMethodField()
     email = serializers.SerializerMethodField()
     route_km = serializers.SerializerMethodField()
-    payment_method = serializers.SerializerMethodField()
+    payment_method = serializers.ChoiceField(choices=Offer.PaymentMethod.choices)
+    payment_method_display = serializers.CharField(
+        source="get_payment_method_display", read_only=True
+    )
     source_status = serializers.SerializerMethodField()
     response_status = serializers.SerializerMethodField()
     price_per_km = serializers.SerializerMethodField()
@@ -388,25 +391,6 @@ class OfferShortSerializer(serializers.ModelSerializer):
                 pass
 
         return None
-
-    @extend_schema_field(str)
-    def get_payment_method(self, obj: Offer) -> str:
-        """
-        Способ оплаты: «Картой» / «Наличными».
-
-        Ожидается, что в модели Offer есть поле payment_method или payment_type
-        с кодами вида: CARD / CASH / BY_CARD / BY_CASH.
-        Если поля нет — вернётся пустая строка (getattr с default).
-        """
-        code = getattr(obj, "payment_method", None) or getattr(obj, "payment_type", None)
-        if not code:
-            return ""
-        code = str(code).upper()
-        if code in ("CARD", "BY_CARD"):
-            return "Картой"
-        if code in ("CASH", "BY_CASH"):
-            return "Наличными"
-        return ""
 
     @extend_schema_field(str)
     def get_source_status(self, obj: Offer) -> str:

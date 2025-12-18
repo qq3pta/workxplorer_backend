@@ -238,6 +238,9 @@ class Offer(models.Model):
     def send_counter_notifications(self, by_user):
         customer = self.cargo.customer
         carrier = self.carrier
+        logistic_user = self.intermediary or self.logistic
+
+        # уведомление инициатору
         notify(
             user=by_user,
             type="offer_my_response_sent",
@@ -246,7 +249,26 @@ class Offer(models.Model):
             offer=self,
             cargo=self.cargo,
         )
-        other = customer if by_user.id == carrier.id else carrier
+
+        other = None
+
+        # --- customer ↔ carrier ---
+        if carrier:
+            if by_user.id == carrier.id:
+                other = customer
+            else:
+                other = carrier
+
+        # --- customer ↔ logistic ---
+        elif logistic_user:
+            if by_user.id == customer.id:
+                other = logistic_user
+            else:
+                other = customer
+
+        if not other:
+            return
+
         notify(
             user=other,
             type="offer_response_to_me",

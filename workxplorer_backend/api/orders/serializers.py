@@ -5,6 +5,7 @@ from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from api.loads.choices import Currency
+from api.payments.serializers import PaymentSerializer
 
 from .models import Order, OrderDocument, OrderStatusHistory
 
@@ -246,13 +247,21 @@ class OrderListSerializer(serializers.ModelSerializer):
 
 class OrderDetailSerializer(OrderListSerializer):
     documents = OrderDocumentSerializer(many=True, read_only=True)
+    payment = serializers.SerializerMethodField()
 
     class Meta(OrderListSerializer.Meta):
         fields = OrderListSerializer.Meta.fields + (
             "loading_datetime",
             "unloading_datetime",
             "documents",
+            "payment",  # ← ВОТ ЭТО
         )
+
+    def get_payment(self, obj):
+        payment = obj.payments.first()
+        if not payment:
+            return None
+        return PaymentSerializer(payment).data
 
 
 # --------------------------

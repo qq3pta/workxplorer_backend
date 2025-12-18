@@ -13,6 +13,7 @@ class PaymentAdmin(admin.ModelAdmin):
         "method",
         "status",
         "confirmed_by_customer",
+        "confirmed_by_logistic",
         "confirmed_by_carrier",
         "created_at",
         "completed_at",
@@ -27,6 +28,7 @@ class PaymentAdmin(admin.ModelAdmin):
         "completed_at",
         "status",
         "confirmed_by_customer",
+        "confirmed_by_logistic",
         "confirmed_by_carrier",
     )
 

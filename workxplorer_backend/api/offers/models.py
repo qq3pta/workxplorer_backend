@@ -26,6 +26,10 @@ class Offer(models.Model):
         CARRIER = "CARRIER", "Перевозчик"
         LOGISTIC = "LOGISTIC", "Логист"
 
+    class PaymentMethod(models.TextChoices):
+        CASH = "cash", "Наличные"
+        CASHLESS = "cashless", "Безналичный расчёт"
+
     class DealType(models.TextChoices):
         CUSTOMER_CARRIER = "customer_carrier"
         LOGISTIC_CARRIER = "logistic_carrier"
@@ -82,6 +86,13 @@ class Offer(models.Model):
         choices=Currency.choices,
         default=Currency.UZS,
     )
+
+    payment_method = models.CharField(
+        max_length=20,
+        choices=PaymentMethod.choices,
+        default=PaymentMethod.CASH,
+    )
+
     message = models.TextField(blank=True)
 
     accepted_by_customer = models.BooleanField(default=False)
@@ -440,6 +451,7 @@ class Offer(models.Model):
         *,
         price_value: Decimal | None,
         price_currency: str | None = None,
+        payment_method: str | None = None,
         message: str | None = None,
         by_user=None,
     ) -> None:
@@ -447,6 +459,8 @@ class Offer(models.Model):
             self.price_value = price_value
         if price_currency:
             self.price_currency = price_currency
+        if payment_method:
+            self.payment_method = payment_method
         if message is not None:
             self.message = message
         if by_user is not None:
@@ -481,6 +495,7 @@ class Offer(models.Model):
             update_fields=[
                 "price_value",
                 "price_currency",
+                "payment_method",
                 "message",
                 "initiator",
                 "accepted_by_customer",

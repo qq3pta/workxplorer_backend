@@ -34,6 +34,7 @@ class Payment(models.Model):
 
     # Статусы подтверждения
     confirmed_by_customer = models.BooleanField(default=False)
+    confirmed_by_logistic = models.BooleanField(default=False)
     confirmed_by_carrier = models.BooleanField(default=False)
 
     # Информация для внешних платежных систем (если будут)
@@ -54,9 +55,14 @@ class Payment(models.Model):
     completed_at = models.DateTimeField(null=True, blank=True)
 
     def update_status(self):
-        """Обновляет статус платежа при двойном подтверждении."""
+        order = self.order
+        needs_logistic = order.logistic is not None
 
-        if self.confirmed_by_customer and self.confirmed_by_carrier:
+        if (
+            self.confirmed_by_customer
+            and self.confirmed_by_carrier
+            and (not needs_logistic or self.confirmed_by_logistic)
+        ):
             self.status = PaymentStatus.COMPLETED
             self.completed_at = timezone.now()
 

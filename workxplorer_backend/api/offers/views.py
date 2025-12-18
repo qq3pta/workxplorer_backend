@@ -472,6 +472,7 @@ class OfferViewSet(ModelViewSet):
             status=status,
             currency=offer.currency,
             price_total=offer.price,
+            payment_method=offer.payment_method,
             route_distance_km=offer.route_distance_km,
         )
 
@@ -515,6 +516,7 @@ class OfferViewSet(ModelViewSet):
             offer.make_counter(
                 price_value=ser.validated_data["price_value"],
                 price_currency=ser.validated_data.get("price_currency"),
+                payment_method=ser.validated_data.get("payment_method"),
                 message=ser.validated_data.get("message"),
                 by_user=request.user,
             )

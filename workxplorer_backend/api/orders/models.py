@@ -9,7 +9,7 @@ from django.utils.translation import gettext_lazy as _
 from api.loads.choices import Currency
 from api.loads.models import Cargo
 from api.notifications.services import notify
-from api.payments.models import Payment
+from api.payments.models import Payment, PaymentMethod
 
 
 def order_upload_to(instance, filename: str) -> str:
@@ -96,6 +96,11 @@ class Order(models.Model):
     )
 
     currency = models.CharField(max_length=3, choices=Currency.choices, default=Currency.UZS)
+    payment_method = models.CharField(
+        max_length=20,
+        choices=PaymentMethod.choices,
+        default=PaymentMethod.CASH,
+    )
 
     price_total = models.DecimalField(
         max_digits=14,
@@ -195,17 +200,17 @@ class Order(models.Model):
                         payload=payload,
                         cargo=self.cargo,
                     )
+
+        if new_status == Order.OrderStatus.DELIVERED:
+            # 🔑 СОЗДАЁМ ПЛАТЁЖ ТОЛЬКО ЗДЕСЬ
             if not self.payments.exists():
                 Payment.objects.create(
                     order=self,
                     amount=self.price_total,
                     currency=self.currency,
-                    method="manual",
+                    method=self.payment_method,
                 )
 
-            return
-
-        if new_status == Order.OrderStatus.DELIVERED:
             for u in (self.customer, self.carrier):
                 if u:
                     notify(

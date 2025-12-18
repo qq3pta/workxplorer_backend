@@ -27,11 +27,17 @@ class OfferCreateSerializer(serializers.ModelSerializer):
     price_currency = serializers.ChoiceField(
         choices=Currency.choices, required=False, default=Currency.UZS
     )
+
+    payment_method = serializers.ChoiceField(
+        choices=Offer.PaymentMethod.choices,
+        default=Offer.PaymentMethod.CASH,
+    )
+
     message = serializers.CharField(required=False, allow_blank=True)
 
     class Meta:
         model = Offer
-        fields = ("cargo", "price_value", "price_currency", "message")
+        fields = ("cargo", "price_value", "price_currency", "payment_method", "message")
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
         user = self.context["request"].user
@@ -131,6 +137,11 @@ class OfferInviteSerializer(serializers.Serializer):
         max_digits=14, decimal_places=2, required=False, allow_null=True, min_value=Decimal("0.00")
     )
     price_currency = serializers.ChoiceField(choices=Currency.choices, default=Currency.UZS)
+    payment_method = serializers.ChoiceField(
+        choices=Offer.PaymentMethod.choices,
+        default=Offer.PaymentMethod.CASH,
+    )
+
     message = serializers.CharField(allow_blank=True, required=False)
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
@@ -181,6 +192,7 @@ class OfferInviteSerializer(serializers.Serializer):
             carrier=carrier,
             price_value=validated_data.get("price_value"),
             price_currency=validated_data.get("price_currency", Currency.UZS),
+            payment_method=validated_data.get("payment_method", Offer.PaymentMethod.CASH),
             message=validated_data.get("message", ""),
             initiator=Offer.Initiator.CUSTOMER,
             logistic=logistic_user,
@@ -509,6 +521,10 @@ class OfferCounterSerializer(serializers.Serializer):
         max_digits=14, decimal_places=2, min_value=Decimal("0.01")
     )
     price_currency = serializers.ChoiceField(choices=Currency.choices, required=False)
+    payment_method = serializers.ChoiceField(
+        choices=Offer.PaymentMethod.choices,
+        required=False,
+    )
     message = serializers.CharField(required=False, allow_blank=True)
 
 

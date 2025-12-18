@@ -1,5 +1,4 @@
 from rest_framework import generics, status
-from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
@@ -11,26 +10,6 @@ class PaymentCreateView(generics.CreateAPIView):
     queryset = Payment.objects.all()
     serializer_class = PaymentCreateSerializer
     permission_classes = [IsAuthenticated]
-
-    class PaymentCreateView(generics.CreateAPIView):
-        queryset = Payment.objects.all()
-        serializer_class = PaymentCreateSerializer
-        permission_classes = [IsAuthenticated]
-
-        def perform_create(self, serializer):
-            order = serializer.validated_data["order"]
-
-            if self.request.user not in (order.customer, order.carrier, order.created_by):
-                raise PermissionDenied("Вы не можете создавать платеж по этому заказу.")
-
-            if order.carrier is None:
-                raise ValidationError("Нельзя создать платеж: перевозчик не назначен.")
-
-            payment = serializer.save()
-
-            order.update_payment_status()
-
-            return payment
 
 
 class ConfirmByCustomerView(generics.UpdateAPIView):
@@ -71,6 +50,31 @@ class ConfirmByCarrierView(generics.UpdateAPIView):
             )
 
         payment.confirmed_by_carrier = True
+        payment.update_status()
+        payment.order.update_payment_status()
+
+        return Response(PaymentSerializer(payment).data)
+
+
+class ConfirmByLogisticView(generics.UpdateAPIView):
+    queryset = Payment.objects.all()
+    serializer_class = PaymentSerializer
+    permission_classes = [IsAuthenticated]
+    http_method_names = ["patch"]
+
+    def patch(self, request, pk):
+        payment = self.get_object()
+        order = payment.order
+        user = request.user
+
+        # логист по заказу или логист-создатель
+        if user not in (order.logistic, order.created_by):
+            return Response(
+                {"detail": "Только логист может подтвердить платёж."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        payment.confirmed_by_logistic = True
         payment.update_status()
         payment.order.update_payment_status()
 

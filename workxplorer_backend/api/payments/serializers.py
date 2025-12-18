@@ -10,6 +10,7 @@ class PaymentSerializer(serializers.ModelSerializer):
         read_only_fields = (
             "status",
             "confirmed_by_customer",
+            "confirmed_by_logistic",
             "confirmed_by_carrier",
             "created_at",
             "completed_at",

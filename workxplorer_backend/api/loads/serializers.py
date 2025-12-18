@@ -56,7 +56,7 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
     weight_tons = serializers.FloatField(required=False, write_only=True, min_value=0.001)
     payment_method = serializers.ChoiceField(
         choices=PaymentMethod.choices,
-        default=PaymentMethod.TRANSFER,
+        default=PaymentMethod.CASH,
     )
 
     class Meta:

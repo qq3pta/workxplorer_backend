@@ -26,9 +26,8 @@ class CargoStatus(models.TextChoices):
 
 
 class PaymentMethod(models.TextChoices):
-    TRANSFER = "transfer", "Перечисление"
-    CASH = "cash", "Наличными"
-    BOTH = "both", "Оба варианта"
+    CASH = "cash", "Наличные"
+    CASHLESS = "cashless", "Безналичный расчёт"
 
 
 class Cargo(models.Model):
@@ -107,7 +106,7 @@ class Cargo(models.Model):
     payment_method = models.CharField(
         max_length=10,
         choices=PaymentMethod.choices,
-        default=PaymentMethod.TRANSFER,
+        default=PaymentMethod.CASH,
         verbose_name="Способ оплаты",
     )
 

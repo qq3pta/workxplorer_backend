@@ -132,7 +132,10 @@ class OfferInviteSerializer(serializers.Serializer):
     """
 
     cargo = serializers.PrimaryKeyRelatedField(queryset=Cargo.objects.all())
-    carrier_id = serializers.PrimaryKeyRelatedField(source="carrier", queryset=User.objects.all())
+    invited_user_id = serializers.PrimaryKeyRelatedField(
+        source="invited_user",
+        queryset=User.objects.all(),
+    )
     price_value = serializers.DecimalField(
         max_digits=14, decimal_places=2, required=False, allow_null=True, min_value=Decimal("0.00")
     )
@@ -147,13 +150,13 @@ class OfferInviteSerializer(serializers.Serializer):
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
         user = self.context["request"].user
         cargo: Cargo = attrs["cargo"]
-        carrier: User = attrs["carrier"]
+        invited_user: User = attrs["invited_user"]
 
         if cargo.customer_id != user.id and not getattr(user, "is_logistic", False):
             raise serializers.ValidationError({"cargo": "Можно приглашать только на свою заявку."})
 
-        if carrier.id == user.id:
-            raise serializers.ValidationError({"carrier_id": "Нельзя приглашать самого себя."})
+        if invited_user.id == user.id:
+            raise serializers.ValidationError({"invited_user_id": "Нельзя приглашать самого себя."})
 
         request = self.context.get("request")
 
@@ -164,38 +167,52 @@ class OfferInviteSerializer(serializers.Serializer):
         if cargo.status != CargoStatus.POSTED:
             raise serializers.ValidationError({"cargo": "Заявка не активна."})
 
-        if Offer.objects.filter(cargo=cargo, carrier=carrier, is_active=True).exists():
-            raise serializers.ValidationError(
-                {"carrier_id": "Этому перевозчику уже отправлено активное предложение."}
-            )
+        if invited_user.role == "CARRIER":
+            if Offer.objects.filter(cargo=cargo, carrier=invited_user, is_active=True).exists():
+                raise serializers.ValidationError(
+                    {"invited_user_id": "Этому перевозчику уже отправлено активное предложение."}
+                )
+
+        if invited_user.role == "LOGISTIC":
+            if Offer.objects.filter(cargo=cargo, logistic=invited_user, is_active=True).exists():
+                raise serializers.ValidationError(
+                    {"invited_user_id": "Этому логисту уже отправлено активное предложение."}
+                )
+
         return attrs
 
     def create(self, validated_data):
         cargo = validated_data["cargo"]
-        carrier = validated_data["carrier"]
+        invited_user: User = validated_data["invited_user"]
 
-        logistic_user = None
-        if cargo.created_by and getattr(cargo.created_by, "role", None) == "LOGISTIC":
-            logistic_user = cargo.created_by
+        carrier = None
+        logistic = None
 
-        # --- Создаём оффер корректно ---
+        # 🔥 КЛЮЧЕВОЙ МОМЕНТ
+        if invited_user.role == "CARRIER":
+            carrier = invited_user
+        elif invited_user.role == "LOGISTIC":
+            logistic = invited_user
+        else:
+            raise serializers.ValidationError("Недопустимая роль для инвайта")
+
         initiator_user = self.context["request"].user
 
         deal_type = Offer.resolve_deal_type(
             initiator_user=initiator_user,
             carrier=carrier,
-            logistic=logistic_user,
+            logistic=logistic,
         )
 
         offer = Offer.objects.create(
             cargo=cargo,
             carrier=carrier,
+            logistic=logistic,
             price_value=validated_data.get("price_value"),
             price_currency=validated_data.get("price_currency", Currency.UZS),
             payment_method=validated_data.get("payment_method", Offer.PaymentMethod.CASH),
             message=validated_data.get("message", ""),
             initiator=Offer.Initiator.CUSTOMER,
-            logistic=logistic_user,
             deal_type=deal_type,
         )
 

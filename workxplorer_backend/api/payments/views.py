@@ -79,3 +79,24 @@ class ConfirmByLogisticView(generics.UpdateAPIView):
         payment.order.update_payment_status()
 
         return Response(PaymentSerializer(payment).data)
+
+
+class PaymentDetailView(generics.RetrieveAPIView):
+    queryset = Payment.objects.select_related("order")
+    serializer_class = PaymentSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self):
+        payment = super().get_object()
+        order = payment.order
+        user = self.request.user
+
+        if user not in (
+            order.customer,
+            order.carrier,
+            order.logistic,
+            order.created_by,
+        ):
+            raise PermissionDenied("У вас нет доступа к этому платежу.")
+
+        return payment

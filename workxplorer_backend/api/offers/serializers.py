@@ -278,6 +278,7 @@ class OfferShortSerializer(serializers.ModelSerializer):
             "price_value",
             "price_currency",
             "payment_method",
+            "payment_method_display",
             "price_per_km",
             "accepted_by_customer",
             "accepted_by_carrier",

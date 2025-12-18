@@ -15,6 +15,7 @@ from rest_framework.response import Response
 
 from .filters import OrderFilter
 from .models import Order, OrderStatusHistory
+from api.offers.models import Offer
 from .permissions import IsOrderParticipant
 from .serializers import (
     InviteByIdSerializer,
@@ -255,6 +256,15 @@ class OrdersViewSet(viewsets.ModelViewSet):
                 status=404,
             )
 
+        offer = Offer.objects.create(
+            cargo=order.cargo,
+            carrier=carrier,
+            initiator=Offer.Initiator.CUSTOMER,
+            deal_type=Offer.DealType.CUSTOMER_CARRIER,
+        )
+
+        order.offer = offer
+        order.save(update_fields=["offer"])
         order.invited_carrier = carrier
 
         # Генерируем токен

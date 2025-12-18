@@ -20,7 +20,6 @@ from api.orders.models import Order
 
 from ..accounts.permissions import (
     IsAuthenticatedAndVerified,
-    IsCustomer,
     IsCustomerOrCarrierOrLogistic,
 )
 from .models import Offer

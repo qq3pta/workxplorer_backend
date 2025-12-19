@@ -12,7 +12,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from .emails import send_code_email
 from .models import EmailOTP, PhoneOTP, Profile, UserRole
-from .utils.whatsapp import send_whatsapp_otp, check_whatsapp_otp
+from .utils.sms import send_sms_otp, check_sms_otp
 
 User = get_user_model()
 
@@ -82,16 +82,16 @@ class SendPhoneOTPSerializer(serializers.Serializer):
                     {"detail": "Код уже отправлен. Подождите.", "seconds_left": left}
                 )
 
-        ok = send_whatsapp_otp(phone)
+        ok = send_sms_otp(phone)
         if not ok:
-            raise serializers.ValidationError({"phone": "Не удалось отправить код в WhatsApp"})
+            raise serializers.ValidationError({"phone": "Не удалось отправить SMS-код"})
 
         PhoneOTP.objects.create(
             phone=phone,
             purpose=purpose,
         )
 
-        return {"detail": "Код отправлен в WhatsApp", "seconds_left": RESEND_COOLDOWN_SEC}
+        return {"detail": "Код отправлен по SMS", "seconds_left": RESEND_COOLDOWN_SEC}
 
 
 class VerifyPhoneOTPSerializer(serializers.Serializer):
@@ -115,7 +115,7 @@ class VerifyPhoneOTPSerializer(serializers.Serializer):
         code = self.validated_data["code"]
         purpose = self.validated_data["purpose"]
 
-        ok = check_whatsapp_otp(phone, code)
+        ok = check_sms_otp(phone, code)
         if not ok:
             raise serializers.ValidationError({"code": "Неверный или просроченный код"})
 
@@ -192,7 +192,7 @@ class RegisterSerializer(serializers.ModelSerializer):
             created_at__gte=since,
         ).exists()
         if not ok_recent:
-            raise serializers.ValidationError({"phone": "Подтвердите номер через WhatsApp-OTP"})
+            raise serializers.ValidationError({"phone": "Подтвердите номер по SMS-коду"})
 
         password_validation.validate_password(attrs["password"])
         return attrs

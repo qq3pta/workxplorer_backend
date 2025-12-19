@@ -89,6 +89,7 @@ class SendPhoneOTPSerializer(serializers.Serializer):
         PhoneOTP.objects.create(
             phone=phone,
             purpose=purpose,
+            expires_at=timezone.now() + timedelta(minutes=5),
         )
 
         return {"detail": "Код отправлен по SMS", "seconds_left": RESEND_COOLDOWN_SEC}

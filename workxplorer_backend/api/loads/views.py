@@ -275,13 +275,16 @@ class PublicLoadsView(generics.ListAPIView):
     serializer_class = CargoListSerializer
 
     def get_queryset(self):
+        qs = Cargo.objects.filter(
+            moderation_status=ModerationStatus.APPROVED,
+            is_hidden=False,
+            status=CargoStatus.POSTED,
+        )
+
+        qs = qs.exclude(origin_point__isnull=True).exclude(dest_point__isnull=True)
+
         qs = (
-            Cargo.objects.filter(
-                moderation_status=ModerationStatus.APPROVED,
-                is_hidden=False,
-                status=CargoStatus.POSTED,
-            )
-            .annotate(
+            qs.annotate(
                 offers_active=Count("offers", filter=Q(offers__is_active=True)),
                 age_minutes_anno=ExtractMinutes(F("refreshed_at")),
                 path_m=Distance(F("origin_point"), F("dest_point")),
@@ -300,6 +303,14 @@ class PublicLoadsView(generics.ListAPIView):
         )
 
         p = self.request.query_params
+
+        o_lat = p.get("origin_lat")
+        o_lng = p.get("origin_lng")
+        o_r = p.get("origin_radius_km")
+
+        d_lat = p.get("dest_lat")
+        d_lng = p.get("dest_lng")
+        d_r = p.get("dest_radius_km")
 
         if p.get("uuid"):
             qs = qs.filter(uuid=p["uuid"])
@@ -350,6 +361,21 @@ class PublicLoadsView(generics.ListAPIView):
                 Q(customer__phone__icontains=p["customer_phone"])
                 | Q(customer__phone_number__icontains=p["customer_phone"])
             )
+        # ---------- GEO ANNOTATIONS ----------
+        if o_lat and o_lng:
+            origin_user_point = Point(float(o_lng), float(o_lat), srid=4326)
+            qs = qs.annotate(origin_dist_km=Distance("origin_point", origin_user_point) / 1000.0)
+
+        if d_lat and d_lng:
+            dest_user_point = Point(float(d_lng), float(d_lat), srid=4326)
+            qs = qs.annotate(dest_dist_km=Distance("dest_point", dest_user_point) / 1000.0)
+
+        # ---------- GEO FILTERS ----------
+        if o_lat and o_lng and o_r:
+            qs = qs.filter(origin_dist_km__lte=float(o_r))
+
+        if d_lat and d_lng and d_r:
+            qs = qs.filter(dest_dist_km__lte=float(d_r))
 
         allowed = {
             "path_km",

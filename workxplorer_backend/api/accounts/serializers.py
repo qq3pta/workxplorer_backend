@@ -25,8 +25,8 @@ def normalize_phone_e164(phone: str, region: str = "UZ") -> str:
         if not phonenumbers.is_valid_number(p):
             raise serializers.ValidationError({"phone": "Неверный номер телефона"})
         return phonenumbers.format_number(p, PhoneNumberFormat.E164)
-    except phonenumbers.NumberParseException:
-        raise serializers.ValidationError({"phone": "Неверный номер телефона"})
+    except phonenumbers.NumberParseException as err:
+        raise serializers.ValidationError({"phone": "Неверный номер телефона"}) from err
 
 
 def _normalize_phone(p: str) -> str:
@@ -355,7 +355,7 @@ class UpdateMeSerializer(serializers.ModelSerializer):
         fields = ("first_name", "phone", "company_name", "photo", "profile", "fcm_token")
 
     def validate_phone(self, value):
-        norm = _normalize_phone(value) if value else value
+        norm = normalize_phone_e164(value) if value else value
         if norm and User.objects.filter(phone=norm).exclude(pk=self.instance.pk).exists():
             raise serializers.ValidationError("Этот телефон уже зарегистрирован")
         return norm

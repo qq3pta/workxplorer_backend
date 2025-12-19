@@ -31,6 +31,7 @@ channels = "^4.3.2"
 channels-redis = "^4.3.0"
 daphne = "^4.2.1"
 twilio = "^9.9.0"
+phonenumbers = "^9.0.21"
 
 [tool.poetry.group.dev.dependencies]
 black = "^24.3.0"

@@ -1,3 +1,6 @@
+import phonenumbers
+
+from phonenumbers import PhoneNumberFormat
 from datetime import timedelta
 
 from django.conf import settings
@@ -14,6 +17,16 @@ from .utils.whatsapp import send_whatsapp_otp, check_whatsapp_otp
 User = get_user_model()
 
 RESEND_COOLDOWN_SEC = 60
+
+
+def normalize_phone_e164(phone: str, region: str = "UZ") -> str:
+    try:
+        p = phonenumbers.parse(phone, region)
+        if not phonenumbers.is_valid_number(p):
+            raise serializers.ValidationError({"phone": "Неверный номер телефона"})
+        return phonenumbers.format_number(p, PhoneNumberFormat.E164)
+    except phonenumbers.NumberParseException:
+        raise serializers.ValidationError({"phone": "Неверный номер телефона"})
 
 
 def _normalize_phone(p: str) -> str:
@@ -51,7 +64,9 @@ class SendPhoneOTPSerializer(serializers.Serializer):
         phone = attrs.get("phone")
         if not phone or not str(phone).strip():
             raise serializers.ValidationError({"phone": "Укажите номер телефона"})
-        attrs["phone"] = _normalize_phone(phone)
+
+        attrs["phone"] = normalize_phone_e164(phone)
+
         return attrs
 
     def save(self, **kwargs):
@@ -67,12 +82,14 @@ class SendPhoneOTPSerializer(serializers.Serializer):
                     {"detail": "Код уже отправлен. Подождите.", "seconds_left": left}
                 )
 
-        ttl_min = max(1, int(getattr(settings, "OTP_TTL_SECONDS", 300) // 60))
-        otp, raw = PhoneOTP.create_otp(phone, purpose, ttl_min=ttl_min)
-
-        ok = send_whatsapp_otp(phone, raw)
+        ok = send_whatsapp_otp(phone)
         if not ok:
             raise serializers.ValidationError({"phone": "Не удалось отправить код в WhatsApp"})
+
+        PhoneOTP.objects.create(
+            phone=phone,
+            purpose=purpose,
+        )
 
         return {"detail": "Код отправлен в WhatsApp", "seconds_left": RESEND_COOLDOWN_SEC}
 
@@ -88,7 +105,9 @@ class VerifyPhoneOTPSerializer(serializers.Serializer):
         phone = attrs.get("phone")
         if not phone or not str(phone).strip():
             raise serializers.ValidationError({"phone": "Укажите номер телефона"})
-        attrs["phone"] = _normalize_phone(phone)
+
+        attrs["phone"] = normalize_phone_e164(phone)
+
         return attrs
 
     def save(self, **kwargs):
@@ -96,19 +115,21 @@ class VerifyPhoneOTPSerializer(serializers.Serializer):
         code = self.validated_data["code"]
         purpose = self.validated_data["purpose"]
 
-        # 1️⃣ Проверяем код ЧЕРЕЗ TWILIO VERIFY
         ok = check_whatsapp_otp(phone, code)
         if not ok:
             raise serializers.ValidationError({"code": "Неверный или просроченный код"})
 
-        # 2️⃣ Помечаем OTP у себя (для бизнес-логики регистрации)
-        PhoneOTP.objects.filter(
+        since = timezone.now() - timedelta(minutes=10)
+
+        updated = PhoneOTP.objects.filter(
             phone=phone,
             purpose=purpose,
             is_used=False,
+            created_at__gte=since,
         ).update(is_used=True)
 
-        return {"verified": True}
+        if updated == 0:
+            raise serializers.ValidationError({"detail": "Код устарел, запросите новый"})
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -148,7 +169,8 @@ class RegisterSerializer(serializers.ModelSerializer):
         phone = attrs.get("phone")
         if not phone or not str(phone).strip():
             raise serializers.ValidationError({"phone": "Укажите номер телефона"})
-        attrs["phone"] = _normalize_phone(phone)
+
+        attrs["phone"] = normalize_phone_e164(phone)
 
         if User.objects.filter(email__iexact=attrs["email"]).exists():
             raise serializers.ValidationError({"email": "Этот e-mail уже зарегистрирован"})

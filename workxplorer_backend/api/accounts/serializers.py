@@ -9,7 +9,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from .emails import send_code_email
 from .models import EmailOTP, PhoneOTP, Profile, UserRole
-from .utils.whatsapp import send_whatsapp_otp
+from .utils.whatsapp import send_whatsapp_otp, check_whatsapp_otp
 
 User = get_user_model()
 
@@ -96,18 +96,17 @@ class VerifyPhoneOTPSerializer(serializers.Serializer):
         code = self.validated_data["code"]
         purpose = self.validated_data["purpose"]
 
-        otp = (
-            PhoneOTP.objects.filter(
-                phone=phone,
-                purpose=purpose,
-                is_used=False,
-                expires_at__gte=timezone.now(),
-            )
-            .order_by("-created_at")
-            .first()
-        )
-        if not otp or not otp.check_and_consume(code):
+        # 1️⃣ Проверяем код ЧЕРЕЗ TWILIO VERIFY
+        ok = check_whatsapp_otp(phone, code)
+        if not ok:
             raise serializers.ValidationError({"code": "Неверный или просроченный код"})
+
+        # 2️⃣ Помечаем OTP у себя (для бизнес-логики регистрации)
+        PhoneOTP.objects.filter(
+            phone=phone,
+            purpose=purpose,
+            is_used=False,
+        ).update(is_used=True)
 
         return {"verified": True}
 

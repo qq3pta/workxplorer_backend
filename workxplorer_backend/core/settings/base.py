@@ -240,12 +240,10 @@ if getenv("REDIS_URL"):
 else:
     CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
 
-# --- WhatsApp / Phone OTP ---
-WHATSAPP_ENABLED = getenv("WHATSAPP_ENABLED", "true").lower() == "true"
-WHATSAPP_PHONE_ID = getenv("WHATSAPP_PHONE_ID")
-WHATSAPP_TOKEN = getenv("WHATSAPP_TOKEN")
-WHATSAPP_TEMPLATE = getenv("WHATSAPP_TEMPLATE", "otp_code")
-WHATSAPP_LANG = getenv("WHATSAPP_LANG", "ru")
+# --- Twilio ---
+TWILIO_ACCOUNT_SID = getenv("TWILIO_ACCOUNT_SID")
+TWILIO_AUTH_TOKEN = getenv("TWILIO_AUTH_TOKEN")
+TWILIO_VERIFY_SERVICE_SID = getenv("TWILIO_VERIFY_SERVICE_SID")
 
 # Параметры OTP
 OTP_TTL_SECONDS = int(getenv("OTP_TTL_SECONDS", "300"))

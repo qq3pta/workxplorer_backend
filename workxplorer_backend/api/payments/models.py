@@ -75,4 +75,4 @@ class Payment(models.Model):
         else:
             self.status = PaymentStatus.PENDING
 
-        self.save(update_fields=["status", "completed_at"])
+        self.save()

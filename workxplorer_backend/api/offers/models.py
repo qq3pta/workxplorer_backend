@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from datetime import date, datetime
+
 
 import logging
 
@@ -15,6 +17,18 @@ from api.loads.models import Cargo
 from api.notifications.services import notify
 
 logger = logging.getLogger(__name__)
+
+
+def json_safe(value):
+    if isinstance(value, Decimal):
+        return str(value)
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    if isinstance(value, dict):
+        return {k: json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [json_safe(v) for v in value]
+    return value
 
 
 class Offer(models.Model):
@@ -156,15 +170,17 @@ class Offer(models.Model):
             offer=self,
             user=user,
             action=action,
-            old_state=old_state,
-            new_state={
-                "is_active": self.is_active,
-                "accepted_by_customer": self.accepted_by_customer,
-                "accepted_by_carrier": self.accepted_by_carrier,
-                "accepted_by_logistic": self.accepted_by_logistic,
-                "is_counter": self.is_counter,
-                "response_status": self.response_status,
-            },
+            old_state=json_safe(old_state),
+            new_state=json_safe(
+                {
+                    "is_active": self.is_active,
+                    "accepted_by_customer": self.accepted_by_customer,
+                    "accepted_by_carrier": self.accepted_by_carrier,
+                    "accepted_by_logistic": self.accepted_by_logistic,
+                    "is_counter": self.is_counter,
+                    "response_status": self.response_status,
+                }
+            ),
         )
 
     # ---------------- Notifications ----------------

@@ -10,7 +10,6 @@ router.register(r"", OfferViewSet, basename="offers")
 
 urlpatterns = [
     *router.urls,
-    # 🔹 ЛОГИ ОФФЕРА
     path(
         "<int:pk>/logs/",
         OfferStatusLogListView.as_view(),

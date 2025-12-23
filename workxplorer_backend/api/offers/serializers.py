@@ -10,7 +10,7 @@ from rest_framework import serializers
 from api.loads.choices import Currency, ModerationStatus
 from api.loads.models import Cargo, CargoStatus
 
-from .models import Offer
+from .models import Offer, OfferStatusLog
 
 User = get_user_model()
 
@@ -540,3 +540,22 @@ class OfferAcceptResponseSerializer(serializers.Serializer):
 
 class OfferRejectResponseSerializer(serializers.Serializer):
     detail = serializers.CharField()
+
+
+class OfferStatusLogSerializer(serializers.ModelSerializer):
+    user_id = serializers.IntegerField(source="user.id", read_only=True)
+    user_name = serializers.CharField(source="user.get_full_name", read_only=True)
+    user_role = serializers.CharField(source="user.role", read_only=True)
+
+    class Meta:
+        model = OfferStatusLog
+        fields = (
+            "id",
+            "action",
+            "user_id",
+            "user_name",
+            "user_role",
+            "old_state",
+            "new_state",
+            "created_at",
+        )

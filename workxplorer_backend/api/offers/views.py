@@ -11,6 +11,8 @@ from drf_spectacular.utils import (
     extend_schema_view,
 )
 from rest_framework import serializers, status
+from rest_framework import generics
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
@@ -22,7 +24,7 @@ from ..accounts.permissions import (
     IsAuthenticatedAndVerified,
     IsCustomerOrCarrierOrLogistic,
 )
-from .models import Offer
+from .models import Offer, OfferStatusLog
 from .serializers import (
     OfferAcceptResponseSerializer,
     OfferCounterSerializer,
@@ -31,6 +33,7 @@ from .serializers import (
     OfferInviteSerializer,
     OfferRejectResponseSerializer,
     OfferShortSerializer,
+    OfferStatusLogSerializer,
 )
 
 
@@ -540,3 +543,16 @@ class OfferViewSet(ModelViewSet):
         with transaction.atomic():
             offer = ser.save()
         return Response(OfferDetailSerializer(offer).data, status=status.HTTP_201_CREATED)
+
+
+class OfferStatusLogListView(generics.ListAPIView):
+    serializer_class = OfferStatusLogSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        offer_id = self.kwargs["pk"]
+        return (
+            OfferStatusLog.objects.filter(offer_id=offer_id)
+            .select_related("user")
+            .order_by("created_at")
+        )

@@ -7,6 +7,22 @@ class AgreementDetailSerializer(serializers.ModelSerializer):
     offer_id = serializers.IntegerField(source="offer.id", read_only=True)
     cargo_id = serializers.IntegerField(source="offer.cargo.id", read_only=True)
 
+    # ---------- ПОГРУЗКА ----------
+    loading_city = serializers.CharField(source="offer.cargo.origin_city", read_only=True)
+    loading_street = serializers.CharField(source="offer.cargo.origin_street", read_only=True)
+    loading_date = serializers.DateField(source="offer.cargo.loading_date", read_only=True)
+
+    # ---------- РАЗГРУЗКА ----------
+    unloading_city = serializers.CharField(source="offer.cargo.destination_city", read_only=True)
+    unloading_street = serializers.CharField(
+        source="offer.cargo.destination_street", read_only=True
+    )
+    unloading_date = serializers.DateField(source="offer.cargo.unloading_date", read_only=True)
+
+    # ---------- ДЕТАЛИ ПОЕЗДКИ ----------
+    total_distance_km = serializers.SerializerMethodField()
+    travel_time = serializers.SerializerMethodField()
+
     class Meta:
         model = Agreement
         fields = (
@@ -50,7 +66,17 @@ class AgreementDetailSerializer(serializers.ModelSerializer):
             "total_distance_km",
             "travel_time",
         )
+
         read_only_fields = fields
+
+    # ---------- METHODS ----------
+    def get_total_distance_km(self, obj):
+        order = getattr(obj, "order", None)
+        return order.total_distance_km if order else None
+
+    def get_travel_time(self, obj):
+        order = getattr(obj, "order", None)
+        return order.travel_time if order else None
 
 
 class AgreementActionSerializer(serializers.Serializer):

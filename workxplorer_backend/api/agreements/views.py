@@ -9,6 +9,7 @@ from .permissions import IsAgreementParticipant
 from .serializers import (
     AgreementActionSerializer,
     AgreementListSerializer,
+    AgreementDetailSerializer,
 )
 
 
@@ -17,10 +18,18 @@ class AgreementViewSet(ReadOnlyModelViewSet):
     Вкладка «Соглашения»
     """
 
-    serializer_class = AgreementListSerializer
     permission_classes = [IsAgreementParticipant]
     queryset = Agreement.objects.all()
 
+    # 🔹 ВАЖНО: правильный выбор сериализатора
+    def get_serializer_class(self):
+        if self.action == "list":
+            return AgreementListSerializer
+        if self.action == "retrieve":
+            return AgreementDetailSerializer
+        return AgreementActionSerializer
+
+    # 🔹 ФИЛЬТРАЦИЯ ПО РОЛЯМ
     def get_queryset(self):
         u = self.request.user
         qs = Agreement.objects.select_related("offer", "offer__cargo")
@@ -46,27 +55,23 @@ class AgreementViewSet(ReadOnlyModelViewSet):
     # ---------------------------
     # ACCEPT
     # ---------------------------
-
-    @action(
-        detail=True,
-        methods=["post"],
-        serializer_class=AgreementActionSerializer,
-    )
+    @action(detail=True, methods=["post"])
     def accept(self, request, pk=None):
         agreement = self.get_object()
         agreement.accept_by(request.user)
-        return Response({"detail": "Соглашение принято"}, status=status.HTTP_200_OK)
+        return Response(
+            {"detail": "Соглашение принято"},
+            status=status.HTTP_200_OK,
+        )
 
     # ---------------------------
     # REJECT
     # ---------------------------
-
-    @action(
-        detail=True,
-        methods=["post"],
-        serializer_class=AgreementActionSerializer,
-    )
+    @action(detail=True, methods=["post"])
     def reject(self, request, pk=None):
         agreement = self.get_object()
         agreement.reject(by_user=request.user)
-        return Response({"detail": "Соглашение отклонено"}, status=status.HTTP_200_OK)
+        return Response(
+            {"detail": "Соглашение отклонено"},
+            status=status.HTTP_200_OK,
+        )

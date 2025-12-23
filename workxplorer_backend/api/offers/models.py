@@ -173,12 +173,17 @@ class Offer(models.Model):
             old_state=json_safe(old_state),
             new_state=json_safe(
                 {
+                    "price_value": self.price_value,
+                    "price_currency": self.price_currency,
+                    "payment_method": self.payment_method,
+                    "message": self.message,
+                    "initiator": self.initiator,
                     "is_active": self.is_active,
+                    "is_counter": self.is_counter,
+                    "response_status": self.response_status,
                     "accepted_by_customer": self.accepted_by_customer,
                     "accepted_by_carrier": self.accepted_by_carrier,
                     "accepted_by_logistic": self.accepted_by_logistic,
-                    "is_counter": self.is_counter,
-                    "response_status": self.response_status,
                 }
             ),
         )

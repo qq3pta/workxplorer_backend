@@ -23,6 +23,27 @@ class Agreement(models.Model):
         related_name="agreement",
     )
 
+    # --- CUSTOMER ---
+    customer_id = models.BigIntegerField(null=True, blank=True)
+    customer_full_name = models.CharField(max_length=255, blank=True, default="")
+    customer_email = models.EmailField(blank=True, default="")
+    customer_phone = models.CharField(max_length=32, blank=True, default="")
+    customer_registered_at = models.DateTimeField(null=True, blank=True)
+
+    # --- CARRIER ---
+    carrier_id = models.BigIntegerField(null=True, blank=True)
+    carrier_full_name = models.CharField(max_length=255, blank=True)
+    carrier_email = models.EmailField(blank=True)
+    carrier_phone = models.CharField(max_length=32, blank=True)
+    carrier_registered_at = models.DateTimeField(null=True, blank=True)
+
+    # --- LOGISTIC ---
+    logistic_id = models.BigIntegerField(null=True, blank=True)
+    logistic_full_name = models.CharField(max_length=255, blank=True)
+    logistic_email = models.EmailField(blank=True)
+    logistic_phone = models.CharField(max_length=32, blank=True)
+    logistic_registered_at = models.DateTimeField(null=True, blank=True)
+
     accepted_by_customer = models.BooleanField(default=False)
     accepted_by_carrier = models.BooleanField(default=False)
     accepted_by_logistic = models.BooleanField(default=False)
@@ -46,11 +67,47 @@ class Agreement(models.Model):
 
     @classmethod
     def get_or_create_from_offer(cls, offer):
+        customer = offer.cargo.customer
+        carrier = offer.carrier
+        logistic = offer.intermediary or offer.logistic
+
+        defaults = {
+            "expires_at": timezone.now() + timedelta(minutes=30),
+            # --- CUSTOMER SNAPSHOT ---
+            "customer_id": customer.id,
+            "customer_full_name": customer.get_full_name(),
+            "customer_email": customer.email,
+            "customer_phone": customer.phone,
+            "customer_registered_at": customer.date_joined,
+        }
+
+        # --- CARRIER SNAPSHOT ---
+        if carrier:
+            defaults.update(
+                {
+                    "carrier_id": carrier.id,
+                    "carrier_full_name": carrier.get_full_name(),
+                    "carrier_email": carrier.email,
+                    "carrier_phone": carrier.phone,
+                    "carrier_registered_at": carrier.date_joined,
+                }
+            )
+
+        # --- LOGISTIC SNAPSHOT ---
+        if logistic:
+            defaults.update(
+                {
+                    "logistic_id": logistic.id,
+                    "logistic_full_name": logistic.get_full_name(),
+                    "logistic_email": logistic.email,
+                    "logistic_phone": logistic.phone,
+                    "logistic_registered_at": logistic.date_joined,
+                }
+            )
+
         agreement, _ = cls.objects.get_or_create(
             offer=offer,
-            defaults={
-                "expires_at": timezone.now() + timedelta(minutes=30),
-            },
+            defaults=defaults,
         )
         return agreement
 

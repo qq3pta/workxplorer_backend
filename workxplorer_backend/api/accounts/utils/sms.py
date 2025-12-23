@@ -19,7 +19,7 @@ def send_sms_otp(e164_phone: str) -> None:
         )
     except Exception as e:
         log.exception(f"Twilio SMS OTP send failed: {e}")
-        raise ValidationError("Не удалось отправить код. Попробуйте позже.")
+        raise ValidationError("Не удалось отправить код. Попробуйте позже.") from None
 
 
 def check_sms_otp(e164_phone: str, code: str) -> None:
@@ -32,7 +32,7 @@ def check_sms_otp(e164_phone: str, code: str) -> None:
         )
     except Exception as e:
         log.exception(f"Twilio SMS OTP check failed: {e}")
-        raise ValidationError("Код неверный или просроченный")
+        raise ValidationError("Ошибка проверки кода. Попробуйте запросить новый код.") from None
 
     if result.status != "approved":
         raise ValidationError("Код неверный или просроченный")

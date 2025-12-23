@@ -16,6 +16,7 @@ class AgreementDetailSerializer(serializers.ModelSerializer):
             "status",
             "expires_at",
             "created_at",
+            # --- ACCEPT ---
             "accepted_by_customer",
             "accepted_by_carrier",
             "accepted_by_logistic",
@@ -37,6 +38,17 @@ class AgreementDetailSerializer(serializers.ModelSerializer):
             "logistic_email",
             "logistic_phone",
             "logistic_registered_at",
+            # --- ПОГРУЗКА ---
+            "loading_city",
+            "loading_street",
+            "loading_date",
+            # --- РАЗГРУЗКА ---
+            "unloading_city",
+            "unloading_street",
+            "unloading_date",
+            # --- ДЕТАЛИ ---
+            "total_distance_km",
+            "travel_time",
         )
         read_only_fields = fields
 

@@ -30,7 +30,14 @@ User = get_user_model()
 
 
 class OrdersViewSet(viewsets.ModelViewSet):
-    queryset = Order.objects.all().select_related("cargo", "customer", "carrier", "created_by")
+    queryset = Order.objects.all().select_related(
+        "cargo",
+        "customer",
+        "carrier",
+        "logistic",
+        "created_by",
+        "offer",
+    )
     permission_classes = [IsAuthenticated, IsOrderParticipant]
     filter_backends = [DjangoFilterBackend]
     filterset_class = OrderFilter

@@ -249,7 +249,7 @@ class OfferShortSerializer(serializers.ModelSerializer):
 
     carrier_company = serializers.SerializerMethodField()
     carrier_full_name = serializers.SerializerMethodField()
-    carrier_id = serializers.IntegerField(read_only=True)
+    carrier_id = serializers.IntegerField(source="carrier.id", read_only=True)
     carrier_rating = serializers.FloatField(read_only=True)
 
     logistic_id = serializers.IntegerField(source="logistic.id", read_only=True)
@@ -348,6 +348,17 @@ class OfferShortSerializer(serializers.ModelSerializer):
     def get_carrier_full_name(self, obj: Offer) -> str:
         """Полное имя перевозчика (строго ФИО)."""
         return self._get_user_full_name(obj.carrier)
+
+    def get_logistic_company(self, obj: Offer) -> str:
+        """Название компании логиста."""
+        u = obj.logistic
+        if not u:
+            return ""
+        return getattr(u, "company_name", "") or ""
+
+    def get_logistic_full_name(self, obj: Offer) -> str:
+        """Полное имя логиста."""
+        return self._get_user_full_name(obj.logistic)
 
     def get_transport_type_display(self, obj: Offer) -> str:
         """

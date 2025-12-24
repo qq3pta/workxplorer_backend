@@ -40,6 +40,7 @@ class Offer(models.Model):
     class PaymentMethod(models.TextChoices):
         CASH = "cash", "Наличные"
         CASHLESS = "cashless", "Безналичный расчёт"
+        BOTH = "both", "Наличные + перечисление"
 
     class DealType(models.TextChoices):
         CUSTOMER_CARRIER = "customer_carrier"

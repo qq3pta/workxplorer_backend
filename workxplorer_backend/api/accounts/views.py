@@ -433,6 +433,7 @@ class AnalyticsView(APIView):
         }
 
         # ---------- PIE CHART ----------
+        # ---------- PIE CHART ----------
         orders_qs = Order.objects.all()
 
         if role == UserRole.LOGISTIC:
@@ -447,13 +448,21 @@ class AnalyticsView(APIView):
         in_process = orders_qs.filter(
             status__in=[
                 Order.OrderStatus.PENDING,
-                Order.OrderStatus.ON_DELIVERY,
+                Order.OrderStatus.EN_ROUTE,
             ]
         ).count()
 
         successful = orders_qs.filter(status=Order.OrderStatus.DELIVERED).count()
 
-        cancelled = orders_qs.filter(status=Order.OrderStatus.CANCELLED).count()
+        # ❗️ У ТЕБЯ НЕТ CANCELLED → считаем "всё остальное"
+        cancelled = orders_qs.exclude(
+            status__in=[
+                Order.OrderStatus.NO_DRIVER,
+                Order.OrderStatus.PENDING,
+                Order.OrderStatus.EN_ROUTE,
+                Order.OrderStatus.DELIVERED,
+            ]
+        ).count()
 
         pie_chart = {
             "in_search": in_search,

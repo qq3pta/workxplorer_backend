@@ -74,19 +74,22 @@ class AgreementDetailSerializer(serializers.ModelSerializer):
     # ---------- METHODS ----------
     @extend_schema_field(serializers.FloatField(allow_null=True))
     def get_total_distance_km(self, obj):
-        # 1️⃣ Если Order уже создан — берём из него
+        # 1️⃣ Если Order уже есть
         order = getattr(obj, "order", None)
         if order and order.route_distance_km:
             return float(order.route_distance_km)
 
-        # 2️⃣ Иначе считаем / берём из Cargo
         cargo = obj.offer.cargo
 
+        # 2️⃣ Кэш
         if cargo.route_km_cached:
             return float(cargo.route_km_cached)
 
+        # 3️⃣ Геометрия (GEOS)
         if cargo.origin_point and cargo.dest_point:
-            return float(Distance(cargo.origin_point, cargo.dest_point).km)
+            # distance() → в единицах SRID (обычно метры)
+            meters = cargo.origin_point.distance(cargo.dest_point)
+            return round(meters / 1000, 2)
 
         return None
 

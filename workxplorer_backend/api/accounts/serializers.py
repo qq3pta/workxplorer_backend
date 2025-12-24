@@ -466,3 +466,4 @@ class AnalyticsSerializer(serializers.Serializer):
     deals_count = serializers.IntegerField()
 
     bar_chart = serializers.DictField()
+    pie_chart = serializers.DictField()

@@ -1,5 +1,6 @@
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
+from django.db.models import Count
 
 from .models import UserRating
 
@@ -81,7 +82,7 @@ class RatingUserListSerializer(serializers.ModelSerializer):
 
     total_distance = serializers.SerializerMethodField()
 
-    orders_stats = serializers.SerializerMethodField()
+    pie_chart = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -99,7 +100,7 @@ class RatingUserListSerializer(serializers.ModelSerializer):
             "completed_orders",
             "total_distance",
             "registered_at",
-            "orders_stats",
+            "pie_chart",
         )
         read_only_fields = fields
 
@@ -123,21 +124,23 @@ class RatingUserListSerializer(serializers.ModelSerializer):
     # -----------------------
     # Piechart statistics
     # -----------------------
-    def get_orders_stats(self, obj):
+    def get_pie_chart(self, obj):
         """
-        Возвращает структуру вида:
-        {
-            "total": int,
-            "completed": int,
-            "in_progress": int,
-            "queued": int,
-            "excellent": int
-        }
+        Pie chart распределения оценок (1–5).
+        Аналогично аналитике.
         """
-        return {
-            "total": int(getattr(obj, "orders_total_value", 0)),
-            "completed": int(getattr(obj, "orders_completed_value", 0)),
-            "in_progress": int(getattr(obj, "orders_in_progress_value", 0)),
-            "queued": int(getattr(obj, "orders_queued_value", 0)),
-            "excellent": int(getattr(obj, "orders_excellent_value", 0)),
+        qs = UserRating.objects.filter(rated_user=obj).values("score").annotate(count=Count("id"))
+
+        # базовая структура — всегда все ключи
+        result = {
+            "1": 0,
+            "2": 0,
+            "3": 0,
+            "4": 0,
+            "5": 0,
         }
+
+        for item in qs:
+            result[str(item["score"])] = item["count"]
+
+        return result

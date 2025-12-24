@@ -251,6 +251,11 @@ class OfferShortSerializer(serializers.ModelSerializer):
     carrier_full_name = serializers.SerializerMethodField()
     carrier_id = serializers.IntegerField(read_only=True)
     carrier_rating = serializers.FloatField(read_only=True)
+
+    logistic_id = serializers.IntegerField(source="logistic.id", read_only=True)
+    logistic_company = serializers.SerializerMethodField()
+    logistic_full_name = serializers.SerializerMethodField()
+
     invite_token = serializers.SerializerMethodField()
     phone = serializers.SerializerMethodField()
     email = serializers.SerializerMethodField()
@@ -289,6 +294,9 @@ class OfferShortSerializer(serializers.ModelSerializer):
             "carrier_full_name",
             "carrier_id",
             "carrier_rating",
+            "logistic_id",
+            "logistic_company",
+            "logistic_full_name",
             "phone",
             "email",
             "route_km",

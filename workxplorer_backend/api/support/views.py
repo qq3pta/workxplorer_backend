@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.core.mail import send_mail
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
@@ -26,19 +27,18 @@ class SupportCreateView(APIView):
         )
 
         send_mail(
-            subject=f"Поддержка | Ticket #{ticket.id}",
-            message=f"""
-Пользователь: {request.user.email or request.user.username}
+            subject=f"[Support #{ticket.id}] Новое обращение",
+            message=f"""Пользователь: {request.user.email or request.user.username}
 ID: {request.user.id}
 
 Сообщение:
 {ticket.message}
-            """,
-            from_email=None,
-            recipient_list=["dispatch@gmail.com"],
+""",
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=["kad.noreply1@gmail.com"],
         )
 
         return Response(
             {"detail": "Сообщение отправлено"},
-            status=201,
+            status=status.HTTP_201_CREATED,
         )

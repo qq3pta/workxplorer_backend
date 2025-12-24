@@ -51,8 +51,14 @@ class OrdersViewSet(viewsets.ModelViewSet):
             return qs
 
         role = getattr(user, "role", None)
+        as_role = self.request.query_params.get("as_role")  # 👈 КЛЮЧ
 
         if role == "LOGISTIC":
+            # вкладка «Заказы» — логист как заказчик
+            if as_role == "customer":
+                return qs.filter(customer=user)
+
+            # вкладка «Везу» — логист как логист
             return qs.filter(
                 models.Q(logistic=user)
                 | models.Q(created_by=user)

@@ -4,7 +4,6 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db.models import Q, Sum
 from django.db.models.functions import TruncMonth
-from calendar import month_abbr
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import generics, serializers
@@ -441,6 +440,9 @@ class AnalyticsView(APIView):
             "rating": float(rating or 0),
             "distance_km": distance_km,
             "deals_count": deals_count,
-            # 👇 ВАЖНО: добавляем сюда
             "bar_chart": bar_chart,
         }
+
+        ser = AnalyticsSerializer(data=data)
+        ser.is_valid(raise_exception=True)
+        return Response(ser.data)

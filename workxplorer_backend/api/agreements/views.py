@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -31,10 +32,16 @@ class AgreementViewSet(ReadOnlyModelViewSet):
 
     # 🔹 ФИЛЬТРАЦИЯ ПО РОЛЯМ
     def get_queryset(self):
-        u = self.request.user
-        qs = Agreement.objects.select_related("offer", "offer__cargo")
+        if getattr(self, "swagger_fake_view", False):
+            return Agreement.objects.none()
 
-        qs = qs.filter(status=Agreement.Status.PENDING)
+        u = self.request.user
+        now = timezone.now()
+
+        qs = Agreement.objects.select_related("offer", "offer__cargo").filter(
+            status=Agreement.Status.PENDING,
+            expires_at__gt=now,
+        )
 
         if u.role == "CUSTOMER":
             return qs.filter(offer__cargo__customer=u)

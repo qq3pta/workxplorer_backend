@@ -9,15 +9,15 @@ class AgreementDetailSerializer(serializers.ModelSerializer):
 
     # ---------- ПОГРУЗКА ----------
     loading_city = serializers.CharField(source="offer.cargo.origin_city", read_only=True)
-    loading_street = serializers.CharField(source="offer.cargo.origin_street", read_only=True)
-    loading_date = serializers.DateField(source="offer.cargo.loading_date", read_only=True)
+    loading_address = serializers.CharField(source="offer.cargo.origin_address", read_only=True)
+    loading_date = serializers.DateField(source="offer.cargo.load_date", read_only=True)
 
     # ---------- РАЗГРУЗКА ----------
     unloading_city = serializers.CharField(source="offer.cargo.destination_city", read_only=True)
-    unloading_street = serializers.CharField(
-        source="offer.cargo.destination_street", read_only=True
+    unloading_address = serializers.CharField(
+        source="offer.cargo.destination_address", read_only=True
     )
-    unloading_date = serializers.DateField(source="offer.cargo.unloading_date", read_only=True)
+    unloading_date = serializers.DateField(source="offer.cargo.delivery_date", read_only=True)
 
     # ---------- ДЕТАЛИ ПОЕЗДКИ ----------
     total_distance_km = serializers.SerializerMethodField()
@@ -56,11 +56,11 @@ class AgreementDetailSerializer(serializers.ModelSerializer):
             "logistic_registered_at",
             # --- ПОГРУЗКА ---
             "loading_city",
-            "loading_street",
+            "loading_address",
             "loading_date",
             # --- РАЗГРУЗКА ---
             "unloading_city",
-            "unloading_street",
+            "unloading_address",
             "unloading_date",
             # --- ДЕТАЛИ ---
             "total_distance_km",

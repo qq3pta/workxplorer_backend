@@ -62,7 +62,7 @@ INSTALLED_APPS = [
     "api.notifications",
     "api.payments",
     "api.agreements",
-    "api.supports",
+    "api.support",
     "channels",
 ]
 

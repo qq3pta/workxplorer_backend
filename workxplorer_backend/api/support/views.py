@@ -3,11 +3,16 @@ from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
+from drf_spectacular.utils import extend_schema
 
 from .models import SupportTicket
 from .serializers import SupportTicketCreateSerializer
 
 
+@extend_schema(
+    request=SupportTicketCreateSerializer,
+    responses={201: None},
+)
 class SupportCreateView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -35,5 +40,5 @@ ID: {request.user.id}
 
         return Response(
             {"detail": "Сообщение отправлено"},
-            status=status.HTTP_201_CREATED,
+            status=201,
         )

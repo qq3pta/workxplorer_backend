@@ -288,4 +288,4 @@ EMAIL_USE_SSL = env_bool("EMAIL_USE_SSL", False)
 
 EMAIL_HOST_USER = getenv("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = getenv("EMAIL_HOST_PASSWORD", "")
-DEFAULT_FROM_EMAIL = getenv("DEFAULT_FROM_EMAIL", "noreply@example.com")
+DEFAULT_FROM_EMAIL = getenv("DEFAULT_FROM_EMAIL", "kad.noreply1@gmail.com")

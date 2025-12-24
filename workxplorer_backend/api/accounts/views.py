@@ -389,7 +389,7 @@ class AnalyticsView(APIView):
 
         # ---------- BAR CHART ----------
         year = int(request.query_params.get("year", now.year))
-        half = request.query_params.get("half", "1")  # "1" | "2"
+        half = request.query_params.get("half", "1")
 
         months = range(1, 7) if half == "1" else range(7, 13)
 
@@ -432,6 +432,38 @@ class AnalyticsView(APIView):
             "earned": [earned_map.get(m, 0) for m in months],
         }
 
+        # ---------- PIE CHART ----------
+        orders_qs = Order.objects.all()
+
+        if role == UserRole.LOGISTIC:
+            orders_qs = orders_qs.filter(customer=user)
+        elif role == UserRole.CARRIER:
+            orders_qs = orders_qs.filter(carrier=user)
+        else:
+            orders_qs = orders_qs.filter(Q(customer=user) | Q(carrier=user))
+
+        in_search = orders_qs.filter(status=Order.OrderStatus.NO_DRIVER).count()
+
+        in_process = orders_qs.filter(
+            status__in=[
+                Order.OrderStatus.PENDING,
+                Order.OrderStatus.ON_DELIVERY,
+            ]
+        ).count()
+
+        successful = orders_qs.filter(status=Order.OrderStatus.DELIVERED).count()
+
+        cancelled = orders_qs.filter(status=Order.OrderStatus.CANCELLED).count()
+
+        pie_chart = {
+            "in_search": in_search,
+            "in_process": in_process,
+            "successful": successful,
+            "cancelled": cancelled,
+            "total": successful + cancelled,
+        }
+
+        # ---------- RESPONSE ----------
         data = {
             "successful_deliveries": current_cnt,
             "successful_deliveries_change": round(successful_change, 3),
@@ -441,6 +473,7 @@ class AnalyticsView(APIView):
             "distance_km": distance_km,
             "deals_count": deals_count,
             "bar_chart": bar_chart,
+            "pie_chart": pie_chart,
         }
 
         ser = AnalyticsSerializer(data=data)

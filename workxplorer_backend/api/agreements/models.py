@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import timedelta
 
 from django.core.exceptions import ValidationError, PermissionDenied
+from django.contrib.gis.db.models.functions import Distance
+from decimal import Decimal
 from django.db import models, transaction
 from django.utils import timezone
 
@@ -180,6 +182,20 @@ class Agreement(models.Model):
             if cargo.status == CargoStatus.MATCHED:
                 return
 
+            # -------- РАССТОЯНИЕ --------
+            if cargo.route_km_cached:
+                route_km = Decimal(cargo.route_km_cached)
+            elif cargo.origin_point and cargo.dest_point:
+                route_km = Decimal(Distance(cargo.origin_point, cargo.dest_point).km)
+            else:
+                route_km = Decimal("0")
+
+            if route_km <= 0:
+                raise ValidationError("Не удалось рассчитать расстояние маршрута")
+
+            # -------- ЦЕНА --------
+            price_total = offer.price_value or Decimal("0.00")
+
             Order.objects.create(
                 cargo=cargo,
                 customer=cargo.customer,
@@ -193,7 +209,9 @@ class Agreement(models.Model):
                     else Order.OrderStatus.PENDING
                 ),
                 currency=offer.price_currency,
-                price_total=offer.price_value or 0,
+                payment_method=offer.payment_method,
+                price_total=price_total,
+                route_distance_km=route_km.quantize(Decimal("0.01")),
             )
 
             cargo.status = CargoStatus.MATCHED

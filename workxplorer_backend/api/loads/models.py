@@ -28,6 +28,7 @@ class CargoStatus(models.TextChoices):
 class PaymentMethod(models.TextChoices):
     CASH = "cash", "Наличные"
     CASHLESS = "cashless", "Безналичный расчёт"
+    BOTH = "both", "Наличные + безналичный расчёт"
 
 
 class Cargo(models.Model):

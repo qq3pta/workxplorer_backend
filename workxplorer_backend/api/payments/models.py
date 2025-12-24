@@ -19,10 +19,12 @@ class PaymentStatus:
 class PaymentMethod:
     CASH = "cash"
     BANK_TRANSFER = "bank_transfer"
+    BOTH = "both"
 
     choices = [
         (CASH, "Наличные"),
         (BANK_TRANSFER, "Перечисление"),
+        (BOTH, "Наличные + перечисление"),
     ]
 
 

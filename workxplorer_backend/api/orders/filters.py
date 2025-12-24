@@ -1,6 +1,7 @@
 import django_filters
 
 from .models import Order
+from django.db import models
 
 
 class OrderFilter(django_filters.FilterSet):
@@ -19,10 +20,22 @@ class OrderFilter(django_filters.FilterSet):
         user = getattr(self.request, "user", None)
         if not user or not user.is_authenticated:
             return qs.none()
+
         if value == "customer":
             return qs.filter(customer_id=user.id)
+
         if value == "carrier":
             return qs.filter(carrier_id=user.id)
+
+        if value == "logistic":
+            return qs.filter(
+                models.Q(logistic_id=user.id)
+                | models.Q(created_by_id=user.id)
+                | models.Q(cargo__created_by_id=user.id)
+                | models.Q(offer__logistic_id=user.id)
+                | models.Q(offer__intermediary_id=user.id)
+            ).distinct()
+
         return qs
 
     def filter_load(self, qs, name, value):

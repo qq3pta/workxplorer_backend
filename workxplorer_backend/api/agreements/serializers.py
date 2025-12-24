@@ -1,3 +1,5 @@
+from django.contrib.gis.db.models.functions import Distance
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from .models import Agreement
@@ -70,9 +72,23 @@ class AgreementDetailSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     # ---------- METHODS ----------
+    @extend_schema_field(serializers.FloatField(allow_null=True))
     def get_total_distance_km(self, obj):
+        # 1️⃣ Если Order уже создан — берём из него
         order = getattr(obj, "order", None)
-        return order.total_distance_km if order else None
+        if order and order.route_distance_km:
+            return float(order.route_distance_km)
+
+        # 2️⃣ Иначе считаем / берём из Cargo
+        cargo = obj.offer.cargo
+
+        if cargo.route_km_cached:
+            return float(cargo.route_km_cached)
+
+        if cargo.origin_point and cargo.dest_point:
+            return float(Distance(cargo.origin_point, cargo.dest_point).km)
+
+        return None
 
     def get_travel_time(self, obj):
         order = getattr(obj, "order", None)

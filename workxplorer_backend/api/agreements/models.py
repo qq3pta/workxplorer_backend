@@ -3,7 +3,6 @@ from __future__ import annotations
 from datetime import timedelta
 
 from django.core.exceptions import ValidationError, PermissionDenied
-from django.contrib.gis.db.models.functions import Distance
 from decimal import Decimal
 from django.db import models, transaction
 from django.utils import timezone
@@ -185,8 +184,11 @@ class Agreement(models.Model):
             # -------- РАССТОЯНИЕ --------
             if cargo.route_km_cached:
                 route_km = Decimal(cargo.route_km_cached)
+
             elif cargo.origin_point and cargo.dest_point:
-                route_km = Decimal(Distance(cargo.origin_point, cargo.dest_point).km)
+                meters = cargo.origin_point.distance(cargo.dest_point)
+                route_km = Decimal(meters / 1000)
+
             else:
                 route_km = Decimal("0")
 

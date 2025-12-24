@@ -464,3 +464,5 @@ class AnalyticsSerializer(serializers.Serializer):
     rating = serializers.FloatField()
     distance_km = serializers.FloatField()
     deals_count = serializers.IntegerField()
+
+    bar_chart = serializers.DictField()

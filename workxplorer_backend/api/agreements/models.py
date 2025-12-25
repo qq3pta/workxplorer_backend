@@ -240,3 +240,28 @@ class Agreement(models.Model):
 
         self.offer.is_active = False
         self.offer.save()
+
+    def reject(self, by_user):
+        if self.status != self.Status.PENDING:
+            raise ValidationError("Соглашение уже обработано")
+
+        offer = self.offer
+        cargo = offer.cargo
+
+        # 🔐 Проверка участия (симметрично accept_by)
+        if by_user.id in (cargo.customer_id, cargo.created_by_id):
+            pass  # заказчик
+        elif by_user.id == offer.carrier_id:
+            pass  # перевозчик
+        elif by_user.id in (offer.logistic_id, offer.intermediary_id):
+            pass  # логист / посредник
+        else:
+            raise PermissionDenied("Вы не участник соглашения")
+
+        # ❌ Отмена соглашения
+        self.status = self.Status.CANCELLED
+        self.save(update_fields=["status"])
+
+        # ❌ Деактивируем оффер
+        offer.is_active = False
+        offer.save(update_fields=["is_active"])

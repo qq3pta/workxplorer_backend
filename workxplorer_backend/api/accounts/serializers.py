@@ -74,6 +74,7 @@ class SendPhoneOTPSerializer(serializers.Serializer):
         purpose = self.validated_data["purpose"]
 
         last = PhoneOTP.objects.filter(phone=phone, purpose=purpose).order_by("-created_at").first()
+
         if last:
             diff = (timezone.now() - last.created_at).total_seconds()
             left = max(0, RESEND_COOLDOWN_SEC - int(diff))
@@ -82,9 +83,8 @@ class SendPhoneOTPSerializer(serializers.Serializer):
                     {"detail": "Код уже отправлен. Подождите.", "seconds_left": left}
                 )
 
-        ok = send_sms_otp(phone)
-        if not ok:
-            raise serializers.ValidationError({"phone": "Не удалось отправить SMS-код"})
+        # ✅ ВОТ ЗДЕСЬ КЛЮЧЕВОЕ ИЗМЕНЕНИЕ
+        send_sms_otp(phone)
 
         PhoneOTP.objects.create(
             phone=phone,
@@ -92,7 +92,10 @@ class SendPhoneOTPSerializer(serializers.Serializer):
             expires_at=timezone.now() + timedelta(minutes=5),
         )
 
-        return {"detail": "Код отправлен по SMS", "seconds_left": RESEND_COOLDOWN_SEC}
+        return {
+            "detail": "Код отправлен по SMS",
+            "seconds_left": RESEND_COOLDOWN_SEC,
+        }
 
 
 class VerifyPhoneOTPSerializer(serializers.Serializer):

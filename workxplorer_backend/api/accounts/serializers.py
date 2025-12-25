@@ -119,9 +119,8 @@ class VerifyPhoneOTPSerializer(serializers.Serializer):
         code = self.validated_data["code"]
         purpose = self.validated_data["purpose"]
 
-        ok = check_sms_otp(phone, code)
-        if not ok:
-            raise serializers.ValidationError({"code": "Неверный или просроченный код"})
+        # ✅ Twilio сам выбросит ошибку, если код неверный
+        check_sms_otp(phone, code)
 
         since = timezone.now() - timedelta(minutes=10)
 

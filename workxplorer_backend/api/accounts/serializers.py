@@ -119,20 +119,23 @@ class VerifyPhoneOTPSerializer(serializers.Serializer):
         code = self.validated_data["code"]
         purpose = self.validated_data["purpose"]
 
-        # ✅ Twilio сам выбросит ошибку, если код неверный
+        # 1️⃣ Проверяет Twilio (если код неверный — exception)
         check_sms_otp(phone, code)
 
-        since = timezone.now() - timedelta(minutes=10)
+        # 2️⃣ Помечаем последний OTP как использованный
+        otp = (
+            PhoneOTP.objects.filter(phone=phone, purpose=purpose, is_used=False)
+            .order_by("-created_at")
+            .first()
+        )
 
-        updated = PhoneOTP.objects.filter(
-            phone=phone,
-            purpose=purpose,
-            is_used=False,
-            created_at__gte=since,
-        ).update(is_used=True)
+        if not otp:
+            raise serializers.ValidationError({"detail": "OTP не найден. Запросите код заново."})
 
-        if updated == 0:
-            raise serializers.ValidationError({"detail": "Код устарел, запросите новый"})
+        otp.is_used = True
+        otp.save(update_fields=["is_used"])
+
+        return {"verified": True}
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -190,7 +193,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         since = timezone.now() - timedelta(minutes=recent_minutes)
         ok_recent = PhoneOTP.objects.filter(
             phone=attrs["phone"],
-            purpose=PhoneOTP.PURPOSE_VERIFY,
+            purpose="verify",
             is_used=True,
             created_at__gte=since,
         ).exists()

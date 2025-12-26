@@ -174,14 +174,24 @@ class Cargo(models.Model):
         super().save(*args, **kwargs)
 
         if is_new:
-            notify(
-                user=self.customer,
-                type="order_created",
-                title="Заявка успешно создана",
-                message="Ваша заявка создана и отправлена на модерацию",
-                cargo=self,
-                payload={"cargo_id": self.id},
-            )
+            if self.moderation_status == ModerationStatus.APPROVED:
+                notify(
+                    user=self.customer,
+                    type="order_published",
+                    title="Заявка опубликована",
+                    message="Ваша заявка сразу опубликована",
+                    cargo=self,
+                    payload={"cargo_id": self.id},
+                )
+            else:
+                notify(
+                    user=self.customer,
+                    type="order_created",
+                    title="Заявка успешно создана",
+                    message="Ваша заявка создана и отправлена на модерацию",
+                    cargo=self,
+                    payload={"cargo_id": self.id},
+                )
             return
 
         if old_moderation != self.moderation_status:

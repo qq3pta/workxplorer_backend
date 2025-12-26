@@ -192,22 +192,31 @@ class MyCargosView(generics.ListAPIView):
             qs = qs.filter(price_uzs_anno__lte=p["max_price_uzs"])
 
         # Гео фильтры
-        o_lat, o_lng, o_r = p.get("origin_lat"), p.get("origin_lng"), p.get("origin_radius_km")
+        # ORIGIN
+        o_lat = p.get("origin_lat") or p.get("lat")
+        o_lng = p.get("origin_lng") or p.get("lng")
+        o_r = p.get("origin_radius_km")
+
         if o_lat and o_lng and o_r:
             try:
                 pnt = Point(float(o_lng), float(o_lat), srid=4326)
                 qs = qs.filter(origin_point__distance_lte=(pnt, D(km=float(o_r))))
-            except Exception:
-                pass
+            except Exception as e:
+                print("ORIGIN GEO FILTER ERROR:", e)
 
-        d_lat, d_lng, d_r = p.get("dest_lat"), p.get("dest_lng"), p.get("dest_radius_km")
+        # DESTINATION
+        d_lat = p.get("dest_lat")
+        d_lng = p.get("dest_lng")
+        d_r = p.get("dest_radius_km")
+
         if d_lat and d_lng and d_r:
             try:
                 pnt = Point(float(d_lng), float(d_lat), srid=4326)
                 qs = qs.filter(dest_point__distance_lte=(pnt, D(km=float(d_r))))
-            except Exception:
-                pass
+            except Exception as e:
+                print("DEST GEO FILTER ERROR:", e)
 
+        # COMPANY / SEARCH
         q = p.get("company") or p.get("q")
         if q:
             qs = qs.filter(

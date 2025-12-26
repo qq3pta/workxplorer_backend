@@ -331,6 +331,18 @@ class PublicLoadsView(generics.ListAPIView):
         o_r = float(o_r) if o_r else None
         d_r = float(d_r) if d_r else None
 
+        if p.get("price_currency"):
+            qs = qs.filter(price_currency=p["price_currency"])
+
+        # Есть / нет предложений
+        has_offers = p.get("has_offers")
+        if has_offers is not None:
+            has_offers = str(has_offers).lower()
+            if has_offers in ("true", "1"):
+                qs = qs.filter(offers_active__gt=0)
+            elif has_offers in ("false", "0"):
+                qs = qs.filter(offers_active=0)
+
         if p.get("uuid"):
             qs = qs.filter(uuid=p["uuid"])
         if p.get("origin_city") and not o_r:

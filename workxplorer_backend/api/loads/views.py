@@ -332,9 +332,6 @@ class PublicLoadsView(generics.ListAPIView):
         o_r = float(o_r) if o_r else None
         d_r = float(d_r) if d_r else None
 
-        if p.get("price_currency"):
-            qs = qs.filter(price_currency=p["price_currency"])
-
         # Есть / нет предложений
         has_offers = p.get("has_offers")
         if has_offers is not None:
@@ -359,10 +356,16 @@ class PublicLoadsView(generics.ListAPIView):
 
         if p.get("transport_type"):
             qs = qs.filter(transport_type=p["transport_type"])
-        if p.get("min_weight"):
-            qs = qs.filter(weight_kg__gte=p["min_weight"])
-        if p.get("max_weight"):
-            qs = qs.filter(weight_kg__lte=p["max_weight"])
+        min_weight = p.get("min_weight")
+        max_weight = p.get("max_weight")
+
+        try:
+            if min_weight is not None:
+                qs = qs.filter(weight_kg__gte=float(min_weight) * 1000)
+            if max_weight is not None:
+                qs = qs.filter(weight_kg__lte=float(max_weight) * 1000)
+        except ValueError:
+            pass
         if p.get("axles_min"):
             qs = qs.filter(axles__gte=p["axles_min"])
         if p.get("axles_max"):

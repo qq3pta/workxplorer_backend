@@ -196,7 +196,7 @@ class MyCargosView(generics.ListAPIView):
         o_lng = p.get("origin_lng") or p.get("lng")
         o_r = p.get("origin_radius_km")
 
-        if o_lat and o_lng and o_r:
+        if o_r is not None and o_lat is not None and o_lng is not None:
             try:
                 pnt = Point(float(o_lng), float(o_lat), srid=4326)
                 qs = qs.annotate(origin_dist_m=Distance("origin_point", pnt)).filter(
@@ -328,6 +328,9 @@ class PublicLoadsView(generics.ListAPIView):
         d_lng = p.get("dest_lng")
         d_r = p.get("dest_radius_km")
 
+        o_r = float(o_r) if o_r else None
+        d_r = float(d_r) if d_r else None
+
         if p.get("uuid"):
             qs = qs.filter(uuid=p["uuid"])
         if p.get("origin_city") and not o_r:
@@ -389,7 +392,7 @@ class PublicLoadsView(generics.ListAPIView):
                 print("ORIGIN GEO FILTER ERROR:", e)
 
         # ---------- DESTINATION GEO FILTER (КУДА + РАДИУС) ----------
-        if d_lat and d_lng and d_r:
+        if d_r is not None and d_lat is not None and d_lng is not None:
             try:
                 dest_center = Point(float(d_lng), float(d_lat), srid=4326)
 

@@ -161,14 +161,8 @@ class OrdersViewSet(viewsets.ModelViewSet):
 
         # ---------- Аннотация цены в UZS ----------
         qs = qs.annotate(
-            price_uzs_anno=Coalesce(
-                F("price_total"),
-                F("offer__price_value"),
-            ),
-            price_currency=Coalesce(
-                F("currency"),
-                F("offer__price_currency"),
-            ),
+            price_uzs_anno=F("offer__price_value"),
+            price_currency=F("offer__price_currency"),
         )
 
         # ---------- UUID / города / даты ----------

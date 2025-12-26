@@ -143,11 +143,7 @@ class MyCargosView(generics.ListAPIView):
         ).annotate(
             path_km=F("path_m") / 1000.0,
             route_km=Coalesce(F("route_km_cached"), F("path_km")),
-            price_uzs_anno=Coalesce(
-                F("price_uzs"),
-                F("price_value"),
-                output_field=DecimalField(max_digits=14, decimal_places=2),
-            ),
+            price_uzs_anno=F("price_uzs"),
         )
 
         return apply_loads_filters(qs, self.request.query_params)
@@ -172,11 +168,7 @@ class MyCargosBoardView(generics.ListAPIView):
             .annotate(
                 path_km=F("path_m") / 1000.0,
                 route_km=Coalesce(F("route_km_cached"), F("path_km")),
-                price_uzs_anno=Coalesce(
-                    F("price_uzs"),
-                    F("price_value"),
-                    output_field=DecimalField(max_digits=14, decimal_places=2),
-                ),
+                price_uzs_anno=F("price_uzs"),
             )
         )
 
@@ -206,11 +198,7 @@ class PublicLoadsView(generics.ListAPIView):
             .annotate(
                 path_km=F("path_m") / 1000.0,
                 route_km=Coalesce(F("route_km_cached"), F("path_km")),
-                price_uzs_anno=Coalesce(
-                    F("price_uzs"),
-                    F("price_value"),
-                    output_field=DecimalField(max_digits=14, decimal_places=2),
-                ),
+                price_uzs_anno=F("price_uzs"),
                 company_rating=Avg("customer__ratings_received__score"),
             )
             .select_related("customer")
@@ -392,11 +380,7 @@ class CargoInviteOpenView(generics.GenericAPIView):
             .annotate(
                 path_km=F("path_m") / 1000.0,
                 route_km=Coalesce(F("route_km_cached"), F("path_km")),
-                price_uzs_anno=Coalesce(
-                    F("price_uzs"),
-                    F("price_value"),
-                    output_field=DecimalField(max_digits=14, decimal_places=2),
-                ),
+                price_uzs_anno=F("price_uzs"),
                 company_rating=Avg("customer__ratings_received__score"),
             )
             .select_related("customer")

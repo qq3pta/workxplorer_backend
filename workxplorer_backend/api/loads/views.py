@@ -274,6 +274,7 @@ class MyCargosBoardView(generics.ListAPIView):
         )
 
         qs = qs.annotate(
+            offers_active=Count("offers", filter=Q(offers__is_active=True)),
             path_m=Distance(F("origin_point"), F("dest_point")),
         ).annotate(
             path_km=F("path_m") / 1000.0,

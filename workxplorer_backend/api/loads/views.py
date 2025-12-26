@@ -30,6 +30,7 @@ from ..accounts.permissions import (
 from .choices import ModerationStatus
 from .models import Cargo, CargoStatus
 from common.utils import convert_to_uzs
+from common.filters import apply_common_search_filters
 from .serializers import CargoListSerializer, CargoPublishSerializer
 
 INVITE_BASE_URL = "https://logistic-omega-eight.vercel.app/dashboard/desk/invite"
@@ -283,6 +284,8 @@ class MyCargosBoardView(generics.ListAPIView):
                 output_field=DecimalField(max_digits=14, decimal_places=2),
             ),
         )
+
+        qs = apply_common_search_filters(qs, self.request.query_params)
 
         return qs.order_by("-refreshed_at", "-created_at")
 

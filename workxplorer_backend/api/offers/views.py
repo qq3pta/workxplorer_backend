@@ -1,3 +1,4 @@
+from decimal import Decimal
 from django.contrib.gis.db.models.functions import Distance
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
@@ -12,6 +13,7 @@ from drf_spectacular.utils import (
 )
 from rest_framework import serializers, status
 from rest_framework import generics
+from common.utils import convert_to_uzs
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -53,6 +55,34 @@ def _apply_common_filters(qs, params):
       - сортировка
     """
     p = params
+
+    # ======================
+    # ВЕС (ТОННЫ → КГ)
+    # ======================
+    try:
+        if p.get("min_weight"):
+            qs = qs.filter(cargo__weight_kg__gte=float(p["min_weight"]) * 1000)
+        if p.get("max_weight"):
+            qs = qs.filter(cargo__weight_kg__lte=float(p["max_weight"]) * 1000)
+    except ValueError:
+        pass
+
+    # ======================
+    # ЦЕНА (ВАЛЮТА → UZS)
+    # ======================
+    currency = p.get("price_currency")
+    if currency:
+        try:
+            if p.get("min_price"):
+                qs = qs.filter(
+                    cargo__price_uzs__gte=convert_to_uzs(Decimal(p["min_price"]), currency)
+                )
+            if p.get("max_price"):
+                qs = qs.filter(
+                    cargo__price_uzs__lte=convert_to_uzs(Decimal(p["max_price"]), currency)
+                )
+        except Exception as e:
+            print("OFFERS PRICE FILTER ERROR:", e)
 
     if p.get("cargo_id"):
         qs = qs.filter(cargo_id=p["cargo_id"])

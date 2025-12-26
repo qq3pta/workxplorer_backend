@@ -1,6 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.db.models import Avg, Count, Q, Sum
 from rest_framework import permissions, viewsets
+from django.db.models.functions import Coalesce
 
 from .models import UserRating
 from .serializers import RatingUserListSerializer, UserRatingSerializer
@@ -49,6 +50,10 @@ class RatingUserViewSet(viewsets.ReadOnlyModelViewSet):
         if role in {"LOGISTIC", "CUSTOMER", "CARRIER"}:
             qs = qs.filter(role=role)
 
+        user_id = self.request.query_params.get("id")
+        if user_id:
+            qs = qs.filter(id=user_id)
+
         country = self.request.query_params.get("country")
         if country:
             qs = qs.filter(profile__country__iexact=country)
@@ -62,7 +67,7 @@ class RatingUserViewSet(viewsets.ReadOnlyModelViewSet):
             )
 
         qs = qs.annotate(
-            avg_rating_value=Avg("ratings_received__score"),
+            avg_rating_value=Coalesce(Avg("ratings_received__score"), 0),
             rating_count_value=Count("ratings_received", distinct=True),
             orders_total_value=(
                 Count("orders_as_carrier", distinct=True)
@@ -118,5 +123,17 @@ class RatingUserViewSet(viewsets.ReadOnlyModelViewSet):
                     filter=Q(orders_as_carrier__status="delivered"),
                 )
             )
+
+        try:
+            min_rating = self.request.query_params.get("min_rating")
+            max_rating = self.request.query_params.get("max_rating")
+
+            if min_rating is not None:
+                qs = qs.filter(avg_rating_value__gte=float(min_rating))
+
+            if max_rating is not None:
+                qs = qs.filter(avg_rating_value__lte=float(max_rating))
+        except ValueError:
+            pass
 
         return qs

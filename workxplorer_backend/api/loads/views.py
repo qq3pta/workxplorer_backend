@@ -30,7 +30,6 @@ from ..accounts.permissions import (
 from .choices import ModerationStatus
 from .models import Cargo, CargoStatus
 from common.utils import convert_to_uzs
-from common.filters import apply_common_search_filters
 from .serializers import CargoListSerializer, CargoPublishSerializer
 
 INVITE_BASE_URL = "https://logistic-omega-eight.vercel.app/dashboard/desk/invite"

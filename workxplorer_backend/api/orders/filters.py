@@ -26,7 +26,7 @@ class OrderFilter(django_filters.FilterSet):
     # ======================
     min_price = django_filters.NumberFilter(method="filter_min_price")
     max_price = django_filters.NumberFilter(method="filter_max_price")
-    price_currency = django_filters.CharFilter()
+    price_currency = django_filters.CharFilter(method="filter_price_currency")
 
     # ======================
     # ГОРОДА
@@ -94,3 +94,9 @@ class OrderFilter(django_filters.FilterSet):
         if not currency:
             return qs
         return qs.filter(price_total__lte=convert_to_uzs(Decimal(value), currency))
+
+    def filter_price_currency(self, qs, name, value):
+        # фильтруем по полю currency модели Order
+        if not value:
+            return qs
+        return qs.filter(currency=value)

@@ -50,12 +50,12 @@ class OrdersViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         qs = super().get_queryset()
         user = self.request.user
+        p = self.request.query_params
 
-        if user.is_staff or user.is_superuser:
-            pass
-        else:
+        # ---------- Ролевая выборка ----------
+        if not (user.is_staff or user.is_superuser):
             role = getattr(user, "role", None)
-            as_role = self.request.query_params.get("as_role")
+            as_role = p.get("as_role")
 
             if role == "LOGISTIC":
                 if as_role == "customer":
@@ -78,9 +78,7 @@ class OrdersViewSet(viewsets.ModelViewSet):
             else:
                 qs = qs.none()
 
-        # ⬇⬇⬇ ВОТ ЗДЕСЬ ТВОЁ РАСШИРЕНИЕ — ТЕПЕРЬ ОНО РАБОТАЕТ
-        p = self.request.query_params
-
+        # ---------- Аннотация цены в UZS ----------
         qs = qs.annotate(
             price_uzs_anno=Coalesce(
                 F("price_total"),
@@ -88,6 +86,36 @@ class OrdersViewSet(viewsets.ModelViewSet):
             )
         )
 
+        # ---------- UUID / города / даты ----------
+        # груз по uuid
+        if p.get("uuid"):
+            qs = qs.filter(cargo__uuid=p["uuid"])
+        if p.get("cargo_uuid"):
+            qs = qs.filter(cargo__uuid=p["cargo_uuid"])
+
+        # города (как в loads/offers)
+        if p.get("origin_city"):
+            qs = qs.filter(cargo__origin_city__iexact=p["origin_city"])
+        if p.get("destination_city"):
+            qs = qs.filter(cargo__destination_city__iexact=p["destination_city"])
+
+        # даты загрузки/доставки
+        if p.get("load_date"):
+            qs = qs.filter(cargo__load_date=p["load_date"])
+        if p.get("load_date_from"):
+            qs = qs.filter(cargo__load_date__gte=p["load_date_from"])
+        if p.get("load_date_to"):
+            qs = qs.filter(cargo__load_date__lte=p["load_date_to"])
+        if p.get("delivery_date_from"):
+            qs = qs.filter(cargo__delivery_date__gte=p["delivery_date_from"])
+        if p.get("delivery_date_to"):
+            qs = qs.filter(cargo__delivery_date__lte=p["delivery_date_to"])
+
+        # ---------- transport_type ----------
+        if p.get("transport_type"):
+            qs = qs.filter(cargo__transport_type=p["transport_type"])
+
+        # ---------- Поиск по компании / q ----------
         q = p.get("q") or p.get("company")
         if q:
             qs = qs.filter(
@@ -99,6 +127,7 @@ class OrdersViewSet(viewsets.ModelViewSet):
                 | Q(carrier__email__icontains=q)
             )
 
+        # ---------- Вес (тонны → кг, как в loads/offers) ----------
         try:
             if p.get("min_weight"):
                 qs = qs.filter(cargo__weight_kg__gte=float(p["min_weight"]) * 1000)
@@ -107,8 +136,12 @@ class OrdersViewSet(viewsets.ModelViewSet):
         except ValueError:
             pass
 
+        # ---------- Цена + валюта ----------
         currency = p.get("price_currency")
         if currency:
+            # фильтр по валюте самого заказа
+            qs = qs.filter(currency=currency)
+
             try:
                 if p.get("min_price"):
                     qs = qs.filter(
@@ -121,35 +154,24 @@ class OrdersViewSet(viewsets.ModelViewSet):
             except Exception:
                 pass
 
+        # ---------- (опционально) сортировка ----------
+        order = p.get("order")
+        allowed_order = {
+            "created_at",
+            "-created_at",
+            "price_uzs_anno",
+            "-price_uzs_anno",
+            "cargo__load_date",
+            "-cargo__load_date",
+            "cargo__delivery_date",
+            "-cargo__delivery_date",
+        }
+        if order in allowed_order:
+            qs = qs.order_by(order)
+        else:
+            qs = qs.order_by("-created_at")
+
         return qs
-
-    # def perform_create(self, serializer):
-    #    user = self.request.user
-    #    offer = serializer.validated_data.get("offer")
-
-    # CASE 1: Customer manually confirms offer → creates order
-    #    if offer and user.role == "CUSTOMER":
-    #        logistic_user = offer.intermediary or offer.logistic
-
-    #        return Order.objects.create(
-    #            cargo=offer.cargo,
-    #            customer=offer.customer,
-    #            created_by=logistic_user or offer.customer,
-    #            logistic=logistic_user,
-    #            status=Order.OrderStatus.NO_DRIVER,
-    #            currency=offer.currency,
-    #            price_total=offer.price,
-    #            route_distance_km=offer.route_distance_km,
-    #        )
-
-    # CASE 2: Logistic cannot create order manually — only through accepting an offer
-    #    if user.role == "LOGISTIC":
-    #        raise ValidationError(
-    #            "Логисты не создают заказ вручную — заказ создаётся автоматически при принятии оффера."
-    #        )
-
-    # CASE 3: Carrier cannot create orders manually either
-    #    raise ValidationError("Создание заказа возможно только через оффер.")
 
     def get_serializer_class(self):
         if self.action == "list":

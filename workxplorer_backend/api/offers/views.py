@@ -68,24 +68,34 @@ def _apply_common_filters(qs, params):
     except ValueError:
         pass
 
-    # ======================
-    # ЦЕНА (ВАЛЮТА → UZS)
-    # ======================
+        # ======================
+        # TRANSPORT (как в loads)
+        # ======================
+    if p.get("transport_type"):
+        qs = qs.filter(cargo__transport_type=p["transport_type"])
+
+        # ======================
+        # ЦЕНА + ВАЛЮТА (как в loads)
+        # ======================
+    min_price = p.get("min_price")
+    max_price = p.get("max_price")
     currency = p.get("price_currency")
+
     if currency:
+        # фильтр по валюте самого оффера
+        qs = qs.filter(price_currency=currency)
+
         try:
-            if p.get("min_price"):
-                qs = qs.filter(
-                    price_uzs_anno__gte=convert_to_uzs(Decimal(p["min_price"]), currency)
-                )
-            if p.get("max_price"):
-                qs = qs.filter(
-                    price_uzs_anno__lte=convert_to_uzs(Decimal(p["max_price"]), currency)
-                )
+            if min_price not in (None, ""):
+                qs = qs.filter(price_uzs_anno__gte=convert_to_uzs(Decimal(min_price), currency))
+            if max_price not in (None, ""):
+                qs = qs.filter(price_uzs_anno__lte=convert_to_uzs(Decimal(max_price), currency))
         except Exception:
             pass
 
-    # uuid / cargo_uuid
+    # ======================
+    # UUID / CARGO
+    # ======================
     if p.get("uuid"):
         qs = qs.filter(cargo__uuid=p["uuid"])
     elif p.get("cargo_uuid"):
@@ -113,10 +123,17 @@ def _apply_common_filters(qs, params):
     if p.get("accepted_by_carrier") in ("true", "false", "1", "0"):
         qs = qs.filter(accepted_by_carrier=p.get("accepted_by_carrier") in ("true", "1"))
 
+    # ======================
+    # ДАТЫ СОЗДАНИЯ + ДАТЫ ЗАГРУЗКИ/ДОСТАВКИ
+    # ======================
     if p.get("created_from"):
         qs = qs.filter(created_at__gte=p["created_from"])
     if p.get("created_to"):
         qs = qs.filter(created_at__lte=p["created_to"])
+
+    # 👇 ЭТО НОВОЕ — точная дата load_date (как в loads)
+    if p.get("load_date"):
+        qs = qs.filter(cargo__load_date=p["load_date"])
 
     if p.get("load_date_from"):
         qs = qs.filter(cargo__load_date__gte=p["load_date_from"])
@@ -127,11 +144,17 @@ def _apply_common_filters(qs, params):
     if p.get("delivery_date_to"):
         qs = qs.filter(cargo__delivery_date__lte=p["delivery_date_to"])
 
+    # ======================
+    # ГОРОДА
+    # ======================
     if p.get("origin_city"):
         qs = qs.filter(cargo__origin_city__iexact=p["origin_city"])
     if p.get("destination_city"):
         qs = qs.filter(cargo__destination_city__iexact=p["destination_city"])
 
+    # ======================
+    # COMPANY / TEXT SEARCH
+    # ======================
     q = p.get("company") or p.get("q")
     if q:
         qs = qs.filter(
@@ -158,6 +181,9 @@ def _apply_common_filters(qs, params):
             | Q(carrier__phone_number__icontains=p["carrier_phone"])
         )
 
+    # ======================
+    # SORTING
+    # ======================
     allowed = {
         "created_at",
         "-created_at",
@@ -214,8 +240,13 @@ def _apply_common_filters(qs, params):
             OpenApiParameter(
                 "accepted_by_carrier", required=False, type=str, description="true|false"
             ),
+            OpenApiParameter("transport_type", required=False, type=str),
+            OpenApiParameter("price_currency", required=False, type=str),
+            OpenApiParameter("min_price", required=False, type=str),
+            OpenApiParameter("max_price", required=False, type=str),
             OpenApiParameter("created_from", required=False, type=str),
             OpenApiParameter("created_to", required=False, type=str),
+            OpenApiParameter("load_date", required=False, type=str),
             OpenApiParameter("load_date_from", required=False, type=str),
             OpenApiParameter("load_date_to", required=False, type=str),
             OpenApiParameter("delivery_date_from", required=False, type=str),

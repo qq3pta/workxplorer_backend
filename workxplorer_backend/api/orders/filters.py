@@ -87,13 +87,13 @@ class OrderFilter(django_filters.FilterSet):
         currency = self.data.get("price_currency")
         if not currency:
             return qs
-        return qs.filter(price_total__gte=convert_to_uzs(Decimal(value), currency))
+        return qs.filter(price_uzs_anno__gte=convert_to_uzs(Decimal(value), currency))
 
     def filter_max_price(self, qs, name, value):
         currency = self.data.get("price_currency")
         if not currency:
             return qs
-        return qs.filter(price_total__lte=convert_to_uzs(Decimal(value), currency))
+        return qs.filter(price_uzs_anno__lte=convert_to_uzs(Decimal(value), currency))
 
     def filter_price_currency(self, qs, name, value):
         # фильтруем по полю currency модели Order

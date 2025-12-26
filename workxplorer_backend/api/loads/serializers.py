@@ -243,7 +243,7 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
             customer=user,
             origin_point=origin_point,
             dest_point=dest_point,
-            moderation_status=ModerationStatus.PENDING,
+            moderation_status=ModerationStatus.APPROVED,
             **validated_data,
         )
 

@@ -192,8 +192,8 @@ class MyCargosView(generics.ListAPIView):
 
         # Гео фильтры
         # ORIGIN
-        o_lat = p.get("origin_lat") or p.get("lat")
-        o_lng = p.get("origin_lng") or p.get("lng")
+        o_lat = p.get("origin_lat")
+        o_lng = p.get("origin_lng")
         o_r = p.get("origin_radius_km")
 
         if o_r is not None and o_lat is not None and o_lng is not None:

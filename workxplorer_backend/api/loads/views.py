@@ -320,8 +320,8 @@ class PublicLoadsView(generics.ListAPIView):
 
         p = self.request.query_params
 
-        o_lat = p.get("origin_lat")
-        o_lng = p.get("origin_lng")
+        o_lat = p.get("origin_lat") or p.get("lat")
+        o_lng = p.get("origin_lng") or p.get("lng")
         o_r = p.get("origin_radius_km")
 
         d_lat = p.get("dest_lat")

@@ -388,6 +388,17 @@ class PublicLoadsView(generics.ListAPIView):
             except Exception as e:
                 print("ORIGIN GEO FILTER ERROR:", e)
 
+        # ---------- DESTINATION GEO FILTER (КУДА + РАДИУС) ----------
+        if d_lat and d_lng and d_r:
+            try:
+                dest_center = Point(float(d_lng), float(d_lat), srid=4326)
+
+                qs = qs.annotate(dest_dist_km=Distance("dest_point", dest_center) / 1000.0).filter(
+                    dest_dist_km__lte=float(d_r)
+                )
+            except Exception as e:
+                print("DEST GEO FILTER ERROR:", e)
+
         allowed = {
             "path_km",
             "-path_km",
@@ -395,6 +406,8 @@ class PublicLoadsView(generics.ListAPIView):
             "-route_km",
             "origin_dist_km",
             "-origin_dist_km",
+            "dest_dist_km",
+            "-dest_dist_km",
             "price_uzs_anno",
             "-price_uzs_anno",
             "load_date",

@@ -353,6 +353,20 @@ class OfferViewSet(ModelViewSet):
 
         qs = _apply_common_filters(qs, request.query_params)
 
+        p = request.query_params
+        min_price = p.get("min_price")
+        max_price = p.get("max_price")
+        currency = p.get("price_currency")
+
+        if currency:
+            try:
+                if min_price not in (None, ""):
+                    qs = qs.filter(price_uzs_anno__gte=convert_to_uzs(Decimal(min_price), currency))
+                if max_price not in (None, ""):
+                    qs = qs.filter(price_uzs_anno__lte=convert_to_uzs(Decimal(max_price), currency))
+            except Exception as e:
+                print("PRICE FILTER ERROR (OFFERS list):", e)
+
         # ------------------ Фильтр по response_status ------------------
         response_status = request.query_params.get("response_status")
         if response_status:
@@ -375,6 +389,19 @@ class OfferViewSet(ModelViewSet):
     def my(self, request):
         qs = self.get_queryset().filter(carrier=request.user)
         qs = _apply_common_filters(qs, request.query_params)
+        p = request.query_params
+        min_price = p.get("min_price")
+        max_price = p.get("max_price")
+        currency = p.get("price_currency")
+
+        if currency:
+            try:
+                if min_price not in (None, ""):
+                    qs = qs.filter(price_uzs_anno__gte=convert_to_uzs(Decimal(min_price), currency))
+                if max_price not in (None, ""):
+                    qs = qs.filter(price_uzs_anno__lte=convert_to_uzs(Decimal(max_price), currency))
+            except Exception as e:
+                print("PRICE FILTER ERROR (OFFERS list):", e)
         page = self.paginate_queryset(qs)
         ser = self.get_serializer(page or qs, many=True)
         return self.get_paginated_response(ser.data) if page is not None else Response(ser.data)
@@ -414,6 +441,19 @@ class OfferViewSet(ModelViewSet):
             )
 
         qs = _apply_common_filters(qs, request.query_params)
+        p = request.query_params
+        min_price = p.get("min_price")
+        max_price = p.get("max_price")
+        currency = p.get("price_currency")
+
+        if currency:
+            try:
+                if min_price not in (None, ""):
+                    qs = qs.filter(price_uzs_anno__gte=convert_to_uzs(Decimal(min_price), currency))
+                if max_price not in (None, ""):
+                    qs = qs.filter(price_uzs_anno__lte=convert_to_uzs(Decimal(max_price), currency))
+            except Exception as e:
+                print("PRICE FILTER ERROR (OFFERS list):", e)
         page = self.paginate_queryset(qs)
         ser = self.get_serializer(page or qs, many=True)
         return self.get_paginated_response(ser.data) if page is not None else Response(ser.data)

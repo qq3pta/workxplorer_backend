@@ -102,12 +102,7 @@ def apply_common_search_filters_offer(qs, p):
     if p.get("load_date_to"):
         qs = qs.filter(cargo__load_date__lte=p["load_date_to"])
 
-    # цена — ОК (price_uzs_anno у тебя есть)
-    currency = p.get("price_currency")
-    if currency:
-        if p.get("min_price"):
-            qs = qs.filter(price_uzs_anno__gte=convert_to_uzs(Decimal(p["min_price"]), currency))
-        if p.get("max_price"):
-            qs = qs.filter(price_uzs_anno__lte=convert_to_uzs(Decimal(p["max_price"]), currency))
+    if p.get("transport_type"):
+        qs = qs.filter(transport_type=p["transport_type"])
 
     return qs

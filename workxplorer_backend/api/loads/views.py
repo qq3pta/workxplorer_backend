@@ -281,9 +281,10 @@ class MyCargosBoardView(generics.ListAPIView):
 
         qs = Cargo.objects.filter(
             Q(customer=user) | Q(created_by=user),
-            status=CargoStatus.POSTED,  # ← ВАЖНО
+            status=CargoStatus.POSTED,
         )
 
+        # 1️⃣ АННОТАЦИИ (ОБЯЗАТЕЛЬНО ДО ФИЛЬТРОВ)
         qs = qs.annotate(
             offers_active=Count("offers", filter=Q(offers__is_active=True)),
             path_m=Distance(F("origin_point"), F("dest_point")),
@@ -297,8 +298,25 @@ class MyCargosBoardView(generics.ListAPIView):
             ),
         )
 
+        # 2️⃣ ОБЩИЕ ФИЛЬТРЫ (uuid, cities, dates, has_offers, min/max price БЕЗ currency)
         qs = apply_common_search_filters(qs, self.request.query_params)
 
+        # 3️⃣ 🔥 PRICE_CURRENCY — ТОЛЬКО ЗДЕСЬ (КАК В /loads/public)
+        p = self.request.query_params
+        min_price = p.get("min_price")
+        max_price = p.get("max_price")
+        currency = p.get("price_currency")
+
+        if currency:
+            try:
+                if min_price not in (None, ""):
+                    qs = qs.filter(price_uzs_anno__gte=convert_to_uzs(Decimal(min_price), currency))
+                if max_price not in (None, ""):
+                    qs = qs.filter(price_uzs_anno__lte=convert_to_uzs(Decimal(max_price), currency))
+            except Exception as e:
+                print("PRICE FILTER ERROR (BOARD):", e)
+
+        # 4️⃣ СОРТИРОВКА
         return qs.order_by("-refreshed_at", "-created_at")
 
 

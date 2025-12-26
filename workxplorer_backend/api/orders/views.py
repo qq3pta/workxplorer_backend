@@ -6,7 +6,6 @@ from django.db.models.functions import Coalesce
 from common.utils import convert_to_uzs
 from django.contrib.auth import get_user_model
 from django.db import models
-from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema
 from rest_framework import status as http_status
 from rest_framework import viewsets
@@ -14,10 +13,8 @@ from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 
-# from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 
-from .filters import OrderFilter
 from .models import Order, OrderStatusHistory
 from api.offers.models import Offer
 from .permissions import IsOrderParticipant
@@ -33,6 +30,92 @@ from .serializers import (
 User = get_user_model()
 
 
+def _apply_orders_filters(qs, p):
+    # ---------- UUID ----------
+    if p.get("uuid"):
+        try:
+            qs = qs.filter(id=int(p["uuid"]))
+        except ValueError:
+            return qs.none()
+
+    if p.get("cargo_uuid"):
+        qs = qs.filter(cargo__uuid=p["cargo_uuid"])
+
+    # ---------- ГОРОДА ----------
+    if p.get("origin_city"):
+        qs = qs.filter(cargo__origin_city__iexact=p["origin_city"])
+    if p.get("destination_city"):
+        qs = qs.filter(cargo__destination_city__iexact=p["destination_city"])
+
+    # ---------- ДАТЫ ----------
+    if p.get("load_date"):
+        qs = qs.filter(cargo__load_date=p["load_date"])
+    if p.get("load_date_from"):
+        qs = qs.filter(cargo__load_date__gte=p["load_date_from"])
+    if p.get("load_date_to"):
+        qs = qs.filter(cargo__load_date__lte=p["load_date_to"])
+    if p.get("delivery_date_from"):
+        qs = qs.filter(cargo__delivery_date__gte=p["delivery_date_from"])
+    if p.get("delivery_date_to"):
+        qs = qs.filter(cargo__delivery_date__lte=p["delivery_date_to"])
+
+    # ---------- TRANSPORT ----------
+    if p.get("transport_type"):
+        qs = qs.filter(cargo__transport_type=p["transport_type"])
+
+    # ---------- ВЕС ----------
+    try:
+        if p.get("min_weight"):
+            qs = qs.filter(cargo__weight_kg__gte=float(p["min_weight"]) * 1000)
+        if p.get("max_weight"):
+            qs = qs.filter(cargo__weight_kg__lte=float(p["max_weight"]) * 1000)
+    except ValueError:
+        pass
+
+    # ---------- ЦЕНА (КЛЮЧЕВОЕ) ----------
+    currency = p.get("price_currency")
+    min_price = p.get("min_price")
+    max_price = p.get("max_price")
+
+    if currency:
+        qs = qs.filter(price_currency=currency)
+
+        try:
+            if min_price not in (None, ""):
+                qs = qs.filter(price_uzs_anno__gte=convert_to_uzs(Decimal(min_price), currency))
+            if max_price not in (None, ""):
+                qs = qs.filter(price_uzs_anno__lte=convert_to_uzs(Decimal(max_price), currency))
+        except Exception:
+            pass
+
+    # ---------- ПОИСК ----------
+    q = p.get("q") or p.get("company")
+    if q:
+        qs = qs.filter(
+            Q(customer__company_name__icontains=q)
+            | Q(customer__username__icontains=q)
+            | Q(customer__email__icontains=q)
+            | Q(carrier__company_name__icontains=q)
+            | Q(carrier__username__icontains=q)
+            | Q(carrier__email__icontains=q)
+        )
+
+    # ---------- СОРТИРОВКА ----------
+    allowed = {
+        "created_at",
+        "-created_at",
+        "price_uzs_anno",
+        "-price_uzs_anno",
+        "cargo__load_date",
+        "-cargo__load_date",
+        "cargo__delivery_date",
+        "-cargo__delivery_date",
+    }
+
+    order = p.get("order")
+    return qs.order_by(order) if order in allowed else qs.order_by("-created_at")
+
+
 class OrdersViewSet(viewsets.ModelViewSet):
     queryset = Order.objects.all().select_related(
         "cargo",
@@ -43,8 +126,6 @@ class OrdersViewSet(viewsets.ModelViewSet):
         "offer",
     )
     permission_classes = [IsAuthenticated, IsOrderParticipant]
-    filter_backends = [DjangoFilterBackend]
-    filterset_class = OrderFilter
     parser_classes = (JSONParser, MultiPartParser, FormParser)
 
     def get_queryset(self):
@@ -83,7 +164,11 @@ class OrdersViewSet(viewsets.ModelViewSet):
             price_uzs_anno=Coalesce(
                 F("price_total"),
                 F("offer__price_value"),
-            )
+            ),
+            price_currency=Coalesce(
+                F("currency"),
+                F("offer__price_currency"),
+            ),
         )
 
         # ---------- UUID / города / даты ----------
@@ -144,23 +229,7 @@ class OrdersViewSet(viewsets.ModelViewSet):
             pass
 
         # ---------- Цена + валюта ----------
-        currency = p.get("price_currency")
-        if currency:
-            # фильтр по валюте самого заказа
-            qs = qs.filter(currency=currency)
-
-            try:
-                if p.get("min_price"):
-                    qs = qs.filter(
-                        price_uzs_anno__gte=convert_to_uzs(Decimal(p["min_price"]), currency)
-                    )
-                if p.get("max_price"):
-                    qs = qs.filter(
-                        price_uzs_anno__lte=convert_to_uzs(Decimal(p["max_price"]), currency)
-                    )
-            except Exception:
-                pass
-
+        qs = _apply_orders_filters(qs, p)
         # ---------- (опционально) сортировка ----------
         order = p.get("order")
         allowed_order = {

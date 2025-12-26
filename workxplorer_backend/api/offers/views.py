@@ -75,14 +75,14 @@ def _apply_common_filters(qs, params):
         try:
             if p.get("min_price"):
                 qs = qs.filter(
-                    cargo__price_uzs__gte=convert_to_uzs(Decimal(p["min_price"]), currency)
+                    price_uzs_anno__gte=convert_to_uzs(Decimal(p["min_price"]), currency)
                 )
             if p.get("max_price"):
                 qs = qs.filter(
-                    cargo__price_uzs__lte=convert_to_uzs(Decimal(p["max_price"]), currency)
+                    price_uzs_anno__lte=convert_to_uzs(Decimal(p["max_price"]), currency)
                 )
-        except Exception as e:
-            print("OFFERS PRICE FILTER ERROR:", e)
+        except Exception:
+            pass
 
     if p.get("cargo_id"):
         qs = qs.filter(cargo_id=p["cargo_id"])
@@ -262,10 +262,16 @@ class OfferViewSet(ModelViewSet):
         )
         .annotate(
             path_km_anno=F("path_m_anno") / 1000.0,
-            # 2. Вычисляем окончательное расстояние route_km:
-            # Приоритет: cargo__route_km_cached, иначе path_km_anno
             route_km=Coalesce(
-                F("cargo__route_km_cached"), F("path_km_anno"), output_field=FloatField()
+                F("cargo__route_km_cached"),
+                F("path_km_anno"),
+                output_field=FloatField(),
+            ),
+            # 🔥 ДОБАВИТЬ КАК В LOADS
+            price_uzs_anno=Coalesce(
+                F("price_uzs"),
+                F("price_value"),
+                output_field=FloatField(),
             ),
         )
     )
@@ -342,7 +348,9 @@ class OfferViewSet(ModelViewSet):
         # ------------------ Фильтр по response_status ------------------
         response_status = request.query_params.get("response_status")
         if response_status:
-            qs = [o for o in qs if o.get_response_status_for(u) == response_status]
+            qs = qs.filter(
+                id__in=[o.id for o in qs if o.get_response_status_for(u) == response_status]
+            )
         # ----------------------------------------------------------------
 
         page = self.paginate_queryset(qs)

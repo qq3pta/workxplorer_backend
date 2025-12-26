@@ -1,5 +1,9 @@
 import uuid
 
+from decimal import Decimal
+from django.db.models import Q, F
+from django.db.models.functions import Coalesce
+from common.utils import convert_to_uzs
 from django.contrib.auth import get_user_model
 from django.db import models
 from django_filters.rest_framework import DjangoFilterBackend
@@ -48,32 +52,76 @@ class OrdersViewSet(viewsets.ModelViewSet):
         user = self.request.user
 
         if user.is_staff or user.is_superuser:
-            return qs
+            pass
+        else:
+            role = getattr(user, "role", None)
+            as_role = self.request.query_params.get("as_role")
 
-        role = getattr(user, "role", None)
-        as_role = self.request.query_params.get("as_role")  # 👈 КЛЮЧ
+            if role == "LOGISTIC":
+                if as_role == "customer":
+                    qs = qs.filter(customer=user)
+                else:
+                    qs = qs.filter(
+                        models.Q(logistic=user)
+                        | models.Q(created_by=user)
+                        | models.Q(cargo__created_by=user)
+                        | models.Q(offer__logistic=user)
+                        | models.Q(offer__intermediary=user)
+                    ).distinct()
 
-        if role == "LOGISTIC":
-            # вкладка «Заказы» — логист как заказчик
-            if as_role == "customer":
-                return qs.filter(customer=user)
+            elif role == "CUSTOMER":
+                qs = qs.filter(customer=user)
 
-            # вкладка «Везу» — логист как логист
-            return qs.filter(
-                models.Q(logistic=user)
-                | models.Q(created_by=user)
-                | models.Q(cargo__created_by=user)
-                | models.Q(offer__logistic=user)
-                | models.Q(offer__intermediary=user)
-            ).distinct()
+            elif role == "CARRIER":
+                qs = qs.filter(carrier=user)
 
-        if role == "CUSTOMER":
-            return qs.filter(customer=user)
+            else:
+                qs = qs.none()
 
-        if role == "CARRIER":
-            return qs.filter(carrier=user)
+        # ⬇⬇⬇ ВОТ ЗДЕСЬ ТВОЁ РАСШИРЕНИЕ — ТЕПЕРЬ ОНО РАБОТАЕТ
+        p = self.request.query_params
 
-        return qs.none()
+        qs = qs.annotate(
+            price_uzs_anno=Coalesce(
+                F("price_total"),
+                F("offer__price_value"),
+            )
+        )
+
+        q = p.get("q") or p.get("company")
+        if q:
+            qs = qs.filter(
+                Q(customer__company_name__icontains=q)
+                | Q(customer__username__icontains=q)
+                | Q(customer__email__icontains=q)
+                | Q(carrier__company_name__icontains=q)
+                | Q(carrier__username__icontains=q)
+                | Q(carrier__email__icontains=q)
+            )
+
+        try:
+            if p.get("min_weight"):
+                qs = qs.filter(cargo__weight_kg__gte=float(p["min_weight"]) * 1000)
+            if p.get("max_weight"):
+                qs = qs.filter(cargo__weight_kg__lte=float(p["max_weight"]) * 1000)
+        except ValueError:
+            pass
+
+        currency = p.get("price_currency")
+        if currency:
+            try:
+                if p.get("min_price"):
+                    qs = qs.filter(
+                        price_uzs_anno__gte=convert_to_uzs(Decimal(p["min_price"]), currency)
+                    )
+                if p.get("max_price"):
+                    qs = qs.filter(
+                        price_uzs_anno__lte=convert_to_uzs(Decimal(p["max_price"]), currency)
+                    )
+            except Exception:
+                pass
+
+        return qs
 
     # def perform_create(self, serializer):
     #    user = self.request.user

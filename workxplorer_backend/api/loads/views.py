@@ -178,20 +178,31 @@ class MyCargosView(generics.ListAPIView):
         if p.get("transport_type"):
             qs = qs.filter(transport_type=p["transport_type"])
 
-        if p.get("min_weight"):
-            qs = qs.filter(weight_kg__gte=p["min_weight"])
-        if p.get("max_weight"):
-            qs = qs.filter(weight_kg__lte=p["max_weight"])
+        try:
+            if p.get("min_weight"):
+                qs = qs.filter(weight_kg__gte=float(p["min_weight"]) * 1000)
+            if p.get("max_weight"):
+                qs = qs.filter(weight_kg__lte=float(p["max_weight"]) * 1000)
+        except ValueError:
+            pass
 
         if p.get("volume_min"):
             qs = qs.filter(volume_m3__gte=p["volume_min"])
         if p.get("volume_max"):
             qs = qs.filter(volume_m3__lte=p["volume_max"])
 
-        if p.get("min_price_uzs"):
-            qs = qs.filter(price_uzs_anno__gte=p["min_price_uzs"])
-        if p.get("max_price_uzs"):
-            qs = qs.filter(price_uzs_anno__lte=p["max_price_uzs"])
+        min_price = p.get("min_price")
+        max_price = p.get("max_price")
+        currency = p.get("price_currency")
+
+        if currency:
+            try:
+                if min_price not in (None, ""):
+                    qs = qs.filter(price_uzs_anno__gte=convert_to_uzs(Decimal(min_price), currency))
+                if max_price not in (None, ""):
+                    qs = qs.filter(price_uzs_anno__lte=convert_to_uzs(Decimal(max_price), currency))
+            except Exception:
+                pass
 
         # Гео фильтры
         # ORIGIN

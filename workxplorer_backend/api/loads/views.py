@@ -1,6 +1,5 @@
 from django.contrib.gis.db.models.functions import Distance
 from django.contrib.gis.geos import Point
-from django.contrib.gis.measure import D
 from django.core.exceptions import ValidationError
 from django.db.models import (
     Avg,
@@ -200,11 +199,15 @@ class MyCargosView(generics.ListAPIView):
         if o_lat and o_lng and o_r:
             try:
                 pnt = Point(float(o_lng), float(o_lat), srid=4326)
-                qs = qs.filter(origin_point__distance_lte=(pnt, D(km=float(o_r))))
+                qs = qs.annotate(origin_dist_m=Distance("origin_point", pnt)).filter(
+                    origin_dist_m__lte=float(o_r) * 1000
+                )
             except Exception as e:
                 print("ORIGIN GEO FILTER ERROR:", e)
 
-        # DESTINATION
+        # ======================
+        # GEO FILTER — DESTINATION
+        # ======================
         d_lat = p.get("dest_lat")
         d_lng = p.get("dest_lng")
         d_r = p.get("dest_radius_km")
@@ -212,11 +215,15 @@ class MyCargosView(generics.ListAPIView):
         if d_lat and d_lng and d_r:
             try:
                 pnt = Point(float(d_lng), float(d_lat), srid=4326)
-                qs = qs.filter(dest_point__distance_lte=(pnt, D(km=float(d_r))))
+                qs = qs.annotate(dest_dist_m=Distance("dest_point", pnt)).filter(
+                    dest_dist_m__lte=float(d_r) * 1000
+                )
             except Exception as e:
                 print("DEST GEO FILTER ERROR:", e)
 
+        # ======================
         # COMPANY / SEARCH
+        # ======================
         q = p.get("company") or p.get("q")
         if q:
             qs = qs.filter(

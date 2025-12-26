@@ -81,6 +81,8 @@ def apply_loads_filters(qs, p):
     currency = p.get("price_currency")
 
     if currency:
+        qs = qs.filter(price_currency=currency)  # ← ВОТ ЭТА СТРОКА
+
         try:
             if min_price not in (None, ""):
                 qs = qs.filter(price_uzs_anno__gte=convert_to_uzs(Decimal(min_price), currency))

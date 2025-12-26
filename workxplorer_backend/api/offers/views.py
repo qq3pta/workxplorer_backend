@@ -269,9 +269,7 @@ class OfferViewSet(ModelViewSet):
             ),
             # 🔥 ДОБАВИТЬ КАК В LOADS
             price_uzs_anno=Coalesce(
-                F("price_uzs"),
                 F("price_value"),
-                output_field=FloatField(),
             ),
         )
     )

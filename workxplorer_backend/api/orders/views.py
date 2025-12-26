@@ -88,13 +88,12 @@ class OrdersViewSet(viewsets.ModelViewSet):
 
         # ---------- UUID / города / даты ----------
         # груз по uuid
-        raw_uuid = p.get("uuid")
-        if raw_uuid:
+        order_id = p.get("uuid")
+        if order_id:
             try:
-                qs = qs.filter(cargo_id=int(raw_uuid))
+                qs = qs.filter(id=int(order_id))
             except (TypeError, ValueError):
-                # если пришла не цифра — просто игнорируем фильтр
-                pass
+                qs = qs.none()
 
         # cargo_uuid = настоящий UUID груза (если нужен отдельно)
         cargo_uuid = p.get("cargo_uuid")

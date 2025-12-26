@@ -1,3 +1,4 @@
+from decimal import Decimal
 from django.contrib.gis.db.models.functions import Distance
 from django.contrib.gis.geos import Point
 from django.core.exceptions import ValidationError
@@ -380,15 +381,15 @@ class PublicLoadsView(generics.ListAPIView):
 
         if currency:
             try:
-                if min_price is not None:
-                    min_price_uzs = convert_to_uzs(min_price, currency)
+                if min_price not in (None, ""):
+                    min_price_uzs = convert_to_uzs(Decimal(min_price), currency)
                     qs = qs.filter(price_uzs_anno__gte=min_price_uzs)
 
-                if max_price is not None:
-                    max_price_uzs = convert_to_uzs(max_price, currency)
+                if max_price not in (None, ""):
+                    max_price_uzs = convert_to_uzs(Decimal(max_price), currency)
                     qs = qs.filter(price_uzs_anno__lte=max_price_uzs)
-            except Exception:
-                pass
+            except Exception as e:
+                print("PRICE FILTER ERROR:", e)
 
         q = p.get("company") or p.get("q")
         if q:

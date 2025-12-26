@@ -281,12 +281,6 @@ class OrdersViewSet(viewsets.ModelViewSet):
         url_path="invite-by-id",
         serializer_class=InviteByIdSerializer,
     )
-    @action(
-        detail=True,
-        methods=["post"],
-        url_path="invite-by-id",
-        serializer_class=InviteByIdSerializer,
-    )
     def invite_by_id(self, request, pk=None):
         order = self.get_object()
         user = request.user

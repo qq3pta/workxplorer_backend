@@ -1,6 +1,7 @@
 from decimal import Decimal
 from django.contrib.gis.db.models.functions import Distance
 from django.core.exceptions import PermissionDenied
+from django.db.models import Count
 from django.db import transaction
 from django.db.models import Avg, F, FloatField, Q
 
@@ -263,6 +264,8 @@ class OfferViewSet(ModelViewSet):
     queryset = (
         Offer.objects.select_related("cargo", "carrier")
         .annotate(
+            # ✅ НУЖНО ДЛЯ has_offers
+            offers_active=Count("cargo__offers", filter=Q(cargo__offers__is_active=True)),
             carrier_rating=Avg("carrier__ratings_received__score"),
             path_m_anno=Distance(
                 F("cargo__origin_point"),
@@ -276,7 +279,7 @@ class OfferViewSet(ModelViewSet):
                 F("path_km_anno"),
                 output_field=FloatField(),
             ),
-            price_uzs_anno=F("price_value"),  # ✅ ТОЛЬКО ТАК
+            price_uzs_anno=F("price_value"),
         )
     )
 

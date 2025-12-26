@@ -1,6 +1,4 @@
-from decimal import Decimal
 from django.db.models import Q
-from common.utils import convert_to_uzs
 
 
 def apply_common_search_filters(qs, p):

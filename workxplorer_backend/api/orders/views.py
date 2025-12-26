@@ -2,7 +2,6 @@ import uuid
 
 from decimal import Decimal
 from django.db.models import Q, F
-from django.db.models.functions import Coalesce
 from common.utils import convert_to_uzs
 from django.contrib.auth import get_user_model
 from django.db import models

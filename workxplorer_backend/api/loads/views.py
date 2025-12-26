@@ -1,6 +1,5 @@
-from decimal import Decimal
 from django.contrib.gis.db.models.functions import Distance
-from django.contrib.gis.geos import Point
+from common.filters import apply_loads_filters
 from django.core.exceptions import ValidationError
 from django.db.models import (
     Avg,
@@ -29,7 +28,6 @@ from ..accounts.permissions import (
 )
 from .choices import ModerationStatus
 from .models import Cargo, CargoStatus
-from common.utils import convert_to_uzs
 from .serializers import CargoListSerializer, CargoPublishSerializer
 
 INVITE_BASE_URL = "https://logistic-omega-eight.vercel.app/dashboard/desk/invite"
@@ -125,7 +123,6 @@ class CargoRefreshView(generics.GenericAPIView):
         return Response({"detail": "Обновлено"}, status=status.HTTP_200_OK)
 
 
-@extend_schema(tags=["loads"])
 class MyCargosView(generics.ListAPIView):
     permission_classes = [IsAuthenticatedAndVerified, IsCustomerOrLogistic]
     serializer_class = CargoListSerializer
@@ -153,106 +150,9 @@ class MyCargosView(generics.ListAPIView):
             ),
         )
 
-        p = self.request.query_params
-
-        # --- UUID / cities / dates ---
-        if p.get("uuid"):
-            qs = qs.filter(uuid=p["uuid"])
-        if p.get("origin_city"):
-            qs = qs.filter(origin_city__iexact=p["origin_city"])
-        if p.get("destination_city"):
-            qs = qs.filter(destination_city__iexact=p["destination_city"])
-        if p.get("load_date"):
-            qs = qs.filter(load_date=p["load_date"])
-        if p.get("load_date_from"):
-            qs = qs.filter(load_date__gte=p["load_date_from"])
-        if p.get("load_date_to"):
-            qs = qs.filter(load_date__lte=p["load_date_to"])
-
-        # --- transport_type ---
-        if p.get("transport_type"):
-            qs = qs.filter(transport_type=p["transport_type"])
-
-        # --- weight ---
-        try:
-            if p.get("min_weight") is not None:
-                qs = qs.filter(weight_kg__gte=float(p["min_weight"]) * 1000)
-            if p.get("max_weight") is not None:
-                qs = qs.filter(weight_kg__lte=float(p["max_weight"]) * 1000)
-        except ValueError:
-            pass
-
-        # --- volume ---
-        if p.get("volume_min"):
-            qs = qs.filter(volume_m3__gte=p["volume_min"])
-        if p.get("volume_max"):
-            qs = qs.filter(volume_m3__lte=p["volume_max"])
-
-        # --- price_currency ---
-        min_price = p.get("min_price")
-        max_price = p.get("max_price")
-        currency = p.get("price_currency")
-
-        if currency:
-            if min_price not in (None, ""):
-                qs = qs.filter(price_uzs_anno__gte=convert_to_uzs(Decimal(min_price), currency))
-            if max_price not in (None, ""):
-                qs = qs.filter(price_uzs_anno__lte=convert_to_uzs(Decimal(max_price), currency))
-
-        # --- GEO origin ---
-        o_lat = p.get("origin_lat")
-        o_lng = p.get("origin_lng")
-        o_r = p.get("origin_radius_km")
-        if o_lat and o_lng and o_r:
-            center = Point(float(o_lng), float(o_lat), srid=4326)
-            qs = qs.annotate(origin_dist_km=Distance("origin_point", center) / 1000.0).filter(
-                origin_dist_km__lte=float(o_r)
-            )
-
-        # --- GEO destination ---
-        d_lat = p.get("dest_lat")
-        d_lng = p.get("dest_lng")
-        d_r = p.get("dest_radius_km")
-        if d_lat and d_lng and d_r:
-            center = Point(float(d_lng), float(d_lat), srid=4326)
-            qs = qs.annotate(dest_dist_km=Distance("dest_point", center) / 1000.0).filter(
-                dest_dist_km__lte=float(d_r)
-            )
-
-        # --- search ---
-        q = p.get("company") or p.get("q")
-        if q:
-            qs = qs.filter(
-                Q(customer__company_name__icontains=q)
-                | Q(customer__username__icontains=q)
-                | Q(customer__email__icontains=q)
-            )
-
-        # --- sorting ---
-        allowed = {
-            "path_km",
-            "-path_km",
-            "route_km",
-            "-route_km",
-            "origin_dist_km",
-            "-origin_dist_km",
-            "dest_dist_km",
-            "-dest_dist_km",
-            "price_uzs_anno",
-            "-price_uzs_anno",
-            "load_date",
-            "-load_date",
-            "volume_m3",
-            "-volume_m3",
-        }
-
-        order = p.get("order")
-        return (
-            qs.order_by(order) if order in allowed else qs.order_by("-refreshed_at", "-created_at")
-        )
+        return apply_loads_filters(qs, self.request.query_params)
 
 
-@extend_schema(tags=["loads"])
 class MyCargosBoardView(generics.ListAPIView):
     permission_classes = [IsAuthenticatedAndVerified, IsCustomerOrLogistic]
     serializer_class = CargoListSerializer
@@ -260,44 +160,45 @@ class MyCargosBoardView(generics.ListAPIView):
     def get_queryset(self):
         user = self.request.user
 
-        qs = Cargo.objects.filter(
-            Q(customer=user) | Q(created_by=user),
-            status=CargoStatus.POSTED,
+        qs = (
+            Cargo.objects.filter(
+                Q(customer=user) | Q(created_by=user),
+                status=CargoStatus.POSTED,
+            )
+            .annotate(
+                offers_active=Count("offers", filter=Q(offers__is_active=True)),
+                path_m=Distance(F("origin_point"), F("dest_point")),
+            )
+            .annotate(
+                path_km=F("path_m") / 1000.0,
+                route_km=Coalesce(F("route_km_cached"), F("path_km")),
+                price_uzs_anno=Coalesce(
+                    F("price_uzs"),
+                    F("price_value"),
+                    output_field=DecimalField(max_digits=14, decimal_places=2),
+                ),
+            )
         )
 
-        qs = qs.annotate(
-            offers_active=Count("offers", filter=Q(offers__is_active=True)),
-            path_m=Distance(F("origin_point"), F("dest_point")),
-        ).annotate(
-            path_km=F("path_m") / 1000.0,
-            route_km=Coalesce(F("route_km_cached"), F("path_km")),
-            price_uzs_anno=Coalesce(
-                F("price_uzs"),
-                F("price_value"),
-                output_field=DecimalField(max_digits=14, decimal_places=2),
-            ),
-        )
-
-        # 🔁 ВСЯ ФИЛЬТРАЦИЯ — ОДИН В ОДИН КАК MyCargosView
-        return MyCargosView().get_queryset.__wrapped__(self)
+        return apply_loads_filters(qs, self.request.query_params)
 
 
-@extend_schema(tags=["loads"])
 class PublicLoadsView(generics.ListAPIView):
     permission_classes = [IsAuthenticatedAndVerified, IsCustomerOrCarrierOrLogistic]
     serializer_class = CargoListSerializer
 
     def get_queryset(self):
-        qs = Cargo.objects.filter(
-            moderation_status=ModerationStatus.APPROVED,
-            is_hidden=False,
-            status=CargoStatus.POSTED,
-        )
-
-        qs = qs.exclude(origin_point__isnull=True).exclude(dest_point__isnull=True)
-
         qs = (
-            qs.annotate(
+            Cargo.objects.filter(
+                moderation_status=ModerationStatus.APPROVED,
+                is_hidden=False,
+                status=CargoStatus.POSTED,
+            )
+            .exclude(
+                origin_point__isnull=True,
+                dest_point__isnull=True,
+            )
+            .annotate(
                 offers_active=Count("offers", filter=Q(offers__is_active=True)),
                 age_minutes_anno=ExtractMinutes(F("refreshed_at")),
                 path_m=Distance(F("origin_point"), F("dest_point")),
@@ -315,152 +216,7 @@ class PublicLoadsView(generics.ListAPIView):
             .select_related("customer")
         )
 
-        p = self.request.query_params
-
-        o_lat = p.get("origin_lat") or p.get("lat")
-        o_lng = p.get("origin_lng") or p.get("lng")
-        o_r = p.get("origin_radius_km")
-
-        d_lat = p.get("dest_lat")
-        d_lng = p.get("dest_lng")
-        d_r = p.get("dest_radius_km")
-
-        o_r = float(o_r) if o_r else None
-        d_r = float(d_r) if d_r else None
-
-        # Есть / нет предложений
-        has_offers = p.get("has_offers")
-        if has_offers is not None:
-            has_offers = str(has_offers).lower()
-            if has_offers in ("true", "1"):
-                qs = qs.filter(offers_active__gt=0)
-            elif has_offers in ("false", "0"):
-                qs = qs.filter(offers_active=0)
-
-        if p.get("uuid"):
-            qs = qs.filter(uuid=p["uuid"])
-        if p.get("origin_city") and not o_r:
-            qs = qs.filter(origin_city__iexact=p["origin_city"])
-        if p.get("destination_city") and not d_r:
-            qs = qs.filter(destination_city__iexact=p["destination_city"])
-        if p.get("load_date"):
-            qs = qs.filter(load_date=p["load_date"])
-        if p.get("load_date_from"):
-            qs = qs.filter(load_date__gte=p["load_date_from"])
-        if p.get("load_date_to"):
-            qs = qs.filter(load_date__lte=p["load_date_to"])
-
-        if p.get("transport_type"):
-            qs = qs.filter(transport_type=p["transport_type"])
-        min_weight = p.get("min_weight")
-        max_weight = p.get("max_weight")
-
-        try:
-            if min_weight is not None:
-                qs = qs.filter(weight_kg__gte=float(min_weight) * 1000)
-            if max_weight is not None:
-                qs = qs.filter(weight_kg__lte=float(max_weight) * 1000)
-        except ValueError:
-            pass
-        if p.get("axles_min"):
-            qs = qs.filter(axles__gte=p["axles_min"])
-        if p.get("axles_max"):
-            qs = qs.filter(axles__lte=p["axles_max"])
-        if p.get("volume_min"):
-            qs = qs.filter(volume_m3__gte=p["volume_min"])
-        if p.get("volume_max"):
-            qs = qs.filter(volume_m3__lte=p["volume_max"])
-        min_price = p.get("min_price")
-        max_price = p.get("max_price")
-        currency = p.get("price_currency")
-
-        if currency:
-            try:
-                if min_price not in (None, ""):
-                    min_price_uzs = convert_to_uzs(Decimal(min_price), currency)
-                    qs = qs.filter(price_uzs_anno__gte=min_price_uzs)
-
-                if max_price not in (None, ""):
-                    max_price_uzs = convert_to_uzs(Decimal(max_price), currency)
-                    qs = qs.filter(price_uzs_anno__lte=max_price_uzs)
-            except Exception as e:
-                print("PRICE FILTER ERROR:", e)
-
-        q = p.get("company") or p.get("q")
-        if q:
-            qs = qs.filter(
-                Q(customer__company_name__icontains=q)
-                | Q(customer__username__icontains=q)
-                | Q(customer__email__icontains=q)
-            )
-
-        if p.get("customer_id"):
-            qs = qs.filter(customer_id=p["customer_id"])
-        if p.get("customer_email"):
-            qs = qs.filter(customer__email__iexact=p["customer_email"])
-        if p.get("customer_phone"):
-            qs = qs.filter(
-                Q(customer__phone__icontains=p["customer_phone"])
-                | Q(customer__phone_number__icontains=p["customer_phone"])
-            )
-        # ---------- ORIGIN GEO FILTER (ОТКУДА + РАДИУС) ----------
-        if o_lat and o_lng and o_r:
-            try:
-                origin_center = Point(float(o_lng), float(o_lat), srid=4326)
-
-                qs = qs.annotate(
-                    origin_dist_km=Distance("origin_point", origin_center) / 1000.0
-                ).filter(origin_dist_km__lte=float(o_r))
-            except Exception as e:
-                print("ORIGIN GEO FILTER ERROR:", e)
-
-        # ---------- DESTINATION GEO FILTER (КУДА + РАДИУС) ----------
-        if d_r is not None and d_lat is not None and d_lng is not None:
-            try:
-                dest_center = Point(float(d_lng), float(d_lat), srid=4326)
-
-                qs = qs.annotate(dest_dist_km=Distance("dest_point", dest_center) / 1000.0).filter(
-                    dest_dist_km__lte=float(d_r)
-                )
-            except Exception as e:
-                print("DEST GEO FILTER ERROR:", e)
-
-        allowed = {
-            "path_km",
-            "-path_km",
-            "route_km",
-            "-route_km",
-            "origin_dist_km",
-            "-origin_dist_km",
-            "dest_dist_km",
-            "-dest_dist_km",
-            "price_uzs_anno",
-            "-price_uzs_anno",
-            "load_date",
-            "-load_date",
-            "axles",
-            "-axles",
-            "volume_m3",
-            "-volume_m3",
-            "age_minutes_anno",
-            "-age_minutes_anno",
-        }
-
-        order_alias = {
-            "route_km": "route_km",
-            "-route_km": "-route_km",
-            "age_minutes": "age_minutes_anno",
-            "-age_minutes": "-age_minutes_anno",
-        }
-
-        order = order_alias.get(p.get("order"), p.get("order"))
-
-        if order in allowed:
-            qs = qs.order_by(order)
-        else:
-            qs = qs.order_by("-refreshed_at", "-created_at")
-
-        return qs
+        return apply_loads_filters(qs, self.request.query_params)
 
 
 @extend_schema(tags=["loads"])

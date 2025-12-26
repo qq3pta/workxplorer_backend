@@ -142,8 +142,8 @@ class MyCargosView(generics.ListAPIView):
             return Cargo.objects.none()
 
         qs = qs.annotate(
-            path_m=Distance(F("origin_point"), F("dest_point")),
             offers_active=Count("offers", filter=Q(offers__is_active=True)),
+            path_m=Distance(F("origin_point"), F("dest_point")),
         ).annotate(
             path_km=F("path_m") / 1000.0,
             route_km=Coalesce(F("route_km_cached"), F("path_km")),
@@ -154,90 +154,73 @@ class MyCargosView(generics.ListAPIView):
             ),
         )
 
-        # ---- ФИЛЬТРЫ ----
         p = self.request.query_params
 
+        # --- UUID / cities / dates ---
         if p.get("uuid"):
             qs = qs.filter(uuid=p["uuid"])
-
         if p.get("origin_city"):
             qs = qs.filter(origin_city__iexact=p["origin_city"])
-
         if p.get("destination_city"):
             qs = qs.filter(destination_city__iexact=p["destination_city"])
-
         if p.get("load_date"):
             qs = qs.filter(load_date=p["load_date"])
-
         if p.get("load_date_from"):
             qs = qs.filter(load_date__gte=p["load_date_from"])
-
         if p.get("load_date_to"):
             qs = qs.filter(load_date__lte=p["load_date_to"])
 
+        # --- transport_type ---
         if p.get("transport_type"):
             qs = qs.filter(transport_type=p["transport_type"])
 
+        # --- weight ---
         try:
-            if p.get("min_weight"):
+            if p.get("min_weight") is not None:
                 qs = qs.filter(weight_kg__gte=float(p["min_weight"]) * 1000)
-            if p.get("max_weight"):
+            if p.get("max_weight") is not None:
                 qs = qs.filter(weight_kg__lte=float(p["max_weight"]) * 1000)
         except ValueError:
             pass
 
+        # --- volume ---
         if p.get("volume_min"):
             qs = qs.filter(volume_m3__gte=p["volume_min"])
         if p.get("volume_max"):
             qs = qs.filter(volume_m3__lte=p["volume_max"])
 
+        # --- price_currency ---
         min_price = p.get("min_price")
         max_price = p.get("max_price")
         currency = p.get("price_currency")
 
         if currency:
-            try:
-                if min_price not in (None, ""):
-                    qs = qs.filter(price_uzs_anno__gte=convert_to_uzs(Decimal(min_price), currency))
-                if max_price not in (None, ""):
-                    qs = qs.filter(price_uzs_anno__lte=convert_to_uzs(Decimal(max_price), currency))
-            except Exception:
-                pass
+            if min_price not in (None, ""):
+                qs = qs.filter(price_uzs_anno__gte=convert_to_uzs(Decimal(min_price), currency))
+            if max_price not in (None, ""):
+                qs = qs.filter(price_uzs_anno__lte=convert_to_uzs(Decimal(max_price), currency))
 
-        # Гео фильтры
-        # ORIGIN
+        # --- GEO origin ---
         o_lat = p.get("origin_lat")
         o_lng = p.get("origin_lng")
         o_r = p.get("origin_radius_km")
+        if o_lat and o_lng and o_r:
+            center = Point(float(o_lng), float(o_lat), srid=4326)
+            qs = qs.annotate(origin_dist_km=Distance("origin_point", center) / 1000.0).filter(
+                origin_dist_km__lte=float(o_r)
+            )
 
-        if o_r is not None and o_lat is not None and o_lng is not None:
-            try:
-                pnt = Point(float(o_lng), float(o_lat), srid=4326)
-                qs = qs.annotate(origin_dist_m=Distance("origin_point", pnt)).filter(
-                    origin_dist_m__lte=float(o_r) * 1000
-                )
-            except Exception as e:
-                print("ORIGIN GEO FILTER ERROR:", e)
-
-        # ======================
-        # GEO FILTER — DESTINATION
-        # ======================
+        # --- GEO destination ---
         d_lat = p.get("dest_lat")
         d_lng = p.get("dest_lng")
         d_r = p.get("dest_radius_km")
-
         if d_lat and d_lng and d_r:
-            try:
-                pnt = Point(float(d_lng), float(d_lat), srid=4326)
-                qs = qs.annotate(dest_dist_m=Distance("dest_point", pnt)).filter(
-                    dest_dist_m__lte=float(d_r) * 1000
-                )
-            except Exception as e:
-                print("DEST GEO FILTER ERROR:", e)
+            center = Point(float(d_lng), float(d_lat), srid=4326)
+            qs = qs.annotate(dest_dist_km=Distance("dest_point", center) / 1000.0).filter(
+                dest_dist_km__lte=float(d_r)
+            )
 
-        # ======================
-        # COMPANY / SEARCH
-        # ======================
+        # --- search ---
         q = p.get("company") or p.get("q")
         if q:
             qs = qs.filter(
@@ -246,29 +229,28 @@ class MyCargosView(generics.ListAPIView):
                 | Q(customer__email__icontains=q)
             )
 
-        # ---- СОРТИРОВКА ---
+        # --- sorting ---
         allowed = {
             "path_km",
             "-path_km",
             "route_km",
             "-route_km",
+            "origin_dist_km",
+            "-origin_dist_km",
+            "dest_dist_km",
+            "-dest_dist_km",
             "price_uzs_anno",
             "-price_uzs_anno",
             "load_date",
             "-load_date",
-            "axles",
-            "-axles",
             "volume_m3",
             "-volume_m3",
         }
 
         order = p.get("order")
-        if order in allowed:
-            qs = qs.order_by(order)
-        else:
-            qs = qs.order_by("-refreshed_at", "-created_at")
-
-        return qs
+        return (
+            qs.order_by(order) if order in allowed else qs.order_by("-refreshed_at", "-created_at")
+        )
 
 
 @extend_schema(tags=["loads"])
@@ -284,7 +266,6 @@ class MyCargosBoardView(generics.ListAPIView):
             status=CargoStatus.POSTED,
         )
 
-        # 1️⃣ АННОТАЦИИ (ОБЯЗАТЕЛЬНО ДО ФИЛЬТРОВ)
         qs = qs.annotate(
             offers_active=Count("offers", filter=Q(offers__is_active=True)),
             path_m=Distance(F("origin_point"), F("dest_point")),
@@ -298,31 +279,8 @@ class MyCargosBoardView(generics.ListAPIView):
             ),
         )
 
-        # 2️⃣ ОБЩИЕ ФИЛЬТРЫ (uuid, cities, dates, has_offers, min/max price БЕЗ currency)
-        qs = apply_common_search_filters(qs, self.request.query_params)
-
-        p = self.request.query_params
-
-        # 🔥 transport_type — ЭТОГО НЕ ХВАТАЛО
-        if p.get("transport_type"):
-            qs = qs.filter(transport_type=p["transport_type"])
-
-        # 3️⃣ price_currency
-        min_price = p.get("min_price")
-        max_price = p.get("max_price")
-        currency = p.get("price_currency")
-
-        if currency:
-            try:
-                if min_price not in (None, ""):
-                    qs = qs.filter(price_uzs_anno__gte=convert_to_uzs(Decimal(min_price), currency))
-                if max_price not in (None, ""):
-                    qs = qs.filter(price_uzs_anno__lte=convert_to_uzs(Decimal(max_price), currency))
-            except Exception as e:
-                print("PRICE FILTER ERROR (BOARD):", e)
-
-        # 4️⃣ СОРТИРОВКА
-        return qs.order_by("-refreshed_at", "-created_at")
+        # 🔁 ВСЯ ФИЛЬТРАЦИЯ — ОДИН В ОДИН КАК MyCargosView
+        return MyCargosView().get_queryset.__wrapped__(self)
 
 
 @extend_schema(tags=["loads"])

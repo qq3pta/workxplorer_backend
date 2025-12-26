@@ -301,8 +301,13 @@ class MyCargosBoardView(generics.ListAPIView):
         # 2️⃣ ОБЩИЕ ФИЛЬТРЫ (uuid, cities, dates, has_offers, min/max price БЕЗ currency)
         qs = apply_common_search_filters(qs, self.request.query_params)
 
-        # 3️⃣ 🔥 PRICE_CURRENCY — ТОЛЬКО ЗДЕСЬ (КАК В /loads/public)
         p = self.request.query_params
+
+        # 🔥 transport_type — ЭТОГО НЕ ХВАТАЛО
+        if p.get("transport_type"):
+            qs = qs.filter(transport_type=p["transport_type"])
+
+        # 3️⃣ price_currency
         min_price = p.get("min_price")
         max_price = p.get("max_price")
         currency = p.get("price_currency")

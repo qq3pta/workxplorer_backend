@@ -54,22 +54,6 @@ def apply_common_search_filters(qs, p):
         pass
 
     # ======================
-    # ЦЕНА (ВАЛЮТА → UZS)
-    # ======================
-    currency = p.get("price_currency")
-    if currency:
-        try:
-            min_price = p.get("min_price")
-            max_price = p.get("max_price")
-
-            if min_price not in (None, ""):
-                qs = qs.filter(price_uzs_anno__gte=convert_to_uzs(Decimal(min_price), currency))
-            if max_price not in (None, ""):
-                qs = qs.filter(price_uzs_anno__lte=convert_to_uzs(Decimal(max_price), currency))
-        except Exception as e:
-            print("PRICE FILTER ERROR:", e)
-
-    # ======================
     # HAS OFFERS
     # ======================
     has_offers = p.get("has_offers")

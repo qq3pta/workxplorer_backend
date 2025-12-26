@@ -330,9 +330,9 @@ class PublicLoadsView(generics.ListAPIView):
 
         if p.get("uuid"):
             qs = qs.filter(uuid=p["uuid"])
-        if p.get("origin_city"):
+        if p.get("origin_city") and not o_r:
             qs = qs.filter(origin_city__iexact=p["origin_city"])
-        if p.get("destination_city"):
+        if p.get("destination_city") and not d_r:
             qs = qs.filter(destination_city__iexact=p["destination_city"])
         if p.get("load_date"):
             qs = qs.filter(load_date=p["load_date"])

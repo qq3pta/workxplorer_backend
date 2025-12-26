@@ -4,7 +4,6 @@ from django.core.exceptions import ValidationError
 from django.db.models import (
     Avg,
     Count,
-    DecimalField,
     F,
     FloatField,
     Func,

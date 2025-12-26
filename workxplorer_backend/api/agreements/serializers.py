@@ -13,6 +13,9 @@ class AgreementDetailSerializer(serializers.ModelSerializer):
     loading_address = serializers.CharField(source="offer.cargo.origin_address", read_only=True)
     loading_date = serializers.DateField(source="offer.cargo.load_date", read_only=True)
 
+    customer = serializers.SerializerMethodField()
+    other_party = serializers.SerializerMethodField()
+
     # ---------- РАЗГРУЗКА ----------
     unloading_city = serializers.CharField(source="offer.cargo.destination_city", read_only=True)
     unloading_address = serializers.CharField(
@@ -59,6 +62,9 @@ class AgreementDetailSerializer(serializers.ModelSerializer):
             "loading_city",
             "loading_address",
             "loading_date",
+            # --- ИНФОРМАЦИЯ ---
+            "customer",
+            "other_party",
             # --- РАЗГРУЗКА ---
             "unloading_city",
             "unloading_address",
@@ -95,6 +101,38 @@ class AgreementDetailSerializer(serializers.ModelSerializer):
     def get_travel_time(self, obj):
         order = getattr(obj, "order", None)
         return order.travel_time if order else None
+
+    def get_customer(self, obj):
+        return {
+            "id": obj.customer_id,
+            "full_name": obj.customer_full_name,
+            "email": obj.customer_email,
+            "phone": obj.customer_phone,
+            "registered_at": obj.customer_registered_at,
+        }
+
+    def get_other_party(self, obj):
+        if obj.carrier_id:
+            return {
+                "role": "CARRIER",
+                "id": obj.carrier_id,
+                "full_name": obj.carrier_full_name,
+                "email": obj.carrier_email,
+                "phone": obj.carrier_phone,
+                "registered_at": obj.carrier_registered_at,
+            }
+
+        if obj.logistic_id:
+            return {
+                "role": "LOGISTIC",
+                "id": obj.logistic_id,
+                "full_name": obj.logistic_full_name,
+                "email": obj.logistic_email,
+                "phone": obj.logistic_phone,
+                "registered_at": obj.logistic_registered_at,
+            }
+
+        return None
 
 
 class AgreementActionSerializer(serializers.Serializer):

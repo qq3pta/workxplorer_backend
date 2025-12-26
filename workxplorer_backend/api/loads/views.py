@@ -28,6 +28,7 @@ from ..accounts.permissions import (
 )
 from .choices import ModerationStatus
 from .models import Cargo, CargoStatus
+from common.utils import convert_to_uzs
 from .serializers import CargoListSerializer, CargoPublishSerializer
 
 INVITE_BASE_URL = "https://logistic-omega-eight.vercel.app/dashboard/desk/invite"
@@ -370,10 +371,21 @@ class PublicLoadsView(generics.ListAPIView):
             qs = qs.filter(volume_m3__gte=p["volume_min"])
         if p.get("volume_max"):
             qs = qs.filter(volume_m3__lte=p["volume_max"])
-        if p.get("min_price_uzs"):
-            qs = qs.filter(price_uzs_anno__gte=p["min_price_uzs"])
-        if p.get("max_price_uzs"):
-            qs = qs.filter(price_uzs_anno__lte=p["max_price_uzs"])
+        min_price = p.get("min_price")
+        max_price = p.get("max_price")
+        currency = p.get("price_currency")
+
+        if currency:
+            try:
+                if min_price is not None:
+                    min_price_uzs = convert_to_uzs(min_price, currency)
+                    qs = qs.filter(price_uzs_anno__gte=min_price_uzs)
+
+                if max_price is not None:
+                    max_price_uzs = convert_to_uzs(max_price, currency)
+                    qs = qs.filter(price_uzs_anno__lte=max_price_uzs)
+            except Exception:
+                pass
 
         q = p.get("company") or p.get("q")
         if q:

@@ -96,7 +96,7 @@ class Cargo(models.Model):
     moderation_status = models.CharField(
         max_length=10,
         choices=ModerationStatus.choices,
-        default=ModerationStatus.PENDING,
+        default=ModerationStatus.APPROVED,
     )
     status = models.CharField(
         max_length=20, choices=CargoStatus.choices, default=CargoStatus.POSTED

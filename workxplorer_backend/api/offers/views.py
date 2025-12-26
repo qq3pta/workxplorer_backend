@@ -84,10 +84,20 @@ def _apply_common_filters(qs, params):
         except Exception:
             pass
 
-    if p.get("cargo_id"):
-        qs = qs.filter(cargo_id=p["cargo_id"])
-    if p.get("cargo_uuid"):
+    # uuid / cargo_uuid
+    if p.get("uuid"):
+        qs = qs.filter(cargo__uuid=p["uuid"])
+    elif p.get("cargo_uuid"):
         qs = qs.filter(cargo__uuid=p["cargo_uuid"])
+
+    has_offers = p.get("has_offers")
+    if has_offers is not None:
+        has_offers = str(has_offers).lower()
+        if has_offers in ("true", "1"):
+            qs = qs.filter(offers_active__gt=0)
+        elif has_offers in ("false", "0"):
+            qs = qs.filter(offers_active=0)
+
     if p.get("carrier_id"):
         qs = qs.filter(carrier_id=p["carrier_id"])
     if p.get("customer_id"):
@@ -150,8 +160,8 @@ def _apply_common_filters(qs, params):
     allowed = {
         "created_at",
         "-created_at",
-        "price_value",
-        "-price_value",
+        "price_uzs_anno",
+        "-price_uzs_anno",
         "cargo__load_date",
         "-cargo__load_date",
         "cargo__delivery_date",

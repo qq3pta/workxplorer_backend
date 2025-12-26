@@ -37,4 +37,12 @@ def apply_common_search_filters(qs, p):
         except Exception as e:
             print("PRICE FILTER ERROR:", e)
 
+    has_offers = p.get("has_offers")
+    if has_offers is not None:
+        has_offers = str(has_offers).lower()
+        if has_offers in ("true", "1"):
+            qs = qs.filter(offers_active__gt=0)
+        elif has_offers in ("false", "0"):
+            qs = qs.filter(offers_active=0)
+
     return qs

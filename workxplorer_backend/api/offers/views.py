@@ -254,7 +254,6 @@ class OfferViewSet(ModelViewSet):
         Offer.objects.select_related("cargo", "carrier")
         .annotate(
             carrier_rating=Avg("carrier__ratings_received__score"),
-            # 1. Сначала вычисляем дистанцию по прямой (path_km) для fallback
             path_m_anno=Distance(
                 F("cargo__origin_point"),
                 F("cargo__dest_point"),
@@ -267,12 +266,10 @@ class OfferViewSet(ModelViewSet):
                 F("path_km_anno"),
                 output_field=FloatField(),
             ),
-            # 🔥 ДОБАВИТЬ КАК В LOADS
-            price_uzs_anno=Coalesce(
-                F("price_value"),
-            ),
+            price_uzs_anno=F("price_value"),  # ✅ ТОЛЬКО ТАК
         )
     )
+
     permission_classes = [IsAuthenticatedAndVerified]
     serializer_class = OfferDetailSerializer
 

@@ -48,6 +48,9 @@ class RatingUserViewSet(viewsets.ReadOnlyModelViewSet):
         qs = super().get_queryset()
 
         role = self.request.query_params.get("role")
+        if role:
+            role = role.upper()
+
         if role in {"LOGISTIC", "CUSTOMER", "CARRIER"}:
             qs = qs.filter(role=role)
 
@@ -129,16 +132,19 @@ class RatingUserViewSet(viewsets.ReadOnlyModelViewSet):
                 )
             )
 
-        try:
-            min_rating = self.request.query_params.get("min_rating")
-            max_rating = self.request.query_params.get("max_rating")
+        min_rating = self.request.query_params.get("min_rating")
+        max_rating = self.request.query_params.get("max_rating")
 
-            if min_rating is not None:
+        if min_rating:
+            try:
                 qs = qs.filter(avg_rating_value__gte=float(min_rating))
+            except ValueError:
+                pass
 
-            if max_rating is not None:
+        if max_rating:
+            try:
                 qs = qs.filter(avg_rating_value__lte=float(max_rating))
-        except ValueError:
-            pass
+            except ValueError:
+                pass
 
         return qs

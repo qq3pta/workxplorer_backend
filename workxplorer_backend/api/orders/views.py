@@ -147,12 +147,7 @@ class OrdersViewSet(viewsets.ModelViewSet):
             qs = qs.filter(status=status_param)
 
         # ---------- Аннотация цены в UZS ----------
-        qs = qs.annotate(
-            price_uzs_anno=convert_to_uzs(
-                F("offer__price_value"),
-                F("offer__price_currency"),
-            )
-        )
+        qs = qs.annotate(price_uzs_anno=F("offer__price_value"))
 
         currency = p.get("price_currency")
         min_price = p.get("min_price")

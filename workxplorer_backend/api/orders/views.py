@@ -77,7 +77,7 @@ def _apply_orders_filters(qs, p):
     max_price = p.get("max_price")
 
     if currency:
-        qs = qs.filter(price_currency=currency)
+        qs = qs.filter(offer__price_currency=currency)
 
         try:
             if min_price not in (None, ""):
@@ -158,87 +158,17 @@ class OrdersViewSet(viewsets.ModelViewSet):
             else:
                 qs = qs.none()
 
+        status_param = p.get("status")
+        if status_param:
+            qs = qs.filter(status=status_param)
+
         # ---------- Аннотация цены в UZS ----------
         qs = qs.annotate(
             price_uzs_anno=F("offer__price_value"),
-            price_currency=F("offer__price_currency"),
         )
-
-        # ---------- UUID / города / даты ----------
-        # груз по uuid
-        order_id = p.get("uuid")
-        if order_id:
-            try:
-                qs = qs.filter(id=int(order_id))
-            except (TypeError, ValueError):
-                qs = qs.none()
-
-        # cargo_uuid = настоящий UUID груза (если нужен отдельно)
-        cargo_uuid = p.get("cargo_uuid")
-        if cargo_uuid:
-            qs = qs.filter(cargo__uuid=cargo_uuid)
-
-        # города (как в loads/offers)
-        if p.get("origin_city"):
-            qs = qs.filter(cargo__origin_city__iexact=p["origin_city"])
-        if p.get("destination_city"):
-            qs = qs.filter(cargo__destination_city__iexact=p["destination_city"])
-
-        # даты загрузки/доставки
-        if p.get("load_date"):
-            qs = qs.filter(cargo__load_date=p["load_date"])
-        if p.get("load_date_from"):
-            qs = qs.filter(cargo__load_date__gte=p["load_date_from"])
-        if p.get("load_date_to"):
-            qs = qs.filter(cargo__load_date__lte=p["load_date_to"])
-        if p.get("delivery_date_from"):
-            qs = qs.filter(cargo__delivery_date__gte=p["delivery_date_from"])
-        if p.get("delivery_date_to"):
-            qs = qs.filter(cargo__delivery_date__lte=p["delivery_date_to"])
-
-        # ---------- transport_type ----------
-        if p.get("transport_type"):
-            qs = qs.filter(cargo__transport_type=p["transport_type"])
-
-        # ---------- Поиск по компании / q ----------
-        q = p.get("q") or p.get("company")
-        if q:
-            qs = qs.filter(
-                Q(customer__company_name__icontains=q)
-                | Q(customer__username__icontains=q)
-                | Q(customer__email__icontains=q)
-                | Q(carrier__company_name__icontains=q)
-                | Q(carrier__username__icontains=q)
-                | Q(carrier__email__icontains=q)
-            )
-
-        # ---------- Вес (тонны → кг, как в loads/offers) ----------
-        try:
-            if p.get("min_weight"):
-                qs = qs.filter(cargo__weight_kg__gte=float(p["min_weight"]) * 1000)
-            if p.get("max_weight"):
-                qs = qs.filter(cargo__weight_kg__lte=float(p["max_weight"]) * 1000)
-        except ValueError:
-            pass
 
         # ---------- Цена + валюта ----------
         qs = _apply_orders_filters(qs, p)
-        # ---------- (опционально) сортировка ----------
-        order = p.get("order")
-        allowed_order = {
-            "created_at",
-            "-created_at",
-            "price_uzs_anno",
-            "-price_uzs_anno",
-            "cargo__load_date",
-            "-cargo__load_date",
-            "cargo__delivery_date",
-            "-cargo__delivery_date",
-        }
-        if order in allowed_order:
-            qs = qs.order_by(order)
-        else:
-            qs = qs.order_by("-created_at")
 
         return qs
 

@@ -132,8 +132,12 @@ class RatingUserViewSet(viewsets.ReadOnlyModelViewSet):
                 )
             )
 
-        min_rating = self.request.query_params.get("min_rating")
-        max_rating = self.request.query_params.get("max_rating")
+        min_rating = self.request.query_params.get("min_rating") or self.request.query_params.get(
+            "rating_min"
+        )
+        max_rating = self.request.query_params.get("max_rating") or self.request.query_params.get(
+            "rating_max"
+        )
 
         if min_rating:
             try:

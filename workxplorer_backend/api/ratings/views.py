@@ -2,6 +2,7 @@ from django.contrib.auth import get_user_model
 from django.db.models import Avg, Count, Q, Sum
 from rest_framework import permissions, viewsets
 from django.db.models.functions import Coalesce
+from django.db.models import IntegerField, ExpressionWrapper
 
 from .models import UserRating
 from .serializers import RatingUserListSerializer, UserRatingSerializer
@@ -67,13 +68,14 @@ class RatingUserViewSet(viewsets.ReadOnlyModelViewSet):
             )
 
         qs = qs.annotate(
-            avg_rating_value=Coalesce(Avg("ratings_received__score"), 0),
+            avg_rating_value=Coalesce(Avg("ratings_received__score"), 0.0),
             rating_count_value=Count("ratings_received", distinct=True),
-            orders_total_value=(
+            orders_total_value=ExpressionWrapper(
                 Count("orders_as_carrier", distinct=True)
-                + Count("orders_as_customer", distinct=True)
+                + Count("orders_as_customer", distinct=True),
+                output_field=IntegerField(),
             ),
-            orders_completed_value=(
+            orders_completed_value=ExpressionWrapper(
                 Count(
                     "orders_as_carrier",
                     filter=Q(orders_as_carrier__status="delivered"),
@@ -83,9 +85,10 @@ class RatingUserViewSet(viewsets.ReadOnlyModelViewSet):
                     "orders_as_customer",
                     filter=Q(orders_as_customer__status="delivered"),
                     distinct=True,
-                )
+                ),
+                output_field=IntegerField(),
             ),
-            orders_in_progress_value=(
+            orders_in_progress_value=ExpressionWrapper(
                 Count(
                     "orders_as_carrier",
                     filter=Q(orders_as_carrier__status="in_process"),
@@ -95,9 +98,10 @@ class RatingUserViewSet(viewsets.ReadOnlyModelViewSet):
                     "orders_as_customer",
                     filter=Q(orders_as_customer__status="in_process"),
                     distinct=True,
-                )
+                ),
+                output_field=IntegerField(),
             ),
-            orders_queued_value=(
+            orders_queued_value=ExpressionWrapper(
                 Count(
                     "orders_as_carrier",
                     filter=Q(orders_as_carrier__status="pending"),
@@ -107,7 +111,8 @@ class RatingUserViewSet(viewsets.ReadOnlyModelViewSet):
                     "orders_as_customer",
                     filter=Q(orders_as_customer__status="pending"),
                     distinct=True,
-                )
+                ),
+                output_field=IntegerField(),
             ),
             orders_excellent_value=Count(
                 "ratings_received",

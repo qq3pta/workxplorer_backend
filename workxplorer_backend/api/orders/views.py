@@ -71,22 +71,6 @@ def _apply_orders_filters(qs, p):
     except ValueError:
         pass
 
-    # ---------- ЦЕНА (КЛЮЧЕВОЕ) ----------
-    currency = p.get("price_currency")
-    min_price = p.get("min_price")
-    max_price = p.get("max_price")
-
-    if currency:
-        qs = qs.filter(offer__price_currency=currency)
-
-        try:
-            if min_price not in (None, ""):
-                qs = qs.filter(price_uzs_anno__gte=convert_to_uzs(Decimal(min_price), currency))
-            if max_price not in (None, ""):
-                qs = qs.filter(price_uzs_anno__lte=convert_to_uzs(Decimal(max_price), currency))
-        except Exception:
-            pass
-
     # ---------- ПОИСК ----------
     q = p.get("q") or p.get("company")
     if q:
@@ -164,10 +148,34 @@ class OrdersViewSet(viewsets.ModelViewSet):
 
         # ---------- Аннотация цены в UZS ----------
         qs = qs.annotate(
-            price_uzs_anno=F("offer__price_value"),
+            price_uzs_anno=convert_to_uzs(
+                F("offer__price_value"),
+                F("offer__price_currency"),
+            )
         )
 
-        # ---------- Цена + валюта ----------
+        currency = p.get("price_currency")
+        min_price = p.get("min_price")
+        max_price = p.get("max_price")
+
+        # если фронт передал валюту — фильтруем по ней (как раньше)
+        if currency:
+            qs = qs.filter(offer__price_currency=currency)
+
+        def _to_uzs(value: str) -> Decimal:
+            val = Decimal(value)
+            # если указали валюту, конвертируем min/max в UZS
+            return convert_to_uzs(val, currency) if currency else val
+
+        try:
+            if min_price not in (None, ""):
+                qs = qs.filter(price_uzs_anno__gte=_to_uzs(min_price))
+
+            if max_price not in (None, ""):
+                qs = qs.filter(price_uzs_anno__lte=_to_uzs(max_price))
+        except Exception:
+            pass
+
         qs = _apply_orders_filters(qs, p)
 
         return qs

@@ -144,6 +144,19 @@ class AgreementActionSerializer(serializers.Serializer):
 class AgreementListSerializer(serializers.ModelSerializer):
     offer_id = serializers.IntegerField(source="offer.id", read_only=True)
     cargo_id = serializers.IntegerField(source="offer.cargo.id", read_only=True)
+    participants = serializers.SerializerMethodField()
+
+    # ---------- ОТКУДА ----------
+    loading_city = serializers.CharField(source="offer.cargo.origin_city", read_only=True)
+    loading_address = serializers.CharField(source="offer.cargo.origin_address", read_only=True)
+    loading_date = serializers.DateField(source="offer.cargo.load_date", read_only=True)
+
+    # ---------- КУДА ----------
+    unloading_city = serializers.CharField(source="offer.cargo.destination_city", read_only=True)
+    unloading_address = serializers.CharField(
+        source="offer.cargo.destination_address", read_only=True
+    )
+    unloading_date = serializers.DateField(source="offer.cargo.delivery_date", read_only=True)
 
     class Meta:
         model = Agreement
@@ -153,9 +166,46 @@ class AgreementListSerializer(serializers.ModelSerializer):
             "cargo_id",
             "status",
             "expires_at",
+            "created_at",
             "accepted_by_customer",
             "accepted_by_carrier",
             "accepted_by_logistic",
-            "created_at",
+            "loading_city",
+            "loading_address",
+            "loading_date",
+            "unloading_city",
+            "unloading_address",
+            "unloading_date",
+            "participants",
         )
         read_only_fields = fields
+
+    def get_participants(self, obj):
+        participants = []
+
+        participants.append(
+            {
+                "role": "CUSTOMER",
+                "id": obj.customer_id,
+                "full_name": obj.customer_full_name,
+            }
+        )
+
+        if obj.carrier_id:
+            participants.append(
+                {
+                    "role": "CARRIER",
+                    "id": obj.carrier_id,
+                    "full_name": obj.carrier_full_name,
+                }
+            )
+        elif obj.logistic_id:
+            participants.append(
+                {
+                    "role": "LOGISTIC",
+                    "id": obj.logistic_id,
+                    "full_name": obj.logistic_full_name,
+                }
+            )
+
+        return participants

@@ -27,7 +27,7 @@ def apply_loads_filters(qs, p):
     if p.get("uuid"):
         qs = qs.filter(uuid=p["uuid"])
 
-    if p.get("origin_city"):
+    if p.get("origin_city") and not p.get("origin_radius_km"):
         qs = qs.filter(origin_city__iexact=p["origin_city"])
 
     if p.get("destination_city"):

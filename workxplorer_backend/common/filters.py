@@ -1,4 +1,6 @@
 from decimal import Decimal
+from django.db import models
+from django.db.models import FloatField
 
 from django.contrib.gis.db.models.functions import Distance
 from django.contrib.gis.geos import Point
@@ -112,9 +114,12 @@ def apply_loads_filters(qs, p):
     if o_lat and o_lng and o_r:
         try:
             center = Point(float(o_lng), float(o_lat), srid=4326)
-            qs = qs.annotate(origin_dist_km=Distance("origin_point", center) / 1000.0).filter(
-                origin_dist_km__lte=float(o_r)
-            )
+            radius = float(o_r)
+
+            qs = qs.annotate(
+                origin_dist_km=Distance("origin_point", center) / 1000.0,
+                origin_radius_km=models.Value(radius, output_field=FloatField()),
+            ).filter(origin_dist_km__lte=radius)
         except Exception:
             pass
 

@@ -30,7 +30,7 @@ def apply_loads_filters(qs, p):
     if p.get("origin_city") and not p.get("origin_radius_km"):
         qs = qs.filter(origin_city__iexact=p["origin_city"])
 
-    if p.get("destination_city"):
+    if p.get("destination_city") and not p.get("dest_radius_km"):
         qs = qs.filter(destination_city__iexact=p["destination_city"])
 
     if p.get("load_date"):

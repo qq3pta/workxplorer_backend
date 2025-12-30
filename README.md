@@ -1,4 +1,4 @@
-# Workxplorer Backend — Биржа грузоперевозок
+# KAD-one — Биржа грузоперевозок
 
 Django/DRF backend для онлайн-платформы грузоперевозок: регистрация и роли, публикация заявок, поиск, предложения.
 Язык: **ru-RU** · Часовой пояс: **Asia/Tashkent**.
@@ -54,3 +54,4 @@ workxplorer_backend/
 ├── docker-compose.yml
 ├── pyproject.toml
 └── README.md
+

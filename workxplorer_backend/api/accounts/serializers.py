@@ -338,6 +338,8 @@ class MeSerializer(serializers.ModelSerializer):
             "date_joined",
             "profile",
             "fcm_token",
+            "is_accept_policy",
+            "policy_accepted_at",
         )
 
         read_only_fields = (
@@ -355,10 +357,19 @@ class MeSerializer(serializers.ModelSerializer):
 class UpdateMeSerializer(serializers.ModelSerializer):
     profile = ProfileSerializer(required=False)
     fcm_token = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    is_accept_policy = serializers.BooleanField(required=False)
 
     class Meta:
         model = User
-        fields = ("first_name", "phone", "company_name", "photo", "profile", "fcm_token")
+        fields = (
+            "first_name",
+            "phone",
+            "company_name",
+            "photo",
+            "profile",
+            "fcm_token",
+            "is_accept_policy",
+        )
 
     def validate_phone(self, value):
         norm = normalize_phone_e164(value) if value else value
@@ -368,6 +379,12 @@ class UpdateMeSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         profile_data = validated_data.pop("profile", None)
+
+        if "is_accept_policy" in validated_data:
+            if validated_data["is_accept_policy"] is True and not instance.is_accept_policy:
+                instance.is_accept_policy = True
+                instance.policy_accepted_at = timezone.now()
+            validated_data.pop("is_accept_policy", None)
 
         if "fcm_token" in validated_data:
             instance.fcm_token = validated_data["fcm_token"]

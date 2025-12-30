@@ -28,6 +28,8 @@ class User(AbstractUser):
     rating_as_carrier = models.FloatField(default=0)
 
     is_email_verified = models.BooleanField(default=False)
+    is_accept_policy = models.BooleanField(default=False)
+    policy_accepted_at = models.DateTimeField(null=True, blank=True)
 
     fcm_token = models.CharField(max_length=255, blank=True, null=True)
 

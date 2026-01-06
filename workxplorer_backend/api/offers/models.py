@@ -491,7 +491,6 @@ class Offer(models.Model):
 
         # ✅ СНИМАЕМ OLD_STATE СРАЗУ
         old_state = {
-            "is_active": self.is_active,
             "accepted_by_customer": self.accepted_by_customer,
             "accepted_by_carrier": self.accepted_by_carrier,
             "accepted_by_logistic": self.accepted_by_logistic,
@@ -501,15 +500,12 @@ class Offer(models.Model):
 
         # --- бизнес-логика ---
         if user.id in (self.cargo.customer_id, self.cargo.created_by_id):
-            self.is_active = False
             self.accepted_by_customer = False
 
         elif user.role == "CARRIER" and user.id == self.carrier_id:
-            self.is_active = False
             self.accepted_by_carrier = False
 
         elif user.role == "LOGISTIC" and user.id in (self.logistic_id, self.intermediary_id):
-            self.is_active = False
             self.accepted_by_logistic = False
 
         else:
@@ -518,7 +514,6 @@ class Offer(models.Model):
         # ✅ ОДИН save
         self.save(
             update_fields=[
-                "is_active",
                 "accepted_by_customer",
                 "accepted_by_carrier",
                 "accepted_by_logistic",

@@ -726,6 +726,12 @@ class Offer(models.Model):
 
             # ✅ 4. СОЗДАНИЕ AGREEMENT ТОЛЬКО ПРИ HANDSHAKE
             if self.accepted_by_customer and self.accepted_by_carrier:
+                # 🔥 ФИКС ФИНАЛЬНОГО СТАТУСА
+                self.response_status = "accepted"
+                self.is_active = True
+
+                self.save(update_fields=["response_status", "is_active", "updated_at"])
+
                 from api.agreements.models import Agreement
 
                 Agreement.get_or_create_from_offer(self)

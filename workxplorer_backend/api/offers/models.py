@@ -489,7 +489,6 @@ class Offer(models.Model):
         if not self.is_active:
             return
 
-        # ✅ СНИМАЕМ OLD_STATE СРАЗУ
         old_state = {
             "accepted_by_customer": self.accepted_by_customer,
             "accepted_by_carrier": self.accepted_by_carrier,
@@ -501,27 +500,29 @@ class Offer(models.Model):
         # --- бизнес-логика ---
         if user.id in (self.cargo.customer_id, self.cargo.created_by_id):
             self.accepted_by_customer = False
+            self.response_status = "rejected_by_customer"
 
         elif user.role == "CARRIER" and user.id == self.carrier_id:
             self.accepted_by_carrier = False
+            self.response_status = "rejected_by_carrier"
 
         elif user.role == "LOGISTIC" and user.id in (self.logistic_id, self.intermediary_id):
             self.accepted_by_logistic = False
+            self.response_status = "rejected_by_logistic"
 
         else:
             raise PermissionDenied("Вы не можете отклонить этот оффер.")
 
-        # ✅ ОДИН save
         self.save(
             update_fields=[
                 "accepted_by_customer",
                 "accepted_by_carrier",
                 "accepted_by_logistic",
+                "response_status",
                 "updated_at",
             ]
         )
 
-        # ✅ ЛОГ ПОСЛЕ SAVE
         self._log_status_change(
             user=user,
             action="reject",

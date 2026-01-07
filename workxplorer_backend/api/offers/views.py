@@ -386,7 +386,15 @@ class OfferViewSet(ModelViewSet):
 
         # ------------------ Фильтр по response_status ------------------
         response_status = request.query_params.get("response_status")
-        if response_status:
+
+        if response_status == "accepted":
+            qs = qs.filter(
+                accepted_by_customer=True,
+                accepted_by_carrier=True,
+                is_active=True,
+            )
+
+        elif response_status:
             qs = qs.filter(
                 id__in=[o.id for o in qs if o.get_response_status_for(u) == response_status]
             )

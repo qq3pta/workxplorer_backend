@@ -457,12 +457,12 @@ class OfferShortSerializer(serializers.ModelSerializer):
         return ""
 
     @extend_schema_field(str)
-    def get_response_status(self, obj: Offer) -> str:
+    def get_response_status(self, obj):
+        if obj.accepted_by_customer and obj.accepted_by_carrier and obj.is_active:
+            return "accepted"
+
         if obj.response_status and str(obj.response_status).startswith("rejected"):
             return "rejected"
-
-        if obj.is_counter and obj.response_status:
-            return obj.response_status
 
         request = self.context.get("request")
         if not request:

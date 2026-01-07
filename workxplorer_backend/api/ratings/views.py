@@ -59,8 +59,9 @@ class RatingUserViewSet(viewsets.ReadOnlyModelViewSet):
             qs = qs.filter(id=user_id)
 
         code = self.request.query_params.get("code")
+
         if code:
-            qs = qs.filter(profile__country__iexact=code)
+            qs = qs.filter(Q(profile__country__iexact=code) | Q(profile__country__icontains=code))
 
         search = self.request.query_params.get("search")
         if search:

@@ -662,7 +662,25 @@ class Offer(models.Model):
         )
 
         if not self.is_active:
-            raise ValidationError("Нельзя принять неактивный оффер.")
+            if (
+                (
+                    user.id in (self.cargo.customer_id, self.cargo.created_by_id)
+                    and self.accepted_by_customer
+                )
+                or (
+                    user.role == "CARRIER"
+                    and user.id == self.carrier_id
+                    and self.accepted_by_carrier
+                )
+                or (
+                    user.role == "LOGISTIC"
+                    and user.id in (self.logistic_id, self.intermediary_id)
+                    and self.accepted_by_logistic
+                )
+            ):
+                return
+
+            raise ValidationError("Оффер уже закрыт.")
 
         handlers = {
             self.DealType.CUSTOMER_CARRIER: self._accept_case_customer_carrier,

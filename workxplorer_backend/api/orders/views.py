@@ -347,6 +347,11 @@ class OrdersViewSet(viewsets.ModelViewSet):
                 initiator=Offer.Initiator.CUSTOMER,
                 deal_type=Offer.DealType.CUSTOMER_CARRIER,
                 is_active=True,
+                # 🔥 ВОТ ЭТО КРИТИЧНО
+                accepted_by_customer=False,
+                accepted_by_carrier=False,
+                accepted_by_logistic=False,
+                response_status=None,
             )
 
         order.offer = offer
@@ -420,6 +425,24 @@ class OrdersViewSet(viewsets.ModelViewSet):
                 "carrier_accepted_terms",
             ]
         )
+
+        offer = order.offer
+
+        if offer:
+            offer.is_active = True
+            offer.accepted_by_carrier = True
+            offer.accepted_by_customer = False
+            offer.accepted_by_logistic = False
+            offer.response_status = None
+
+            offer.save(
+                update_fields=[
+                    "is_active",
+                    "accepted_by_carrier",
+                    "accepted_by_customer",
+                    "accepted_by_logistic",
+                ]
+            )
 
         # --------------------------------------------------------------
 

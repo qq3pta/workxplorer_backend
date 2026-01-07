@@ -62,18 +62,24 @@ def apply_loads_filters(qs, p):
     # ======================
     # AXLES
     # ======================
-    if p.get("axles_min"):
-        qs = qs.filter(axles__gte=p["axles_min"])
-    if p.get("axles_max"):
-        qs = qs.filter(axles__lte=p["axles_max"])
+    min_axles = p.get("min_axles") or p.get("axles_min")
+    if min_axles:
+        qs = qs.filter(axles__gte=min_axles)
+
+    max_axles = p.get("max_axles") or p.get("axles_max")
+    if max_axles:
+        qs = qs.filter(axles__lte=max_axles)
 
     # ======================
     # VOLUME
     # ======================
-    if p.get("volume_min"):
-        qs = qs.filter(volume_m3__gte=p["volume_min"])
-    if p.get("volume_max"):
-        qs = qs.filter(volume_m3__lte=p["volume_max"])
+    min_volume = p.get("min_volume_m3") or p.get("volume_min")
+    if min_volume:
+        qs = qs.filter(volume_m3__gte=min_volume)
+
+    max_volume = p.get("max_volume_m3") or p.get("volume_max")
+    if max_volume:
+        qs = qs.filter(volume_m3__lte=max_volume)
 
     # ======================
     # PRICE + CURRENCY

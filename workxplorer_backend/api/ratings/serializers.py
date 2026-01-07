@@ -78,7 +78,7 @@ class RatingUserListSerializer(serializers.ModelSerializer):
     completed_orders = serializers.IntegerField(source="completed_orders_value", read_only=True)
 
     registered_at = serializers.DateTimeField(source="date_joined", read_only=True)
-    country = serializers.CharField(read_only=True)
+    country = serializers.CharField(source="profile.country", read_only=True)
 
     total_distance = serializers.SerializerMethodField()
 

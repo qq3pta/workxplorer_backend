@@ -389,14 +389,26 @@ class CargoInviteOpenView(generics.GenericAPIView):
         carrier = request.user
         invited_by = invite.created_by
 
-        offer, created = Offer.objects.get_or_create(
+        offer = Offer.objects.filter(
             cargo_id=cargo.id,
             carrier_id=carrier.id,
-            defaults={
-                "initiator": Offer.Initiator.CUSTOMER,
-                "price_value": cargo.price_value or 0,
-            },
-        )
+            is_active=True,
+        ).first()
+
+        if not offer:
+            offer = Offer.objects.create(
+                cargo=cargo,
+                carrier=carrier,
+                initiator=Offer.Initiator.CUSTOMER,
+                deal_type=Offer.resolve_deal_type(
+                    initiator_user=invite.created_by or cargo.customer,
+                    carrier=carrier,
+                ),
+                price_value=cargo.price_value or 0,
+                price_currency=cargo.price_currency,
+                payment_method=Offer.PaymentMethod.CASH,
+                message="",
+            )
 
         return Response(
             {

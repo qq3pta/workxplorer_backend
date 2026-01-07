@@ -334,12 +334,20 @@ class OrdersViewSet(viewsets.ModelViewSet):
                 status=404,
             )
 
-        offer = Offer.objects.create(
+        offer = Offer.objects.filter(
             cargo=order.cargo,
             carrier=carrier,
-            initiator=Offer.Initiator.CUSTOMER,
-            deal_type=Offer.DealType.CUSTOMER_CARRIER,
-        )
+            is_active=True,
+        ).first()
+
+        if not offer:
+            offer = Offer.objects.create(
+                cargo=order.cargo,
+                carrier=carrier,
+                initiator=Offer.Initiator.CUSTOMER,
+                deal_type=Offer.DealType.CUSTOMER_CARRIER,
+                is_active=True,
+            )
 
         order.offer = offer
         order.save(update_fields=["offer"])
@@ -360,31 +368,6 @@ class OrdersViewSet(viewsets.ModelViewSet):
             },
             status=200,
         )
-
-        # offer, created = Offer.objects.get_or_create(
-        #    cargo=order.cargo,
-        #    carrier=carrier,
-        #    defaults={
-        #        "initiator": Offer.Initiator.CUSTOMER,
-        #        "logistic": user,
-        #        "price_value": order.price_total or 0,
-        #        "price_currency": order.currency,
-        #        "message": "Приглашение через заказ",
-        #        "is_active": True,
-        #    },
-        # )
-
-        # if created:
-        #    offer.send_create_notifications()
-
-        # return Response(
-        #    {
-        #        "detail": "Перевозчик приглашён",
-        #        "offer_id": offer.id,
-        #        "invite_token": str(token),
-        #    },
-        #    status=200,
-        # )
 
     @action(detail=True, methods=["post"], url_path="generate-invite")
     def generate_invite(self, request, pk=None):

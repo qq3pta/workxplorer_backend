@@ -458,6 +458,9 @@ class OfferShortSerializer(serializers.ModelSerializer):
 
     @extend_schema_field(str)
     def get_response_status(self, obj: Offer) -> str:
+        if obj.response_status and str(obj.response_status).startswith("rejected"):
+            return "rejected"
+
         if obj.is_counter and obj.response_status:
             return obj.response_status
 
@@ -479,6 +482,9 @@ class OfferShortSerializer(serializers.ModelSerializer):
         Человекочитаемый статус под макет.
         Можно потом подправить формулировки под точные ТЗ.
         """
+        if obj.response_status and str(obj.response_status).startswith("rejected"):
+            return "Отменено"
+
         if not obj.is_active:
             return "Отменено"
 

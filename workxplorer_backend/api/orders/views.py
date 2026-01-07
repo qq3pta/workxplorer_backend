@@ -337,7 +337,6 @@ class OrdersViewSet(viewsets.ModelViewSet):
         offer = Offer.objects.filter(
             cargo=order.cargo,
             carrier=carrier,
-            is_active=True,
         ).first()
 
         if not offer:
@@ -346,13 +345,24 @@ class OrdersViewSet(viewsets.ModelViewSet):
                 carrier=carrier,
                 initiator=Offer.Initiator.CUSTOMER,
                 deal_type=Offer.DealType.CUSTOMER_CARRIER,
-                is_active=True,
-                # 🔥 ВОТ ЭТО КРИТИЧНО
-                accepted_by_customer=False,
-                accepted_by_carrier=False,
-                accepted_by_logistic=False,
-                response_status=None,
             )
+
+        # 🔥 КРИТИЧНО: СБРОС СОСТОЯНИЯ
+        offer.is_active = True
+        offer.accepted_by_customer = False
+        offer.accepted_by_carrier = False
+        offer.accepted_by_logistic = False
+        offer.response_status = None
+
+        offer.save(
+            update_fields=[
+                "is_active",
+                "accepted_by_customer",
+                "accepted_by_carrier",
+                "accepted_by_logistic",
+                "response_status",
+            ]
+        )
 
         order.offer = offer
         order.save(update_fields=["offer"])
@@ -404,17 +414,20 @@ class OrdersViewSet(viewsets.ModelViewSet):
             return Response({"detail": "token обязателен"}, status=400)
 
         try:
-            order = Order.objects.get(invite_token=token, status=Order.OrderStatus.NO_DRIVER)
+            order = Order.objects.get(
+                invite_token=token,
+                status=Order.OrderStatus.NO_DRIVER,
+            )
         except Order.DoesNotExist:
             return Response({"detail": "Приглашение недействительно"}, status=404)
 
         if user.role != "CARRIER":
             return Response({"detail": "Только перевозчики могут принять заказ"}, status=403)
 
-        # Назначаем перевозчика
+        # ✅ ТОЛЬКО ORDER
         order.carrier = user
         order.invite_token = None
-        order.status = Order.OrderStatus.PENDING
+        order.status = Order.OrderStatus.NO_DRIVER
         order.carrier_accepted_terms = False
 
         order.save(
@@ -426,31 +439,11 @@ class OrdersViewSet(viewsets.ModelViewSet):
             ]
         )
 
-        offer = order.offer
-
-        if offer:
-            offer.is_active = True
-            offer.accepted_by_carrier = True
-            offer.accepted_by_customer = False
-            offer.accepted_by_logistic = False
-            offer.response_status = None
-
-            offer.save(
-                update_fields=[
-                    "is_active",
-                    "accepted_by_carrier",
-                    "accepted_by_customer",
-                    "accepted_by_logistic",
-                ]
-            )
-
-        # --------------------------------------------------------------
-
         return Response(
             {
-                "detail": "Приглашение принято. Пожалуйста, подтвердите условия заказа.",
+                "detail": "Инвайт принят. Подтвердите оффер.",
                 "order_id": order.id,
-                "requires_terms_confirmation": True,
+                "next_action": "accept_offer",
             },
             status=200,
         )

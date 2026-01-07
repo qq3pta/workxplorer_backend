@@ -9,6 +9,32 @@ from .serializers import RatingUserListSerializer, UserRatingSerializer
 
 User = get_user_model()
 
+COUNTRY_CODE_MAP = {
+    "UZ": ["UZ", "Uzbekistan", "Узбекистан"],
+    "KZ": ["KZ", "Kazakhstan", "Казахстан"],
+    "KG": ["KG", "Kyrgyzstan", "Кыргызстан", "Киргизия"],
+    "TJ": ["TJ", "Tajikistan", "Таджикистан"],
+    "TM": ["TM", "Turkmenistan", "Туркменистан"],
+    "CN": ["CN", "China", "Китай"],
+    "MN": ["MN", "Mongolia", "Монголия"],
+    "AF": ["AF", "Afghanistan", "Афганистан"],
+    "PK": ["PK", "Pakistan", "Пакистан"],
+    "IN": ["IN", "India", "Индия"],
+    "IR": ["IR", "Iran", "Иран"],
+    "AZ": ["AZ", "Azerbaijan", "Азербайджан"],
+    "AM": ["AM", "Armenia", "Армения"],
+    "GE": ["GE", "Georgia", "Грузия"],
+    "RU": ["RU", "Russia", "Россия"],
+    "UA": ["UA", "Ukraine", "Украина"],
+    "PL": ["PL", "Poland", "Польша"],
+    "HU": ["HU", "Hungary", "Венгрия"],
+    "RO": ["RO", "Romania", "Румыния"],
+    "BG": ["BG", "Bulgaria", "Болгария"],
+    "RS": ["RS", "Serbia", "Сербия"],
+    "GR": ["GR", "Greece", "Греция"],
+    "TR": ["TR", "Turkey", "Турция"],
+}
+
 
 class UserRatingViewSet(viewsets.ModelViewSet):
     """CRUD API для оценок пользователей."""
@@ -59,9 +85,11 @@ class RatingUserViewSet(viewsets.ReadOnlyModelViewSet):
             qs = qs.filter(id=user_id)
 
         code = self.request.query_params.get("code")
-
         if code:
-            qs = qs.filter(Q(profile__country__iexact=code) | Q(profile__country__icontains=code))
+            code = code.upper()
+            country_values = COUNTRY_CODE_MAP.get(code)
+            if country_values:
+                qs = qs.filter(profile__country__in=country_values)
 
         search = self.request.query_params.get("search")
         if search:

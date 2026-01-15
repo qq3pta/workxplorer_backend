@@ -1,5 +1,6 @@
 from django.urls import path
 
+
 from .views import (
     AnalyticsView,
     ChangeRoleView,
@@ -16,6 +17,7 @@ from .views import (
     UpdateMeView,
     VerifyEmailView,
     VerifyPhoneOTPView,
+    dashboard_stats,
 )
 
 urlpatterns = [
@@ -40,4 +42,5 @@ urlpatterns = [
     path("reset-password/", ResetPasswordView.as_view()),
     # FCM
     path("fcm-token/", UpdateFCMTokenView.as_view()),
+    path("dashboard-stats/", dashboard_stats, name="dashboard-stats"),
 ]

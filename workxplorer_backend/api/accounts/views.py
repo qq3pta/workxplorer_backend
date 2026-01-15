@@ -10,6 +10,8 @@ from rest_framework import generics, serializers
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.decorators import api_view
+from api.loads.models import Cargo
 from rest_framework_simplejwt.tokens import (
     BlacklistedToken,
     OutstandingToken,
@@ -488,3 +490,36 @@ class AnalyticsView(APIView):
         ser = AnalyticsSerializer(data=data)
         ser.is_valid(raise_exception=True)
         return Response(ser.data)
+
+
+@extend_schema(
+    tags=["dashboard"],
+    responses=inline_serializer(
+        "DashboardStatsResponse",
+        {
+            "total_users": serializers.IntegerField(),
+            "online_users": serializers.IntegerField(),
+            "total_cargos": serializers.IntegerField(),
+        },
+    ),
+)
+@api_view(["GET"])
+def dashboard_stats(request):
+    """
+    Возвращает статистику:
+    - total_users: общее количество пользователей
+    - online_users: пользователи с last_login в последние 5 минут
+    - total_cargos: общее количество заявок
+    """
+    total_users = User.objects.count()
+    five_minutes_ago = timezone.now() - timedelta(minutes=5)
+    online_users = User.objects.filter(last_login__gte=five_minutes_ago).count()
+    total_cargos = Cargo.objects.count()
+
+    return Response(
+        {
+            "total_users": total_users,
+            "online_users": online_users,
+            "total_cargos": total_cargos,
+        }
+    )

@@ -35,6 +35,8 @@ from .serializers import (
     UpdateMeSerializer,
     VerifyEmailSerializer,
     VerifyPhoneOTPSerializer,
+    SendEmailVerifyFromProfileSerializer,
+    VerifyEmailFromProfileSerializer,
 )
 
 User = get_user_model()
@@ -523,3 +525,27 @@ def dashboard_stats(request):
             "total_cargos": total_cargos,
         }
     )
+
+
+class SendEmailVerifyFromProfileView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        s = SendEmailVerifyFromProfileSerializer(
+            data=request.data,
+            context={"request": request},
+        )
+        s.is_valid(raise_exception=True)
+        return Response(s.save())
+
+
+class VerifyEmailFromProfileView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        s = VerifyEmailFromProfileSerializer(
+            data=request.data,
+            context={"request": request},
+        )
+        s.is_valid(raise_exception=True)
+        return Response(s.save())

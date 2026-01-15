@@ -18,6 +18,8 @@ from .views import (
     VerifyEmailView,
     VerifyPhoneOTPView,
     dashboard_stats,
+    SendEmailVerifyFromProfileView,
+    VerifyEmailFromProfileView,
 )
 
 urlpatterns = [
@@ -43,4 +45,7 @@ urlpatterns = [
     # FCM
     path("fcm-token/", UpdateFCMTokenView.as_view()),
     path("dashboard-stats/", dashboard_stats, name="dashboard-stats"),
+    # Email verification from profile
+    path("me/email/send/", SendEmailVerifyFromProfileView.as_view()),
+    path("me/email/verify/", VerifyEmailFromProfileView.as_view()),
 ]

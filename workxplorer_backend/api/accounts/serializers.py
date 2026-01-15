@@ -215,7 +215,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         user = User.objects.create(
             role=role,
             is_active=True,
-            is_email_verified=True,
+            is_email_verified=False,
             **validated,
         )
         user.set_password(pwd)
@@ -318,8 +318,6 @@ class LoginSerializer(serializers.Serializer):
         user = authenticate(username=u.username, password=password)
         if not user:
             raise serializers.ValidationError({"detail": "Неверные учетные данные"})
-        if not user.is_email_verified:
-            raise serializers.ValidationError({"detail": "Аккаунт не подтверждён"})
 
         refresh = RefreshToken.for_user(user)
         access = refresh.access_token
@@ -503,3 +501,76 @@ class AnalyticsSerializer(serializers.Serializer):
 
     bar_chart = serializers.DictField()
     pie_chart = serializers.DictField()
+
+
+class SendEmailVerifyFromProfileSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+    def save(self, **kwargs):
+        user = self.context["request"].user
+        email = self.validated_data["email"]
+
+        if User.objects.filter(email__iexact=email).exclude(id=user.id).exists():
+            raise serializers.ValidationError({"email": "Этот e-mail уже используется"})
+
+        if user.email != email:
+            user.email = email
+            user.is_email_verified = False
+            user.save(update_fields=["email", "is_email_verified"])
+
+        last = (
+            EmailOTP.objects.filter(
+                user=user,
+                purpose=EmailOTP.PURPOSE_VERIFY,
+            )
+            .order_by("-created_at")
+            .first()
+        )
+
+        if last:
+            diff = (timezone.now() - last.created_at).total_seconds()
+            left = max(0, RESEND_COOLDOWN_SEC - int(diff))
+            if left > 0:
+                raise serializers.ValidationError(
+                    {"detail": "Код уже отправлен", "seconds_left": left}
+                )
+
+        otp, raw = EmailOTP.create_otp(
+            user=user,
+            purpose=EmailOTP.PURPOSE_VERIFY,
+            ttl_min=15,
+        )
+
+        send_code_email(email, raw, purpose="verify")
+
+        return {
+            "detail": "Код отправлен на e-mail",
+            "seconds_left": RESEND_COOLDOWN_SEC,
+        }
+
+
+class VerifyEmailFromProfileSerializer(serializers.Serializer):
+    code = serializers.CharField(max_length=6)
+
+    def save(self, **kwargs):
+        user = self.context["request"].user
+        code = self.validated_data["code"]
+
+        otp = (
+            EmailOTP.objects.filter(
+                user=user,
+                purpose=EmailOTP.PURPOSE_VERIFY,
+                is_used=False,
+                expires_at__gte=timezone.now(),
+            )
+            .order_by("-created_at")
+            .first()
+        )
+        if not otp or not otp.check_and_consume(code):
+            raise serializers.ValidationError({"code": "Неверный или просроченный код"})
+
+        if not user.is_email_verified:
+            user.is_email_verified = True
+            user.save(update_fields=["is_email_verified"])
+
+        return {"detail": "E-mail подтвержден"}

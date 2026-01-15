@@ -249,7 +249,7 @@ class LogoutView(APIView):
 
 @extend_schema(tags=["auth"], responses=MeSerializer)
 class MeView(generics.RetrieveAPIView):
-    permission_classes = [IsAuthenticatedAndVerified]
+    permission_classes = [IsAuthenticated]
     serializer_class = MeSerializer
 
     def get_object(self):

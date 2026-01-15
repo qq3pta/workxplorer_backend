@@ -295,7 +295,7 @@ class ResendVerifySerializer(serializers.Serializer):
                 logger.error(f"Failed to send OTP email to {user.email}: {e}")
                 raise serializers.ValidationError(
                     {"detail": "Не удалось отправить код по email. Попробуйте позже."}
-                )
+                ) from e
 
         return {
             "detail": "Если e-mail существует — код отправлен",

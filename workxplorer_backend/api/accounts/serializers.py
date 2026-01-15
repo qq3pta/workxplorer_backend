@@ -1,4 +1,5 @@
 import phonenumbers
+import logging
 
 from phonenumbers import PhoneNumberFormat
 from datetime import timedelta
@@ -260,18 +261,23 @@ class VerifyEmailSerializer(serializers.Serializer):
         return user
 
 
+logger = logging.getLogger(__name__)
+
+
 class ResendVerifySerializer(serializers.Serializer):
     email = serializers.EmailField()
 
     def save(self, **kwargs):
         email = self.validated_data["email"]
         user = User.objects.filter(email__iexact=email).first()
+
         if user and not user.is_email_verified:
             last = (
                 EmailOTP.objects.filter(user=user, purpose=EmailOTP.PURPOSE_VERIFY)
                 .order_by("-created_at")
                 .first()
             )
+
             if last:
                 diff = (timezone.now() - last.created_at).total_seconds()
                 left = max(0, RESEND_COOLDOWN_SEC - int(diff))
@@ -281,7 +287,15 @@ class ResendVerifySerializer(serializers.Serializer):
                     )
 
             otp, raw = EmailOTP.create_otp(user, EmailOTP.PURPOSE_VERIFY, ttl_min=15)
-            send_code_email(user.email, raw, purpose="verify")
+
+            try:
+                send_code_email(user.email, raw, purpose="verify")
+                logger.info(f"OTP email sent successfully to {user.email}")
+            except Exception as e:
+                logger.error(f"Failed to send OTP email to {user.email}: {e}")
+                raise serializers.ValidationError(
+                    {"detail": "Не удалось отправить код по email. Попробуйте позже."}
+                )
 
         return {
             "detail": "Если e-mail существует — код отправлен",

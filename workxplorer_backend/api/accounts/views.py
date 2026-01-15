@@ -527,6 +527,17 @@ def dashboard_stats(request):
     )
 
 
+@extend_schema(
+    tags=["auth"],
+    request=SendEmailVerifyFromProfileSerializer,
+    responses=inline_serializer(
+        "SendEmailVerifyFromProfileResponse",
+        {
+            "detail": serializers.CharField(),
+            "seconds_left": serializers.IntegerField(),
+        },
+    ),
+)
 class SendEmailVerifyFromProfileView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -539,6 +550,21 @@ class SendEmailVerifyFromProfileView(APIView):
         return Response(s.save())
 
 
+@extend_schema(
+    tags=["auth"],
+    request=inline_serializer(
+        "VerifyEmailFromProfileRequest",
+        {
+            "code": serializers.CharField(),
+        },
+    ),
+    responses=inline_serializer(
+        "VerifyEmailFromProfileResponse",
+        {
+            "detail": serializers.CharField(),
+        },
+    ),
+)
 class VerifyEmailFromProfileView(APIView):
     permission_classes = [IsAuthenticated]
 

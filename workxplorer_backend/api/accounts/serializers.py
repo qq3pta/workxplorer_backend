@@ -439,42 +439,28 @@ class ForgotPasswordSerializer(serializers.Serializer):
         }
 
 
-class ResetPasswordSerializer(serializers.Serializer):
-    email = serializers.EmailField()
-    code = serializers.CharField(max_length=6)
-    new_password = serializers.CharField()
+class ChangePasswordSerializer(serializers.Serializer):
+    old_password = serializers.CharField(write_only=True)
+    new_password = serializers.CharField(write_only=True)
 
     def validate(self, attrs):
-        user = User.objects.filter(email__iexact=attrs["email"]).first()
-        password_validation.validate_password(attrs["new_password"], user=user)
+        user = self.context["request"].user
+
+        if not user.check_password(attrs["old_password"]):
+            raise serializers.ValidationError({"old_password": "Неверный текущий пароль"})
+
+        password_validation.validate_password(
+            attrs["new_password"],
+            user=user,
+        )
+
         return attrs
 
     def save(self, **kwargs):
-        email = self.validated_data["email"]
-        code = self.validated_data["code"]
-        newp = self.validated_data["new_password"]
-
-        user = User.objects.filter(email__iexact=email).first()
-        if not user:
-            raise serializers.ValidationError({"email": "Пользователь не найден"})
-
-        otp = (
-            EmailOTP.objects.filter(
-                user=user,
-                purpose=EmailOTP.PURPOSE_RESET,
-                is_used=False,
-                expires_at__gte=timezone.now(),
-                code=code,
-            )
-            .order_by("-created_at")
-            .first()
-        )
-        if not otp or not otp.check_and_consume(code):
-            raise serializers.ValidationError({"code": "Неверный или просроченный код"})
-
-        user.set_password(newp)
+        user = self.context["request"].user
+        user.set_password(self.validated_data["new_password"])
         user.save(update_fields=["password"])
-        return {"detail": "Пароль обновлен"}
+        return {"detail": "Пароль успешно изменён"}
 
 
 class RoleChangeSerializer(serializers.Serializer):

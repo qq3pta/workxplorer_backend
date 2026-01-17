@@ -11,7 +11,7 @@ from .views import (
     RefreshView,
     RegisterView,
     ResendVerifyView,
-    ResetPasswordView,
+    ChangePasswordView,
     SendPhoneOTPView,
     UpdateFCMTokenView,
     UpdateMeView,
@@ -41,7 +41,7 @@ urlpatterns = [
     path("change-role/", ChangeRoleView.as_view()),
     # Password reset
     path("forgot-password/", ForgotPasswordView.as_view()),
-    path("reset-password/", ResetPasswordView.as_view()),
+    path("auth/change-password/", ChangePasswordView.as_view()),
     # FCM
     path("fcm-token/", UpdateFCMTokenView.as_view()),
     path("dashboard-stats/", dashboard_stats, name="dashboard-stats"),

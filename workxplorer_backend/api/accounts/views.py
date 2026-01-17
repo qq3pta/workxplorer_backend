@@ -29,7 +29,7 @@ from .serializers import (
     MeSerializer,
     RegisterSerializer,
     ResendVerifySerializer,
-    ResetPasswordSerializer,
+    ChangePasswordSerializer,
     RoleChangeSerializer,
     SendPhoneOTPSerializer,
     UpdateMeSerializer,
@@ -333,16 +333,22 @@ class ForgotPasswordView(APIView):
 
 @extend_schema(
     tags=["auth"],
-    request=ResetPasswordSerializer,
-    responses=inline_serializer("ResetPasswordResponse", {"detail": serializers.CharField()}),
+    request=ChangePasswordSerializer,
+    responses=inline_serializer(
+        "ChangePasswordResponse",
+        {"detail": serializers.CharField()},
+    ),
 )
-class ResetPasswordView(APIView):
-    permission_classes = [AllowAny]
+class ChangePasswordView(APIView):
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        s = ResetPasswordSerializer(data=request.data)
-        s.is_valid(raise_exception=True)
-        return Response(s.save())
+        serializer = ChangePasswordSerializer(
+            data=request.data,
+            context={"request": request},
+        )
+        serializer.is_valid(raise_exception=True)
+        return Response(serializer.save())
 
 
 @extend_schema(

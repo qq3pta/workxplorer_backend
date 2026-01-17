@@ -25,3 +25,12 @@ class SupportTicket(models.Model):
 
     def __str__(self):
         return f"Ticket #{self.id} ({self.status})"
+
+
+class ConsultationRequest(models.Model):
+    email = models.EmailField(unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    is_processed = models.BooleanField(default=False)
+
+    def __str__(self):
+        return self.email

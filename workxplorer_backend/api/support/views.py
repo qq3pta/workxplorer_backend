@@ -6,8 +6,8 @@ from rest_framework.response import Response
 from rest_framework import status
 from drf_spectacular.utils import extend_schema
 
-from .models import SupportTicket
-from .serializers import SupportTicketCreateSerializer
+from .models import SupportTicket, ConsultationRequest
+from .serializers import SupportTicketCreateSerializer, ConsultationRequestSerializer
 
 
 @extend_schema(
@@ -40,5 +40,30 @@ ID: {request.user.id}
 
         return Response(
             {"detail": "Сообщение отправлено"},
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class ConsultationRequestView(APIView):
+    permission_classes = []  # публичный эндпоинт
+
+    def post(self, request):
+        serializer = ConsultationRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        consultation, created = ConsultationRequest.objects.get_or_create(
+            email=serializer.validated_data["email"]
+        )
+
+        if created:
+            send_mail(
+                subject="Новая заявка на консультацию",
+                message=f"Email: {consultation.email}",
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=["kad.noreply1@gmail.com"],
+            )
+
+        return Response(
+            {"detail": "Заявка принята"},
             status=status.HTTP_201_CREATED,
         )

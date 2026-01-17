@@ -44,8 +44,18 @@ ID: {request.user.id}
         )
 
 
+@extend_schema(
+    request=ConsultationRequestSerializer,
+    responses={
+        201: {"type": "object", "properties": {"detail": {"type": "string"}}},
+        400: {
+            "type": "object",
+            "properties": {"email": {"type": "array", "items": {"type": "string"}}},
+        },
+    },
+)
 class ConsultationRequestView(APIView):
-    permission_classes = []  # публичный эндпоинт
+    permission_classes = []
 
     def post(self, request):
         serializer = ConsultationRequestSerializer(data=request.data)

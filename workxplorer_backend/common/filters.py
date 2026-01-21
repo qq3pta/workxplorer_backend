@@ -124,7 +124,6 @@ def apply_loads_filters(qs, p):
 
             qs = qs.annotate(
                 origin_dist_km=Distance("origin_point", center) / 1000.0,
-                origin_radius_km=models.Value(radius, output_field=FloatField()),
             ).filter(origin_dist_km__lte=radius)
         except Exception:
             pass

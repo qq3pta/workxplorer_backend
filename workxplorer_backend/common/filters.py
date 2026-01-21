@@ -1,6 +1,4 @@
 from decimal import Decimal
-from django.db import models
-from django.db.models import FloatField
 
 from django.contrib.gis.db.models.functions import Distance
 from django.contrib.gis.geos import Point

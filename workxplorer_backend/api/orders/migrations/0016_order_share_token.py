@@ -4,20 +4,41 @@ from django.db import migrations, models
 import uuid
 
 
+def generate_share_tokens(apps, schema_editor):
+    Order = apps.get_model("orders", "Order")
+    for order in Order.objects.filter(share_token__isnull=True):
+        order.share_token = uuid.uuid4()
+        order.save(update_fields=["share_token"])
+
+
 class Migration(migrations.Migration):
     dependencies = [
         ("orders", "0015_alter_order_payment_method"),
     ]
 
     operations = [
+        # 1️⃣ Сначала добавляем поле БЕЗ unique и default
         migrations.AddField(
             model_name="order",
             name="share_token",
             field=models.UUIDField(
-                default=uuid.uuid4,
+                null=True,
+                blank=True,
                 editable=False,
                 help_text="Публичный токен для просмотра заказа",
+            ),
+        ),
+        # 2️⃣ Генерируем уникальные UUID для старых заказов
+        migrations.RunPython(generate_share_tokens),
+        # 3️⃣ Теперь делаем поле уникальным и с default
+        migrations.AlterField(
+            model_name="order",
+            name="share_token",
+            field=models.UUIDField(
+                default=uuid.uuid4,
                 unique=True,
+                editable=False,
+                help_text="Публичный токен для просмотра заказа",
             ),
         ),
     ]

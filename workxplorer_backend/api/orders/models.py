@@ -1,4 +1,5 @@
 import os
+import uuid
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -123,6 +124,13 @@ class Order(models.Model):
 
     invite_token = models.UUIDField(
         null=True, blank=True, unique=True, help_text="Токен приглашения перевозчика"
+    )
+
+    share_token = models.UUIDField(
+        default=uuid.uuid4,
+        unique=True,
+        editable=False,
+        help_text="Публичный токен для просмотра заказа",
     )
 
     invited_carrier = models.ForeignKey(

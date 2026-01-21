@@ -11,6 +11,8 @@ from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.generics import RetrieveAPIView
+from rest_framework.permissions import AllowAny
 
 from rest_framework.response import Response
 
@@ -447,3 +449,21 @@ class OrdersViewSet(viewsets.ModelViewSet):
             },
             status=200,
         )
+
+
+class SharedOrderView(RetrieveAPIView):
+    """
+    Публичный просмотр заказа по share_token
+    """
+
+    queryset = Order.objects.all().select_related(
+        "cargo",
+        "customer",
+        "carrier",
+        "logistic",
+        "created_by",
+        "offer",
+    )
+    serializer_class = OrderDetailSerializer
+    permission_classes = [AllowAny]
+    lookup_field = "share_token"

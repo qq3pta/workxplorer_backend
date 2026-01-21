@@ -141,6 +141,7 @@ class OrderListSerializer(serializers.ModelSerializer):
             "delivery_date",
             "documents_count",
             "created_at",
+            "share_token",
         )
         read_only_fields = (
             "id",

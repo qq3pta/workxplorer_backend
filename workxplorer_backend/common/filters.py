@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from django.contrib.gis.db.models.functions import Distance
 from django.contrib.gis.geos import Point
-from django.db.models import Q
+from django.db.models import Q, F
 
 from common.utils import convert_to_uzs
 
@@ -85,17 +85,20 @@ def apply_loads_filters(qs, p):
     min_price = p.get("min_price")
     max_price = p.get("max_price")
     currency = p.get("price_currency")
+    currency_selected = p.get("price_currency_selected")
 
-    if currency:
-        qs = qs.filter(price_currency=currency)  # ← ВОТ ЭТА СТРОКА
+    try:
+        if min_price not in (None, ""):
+            qs = qs.filter(price_uzs_anno__gte=convert_to_uzs(Decimal(min_price), currency))
+        if max_price not in (None, ""):
+            qs = qs.filter(price_uzs_anno__lte=convert_to_uzs(Decimal(max_price), currency))
+    except Exception:
+        pass
 
-        try:
-            if min_price not in (None, ""):
-                qs = qs.filter(price_uzs_anno__gte=convert_to_uzs(Decimal(min_price), currency))
-            if max_price not in (None, ""):
-                qs = qs.filter(price_uzs_anno__lte=convert_to_uzs(Decimal(max_price), currency))
-        except Exception:
-            pass
+    if currency_selected:
+        qs = qs.annotate(selected_currency=F("price_currency")).filter(
+            selected_currency=currency_selected
+        )
 
     # ======================
     # COMPANY / TEXT SEARCH

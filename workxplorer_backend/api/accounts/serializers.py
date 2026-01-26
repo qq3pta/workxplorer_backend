@@ -106,24 +106,15 @@ class VerifyPhoneOTPSerializer(serializers.Serializer):
         choices=[("verify", "verify"), ("reset", "reset")], default="verify"
     )
 
-    def validate(self, attrs):
-        phone = attrs.get("phone")
-        if not phone or not str(phone).strip():
-            raise serializers.ValidationError({"phone": "Укажите номер телефона"})
-
-        attrs["phone"] = normalize_phone_e164(phone)
-
-        return attrs
-
     def save(self, **kwargs):
         phone = self.validated_data["phone"]
         code = self.validated_data["code"]
         purpose = self.validated_data["purpose"]
 
-        # 1️⃣ Проверяет SMS (если код неверный — exception)
+        # 1️⃣ Проверяет SMS
         check_sms_otp(phone, code)
 
-        # 2️⃣ Помечаем последний OTP как использованный
+        # 2️⃣ OTP запись
         otp = (
             PhoneOTP.objects.filter(phone=phone, purpose=purpose, is_used=False)
             .order_by("-created_at")
@@ -136,10 +127,16 @@ class VerifyPhoneOTPSerializer(serializers.Serializer):
         otp.is_used = True
         otp.save(update_fields=["is_used"])
 
-        user = User.objects.filter(phone=phone).first()
-        if user:
-            user.is_phone_verified = True
-            user.save(update_fields=["is_phone_verified"])
+        # 3️⃣ Нормализуем телефон и находим пользователя
+        normalized = normalize_phone_e164(phone)
+        user = User.objects.filter(phone=normalized).first()
+
+        if not user:
+            raise serializers.ValidationError({"detail": "Пользователь с этим номером не найден"})
+
+        # 4️⃣ Помечаем verified
+        user.is_phone_verified = True
+        user.save(update_fields=["is_phone_verified"])
 
         return {"verified": True}
 

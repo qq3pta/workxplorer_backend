@@ -20,14 +20,14 @@ User = get_user_model()
 RESEND_COOLDOWN_SEC = 60
 
 
-def normalize_phone_e164(phone: str, region: str = "UZ") -> str:
+def normalize_phone_e164(phone: str, region: str | None = None) -> str:
     try:
         p = phonenumbers.parse(phone, region)
         if not phonenumbers.is_valid_number(p):
             raise serializers.ValidationError({"phone": "Неверный номер телефона"})
         return phonenumbers.format_number(p, PhoneNumberFormat.E164)
-    except phonenumbers.NumberParseException as err:
-        raise serializers.ValidationError({"phone": "Неверный номер телефона"}) from err
+    except phonenumbers.NumberParseException:
+        raise serializers.ValidationError({"phone": "Неверный номер телефона"})
 
 
 def _normalize_phone(p: str) -> str:
@@ -106,15 +106,23 @@ class VerifyPhoneOTPSerializer(serializers.Serializer):
         choices=[("verify", "verify"), ("reset", "reset")], default="verify"
     )
 
+    def validate(self, attrs):
+        phone = attrs.get("phone")
+        if not phone or not str(phone).strip():
+            raise serializers.ValidationError({"phone": "Укажите номер телефона"})
+
+        attrs["phone"] = normalize_phone_e164(phone)
+        return attrs
+
     def save(self, **kwargs):
         phone = self.validated_data["phone"]
         code = self.validated_data["code"]
         purpose = self.validated_data["purpose"]
 
-        # 1️⃣ Проверяет SMS
+        # 1️⃣ Проверяем SMS код через Twilio
         check_sms_otp(phone, code)
 
-        # 2️⃣ OTP запись
+        # 2️⃣ Проверяем OTP запись в БД
         otp = (
             PhoneOTP.objects.filter(phone=phone, purpose=purpose, is_used=False)
             .order_by("-created_at")
@@ -127,14 +135,17 @@ class VerifyPhoneOTPSerializer(serializers.Serializer):
         otp.is_used = True
         otp.save(update_fields=["is_used"])
 
-        # 3️⃣ Нормализуем телефон и находим пользователя
-        normalized = normalize_phone_e164(phone)
-        user = User.objects.filter(phone=normalized).first()
+        normalized = phone
+        digits = normalized.replace("+", "")
+
+        user = User.objects.filter(
+            Q(phone=normalized) | Q(phone=digits) | Q(phone__endswith=digits[-9:])
+        ).first()
 
         if not user:
             raise serializers.ValidationError({"detail": "Пользователь с этим номером не найден"})
 
-        # 4️⃣ Помечаем verified
+        # 4️⃣ Ставим verified
         user.is_phone_verified = True
         user.save(update_fields=["is_phone_verified"])
 

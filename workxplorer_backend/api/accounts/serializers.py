@@ -20,14 +20,14 @@ User = get_user_model()
 RESEND_COOLDOWN_SEC = 60
 
 
-def normalize_phone_e164(phone: str, region: str | None = None) -> str:
+def normalize_phone_e164(phone: str, region: str = "UZ") -> str:
     try:
         p = phonenumbers.parse(phone, region)
         if not phonenumbers.is_valid_number(p):
             raise serializers.ValidationError({"phone": "Неверный номер телефона"})
         return phonenumbers.format_number(p, PhoneNumberFormat.E164)
-    except phonenumbers.NumberParseException:
-        raise serializers.ValidationError({"phone": "Неверный номер телефона"})
+    except phonenumbers.NumberParseException as err:
+        raise serializers.ValidationError({"phone": "Неверный номер телефона"}) from err
 
 
 def _normalize_phone(p: str) -> str:

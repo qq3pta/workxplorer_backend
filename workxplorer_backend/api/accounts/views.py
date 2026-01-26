@@ -263,7 +263,7 @@ class MeView(generics.RetrieveAPIView):
     responses=MeSerializer,
 )
 class UpdateMeView(generics.UpdateAPIView):
-    permission_classes = [IsAuthenticatedAndVerified]
+    permission_classes = [IsAuthenticated]
     serializer_class = UpdateMeSerializer
 
     def get_object(self):

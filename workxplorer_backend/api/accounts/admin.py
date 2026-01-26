@@ -20,13 +20,14 @@ class UserAdmin(admin.ModelAdmin):
         "username",
         "email",
         "role",
+        "is_phone_verified",
         "is_email_verified",
         "rating_as_customer",
         "rating_as_carrier",
         "profile_country",
         "profile_city",
     )
-    list_filter = ("role", "is_email_verified")
+    list_filter = ("role", "is_phone_verified")
     search_fields = (
         "username",
         "email",

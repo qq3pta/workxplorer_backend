@@ -13,21 +13,7 @@ __all__ = [
 
 
 def _is_user_verified(user) -> bool:
-    candidate_flags = (
-        "is_verified",
-        "email_verified",
-        "is_email_verified",
-        "phone_verified",
-        "is_phone_verified",
-    )
-    saw_any_flag = False
-    for name in candidate_flags:
-        val = getattr(user, name, None)
-        if val is True:
-            return True
-        if val is False:
-            saw_any_flag = True
-    return False if saw_any_flag else True
+    return bool(getattr(user, "is_phone_verified", False))
 
 
 class IsAuthenticatedAndVerified(BasePermission):

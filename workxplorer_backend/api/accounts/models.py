@@ -27,6 +27,7 @@ class User(AbstractUser):
     rating_as_customer = models.FloatField(default=0)
     rating_as_carrier = models.FloatField(default=0)
 
+    is_phone_verified = models.BooleanField(default=False)
     is_email_verified = models.BooleanField(default=False)
     is_accept_policy = models.BooleanField(default=False)
     policy_accepted_at = models.DateTimeField(null=True, blank=True)

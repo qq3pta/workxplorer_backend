@@ -120,7 +120,7 @@ class VerifyPhoneOTPSerializer(serializers.Serializer):
         code = self.validated_data["code"]
         purpose = self.validated_data["purpose"]
 
-        # 1️⃣ Проверяет Twilio (если код неверный — exception)
+        # 1️⃣ Проверяет SMS (если код неверный — exception)
         check_sms_otp(phone, code)
 
         # 2️⃣ Помечаем последний OTP как использованный
@@ -135,6 +135,11 @@ class VerifyPhoneOTPSerializer(serializers.Serializer):
 
         otp.is_used = True
         otp.save(update_fields=["is_used"])
+
+        user = User.objects.filter(phone=phone).first()
+        if user:
+            user.is_phone_verified = True
+            user.save(update_fields=["is_phone_verified"])
 
         return {"verified": True}
 
@@ -215,7 +220,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         user = User.objects.create(
             role=role,
             is_active=True,
-            is_email_verified=False,
+            is_email_verified=True,
             **validated,
         )
         user.set_password(pwd)
@@ -346,6 +351,7 @@ class MeSerializer(serializers.ModelSerializer):
             "role",
             "rating_as_customer",
             "rating_as_carrier",
+            "is_phone_verified",
             "is_email_verified",
             "date_joined",
             "profile",

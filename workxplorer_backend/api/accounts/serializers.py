@@ -135,19 +135,11 @@ class VerifyPhoneOTPSerializer(serializers.Serializer):
         otp.is_used = True
         otp.save(update_fields=["is_used"])
 
-        normalized = phone
-        digits = normalized.replace("+", "")
-
-        user = User.objects.filter(
-            Q(phone=normalized) | Q(phone=digits) | Q(phone__endswith=digits[-9:])
-        ).first()
-
-        if not user:
-            raise serializers.ValidationError({"detail": "Пользователь с этим номером не найден"})
-
-        # 4️⃣ Ставим verified
-        user.is_phone_verified = True
-        user.save(update_fields=["is_phone_verified"])
+        # 3️⃣ Если пользователь существует — отмечаем verified
+        user = User.objects.filter(phone=phone).first()
+        if user:
+            user.is_phone_verified = True
+            user.save(update_fields=["is_phone_verified"])
 
         return {"verified": True}
 

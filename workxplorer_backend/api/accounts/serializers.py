@@ -220,7 +220,8 @@ class RegisterSerializer(serializers.ModelSerializer):
         user = User.objects.create(
             role=role,
             is_active=True,
-            is_email_verified=True,
+            is_email_verified=False,
+            is_phone_verified=True,
             **validated,
         )
         user.set_password(pwd)

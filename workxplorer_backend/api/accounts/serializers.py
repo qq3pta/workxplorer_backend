@@ -185,7 +185,8 @@ class RegisterSerializer(serializers.ModelSerializer):
 
         attrs["phone"] = normalize_phone_e164(phone)
 
-        if User.objects.filter(email__iexact=attrs["email"]).exists():
+        email = attrs.get("email")
+        if email and User.objects.filter(email__iexact=email).exists():
             raise serializers.ValidationError({"email": "Этот e-mail уже зарегистрирован"})
         if User.objects.filter(username__iexact=attrs["username"]).exists():
             raise serializers.ValidationError({"username": "Этот логин уже занят"})

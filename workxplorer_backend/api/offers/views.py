@@ -543,12 +543,14 @@ class OfferViewSet(ModelViewSet):
 
         # Если принял перевозчик — водитель известен
         if accepted_by.role == "CARRIER":
-            status = Order.OrderStatus.PENDING
             carrier = accepted_by
+            status = Order.OrderStatus.PENDING
+        elif accepted_by.role == "LOGISTIC":
+            # Логист принял → проверяем, назначен ли перевозчик в оффере
+            carrier = offer.carrier
+            status = Order.OrderStatus.PENDING if carrier else Order.OrderStatus.NO_DRIVER
         else:
-            # Логист принял → водитель неизвестен
-            status = Order.OrderStatus.NO_DRIVER
-            carrier = None
+            raise serializers.ValidationError("Пользователь не может акцептить этот оффер")
 
         order = Order.objects.create(
             offer=offer,
@@ -560,8 +562,9 @@ class OfferViewSet(ModelViewSet):
             status=status,
             currency=offer.currency,
             price_total=offer.price,
+            driver_price=getattr(offer, "driver_price", None) or offer.price,
             payment_method=offer.payment_method,
-            route_distance_km=offer.route_distance_km,
+            route_distance_km=getattr(offer, "route_distance_km", 0),
         )
 
         return order

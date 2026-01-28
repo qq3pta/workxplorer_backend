@@ -357,6 +357,7 @@ class OrdersViewSet(viewsets.ModelViewSet):
         order.driver_price = driver_price
         order.invited_carrier = carrier
         order.invite_token = uuid.uuid4()
+        order.status = Order.OrderStatus.PENDING
         order.save(update_fields=["carrier", "driver_price", "invited_carrier", "invite_token"])
 
         return Response(
@@ -424,7 +425,7 @@ class OrdersViewSet(viewsets.ModelViewSet):
 
         order.carrier = user
         order.invite_token = None
-        order.status = Order.OrderStatus.NO_DRIVER
+        order.status = Order.OrderStatus.PENDING
         order.carrier_accepted_terms = False
         order.save(
             update_fields=[

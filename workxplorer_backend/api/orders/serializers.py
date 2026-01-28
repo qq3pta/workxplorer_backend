@@ -6,6 +6,7 @@ from rest_framework import serializers
 
 from api.loads.choices import Currency
 from api.payments.serializers import PaymentSerializer
+from api.ratings.models import UserRating
 
 from .models import Order, OrderDocument, OrderStatusHistory
 
@@ -107,6 +108,7 @@ class OrderListSerializer(serializers.ModelSerializer):
     delivery_date = serializers.DateField(source="cargo.delivery_date", read_only=True)
 
     documents_count = serializers.SerializerMethodField()
+    rated = serializers.SerializerMethodField()
 
     class Meta:
         model = Order
@@ -140,6 +142,7 @@ class OrderListSerializer(serializers.ModelSerializer):
             "destination_address",
             "delivery_date",
             "documents_count",
+            "rated",
             "created_at",
             "share_token",
         )
@@ -151,7 +154,27 @@ class OrderListSerializer(serializers.ModelSerializer):
             "driver_status",
             "cargo_id",
             "price_per_km",
+            "rated",
         )
+
+    def get_rated(self, obj):
+        """
+        Возвращает рейтинги участников заказа по ролям:
+        {
+            "by_customer": {"value": 5, "rating_id": 12},
+            "by_carrier": {"value": 4, "rating_id": 13},
+            "by_logistic": {"value": 5, "rating_id": 14},
+        }
+        """
+        result = {}
+        ratings = getattr(obj, "ratings", None)  # связанное поле UserRating
+        if ratings:
+            for r in ratings.all():
+                if not r.rated_user:
+                    continue
+                role_key = getattr(r.rated_user, "role", "").lower()  # customer/logistic/carrier
+                result[f"by_{role_key}"] = {"value": r.score, "rating_id": r.id}
+        return result
 
     # --------------------------
     # HELPERS

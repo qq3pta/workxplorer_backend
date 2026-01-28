@@ -6,7 +6,6 @@ from rest_framework import serializers
 
 from api.loads.choices import Currency
 from api.payments.serializers import PaymentSerializer
-from api.ratings.models import UserRating
 
 from .models import Order, OrderDocument, OrderStatusHistory
 

@@ -146,6 +146,7 @@ class VerifyPhoneOTPSerializer(serializers.Serializer):
 
 class RegisterSerializer(serializers.ModelSerializer):
     phone = serializers.CharField()
+    email = serializers.EmailField(required=False, allow_blank=True, allow_null=True)
     password = serializers.CharField(write_only=True)
     password2 = serializers.CharField(write_only=True)
     role = serializers.ChoiceField(choices=UserRole.choices, required=False)

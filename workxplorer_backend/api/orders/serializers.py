@@ -249,13 +249,17 @@ class OrderListSerializer(serializers.ModelSerializer):
 class OrderDetailSerializer(OrderListSerializer):
     documents = OrderDocumentSerializer(many=True, read_only=True)
     payment = serializers.SerializerMethodField()
+    driver_price = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
+    logistic_margin = serializers.SerializerMethodField()
 
     class Meta(OrderListSerializer.Meta):
         fields = OrderListSerializer.Meta.fields + (
             "loading_datetime",
             "unloading_datetime",
             "documents",
-            "payment",  # ← ВОТ ЭТО
+            "payment",
+            "driver_price",
+            "logistic_margin",
         )
 
     def get_payment(self, obj):
@@ -263,6 +267,11 @@ class OrderDetailSerializer(OrderListSerializer):
         if not payment:
             return None
         return PaymentSerializer(payment).data
+
+    def get_logistic_margin(self, obj):
+        if obj.driver_price:
+            return float(obj.price_total) - float(obj.driver_price)
+        return None
 
 
 # --------------------------
@@ -314,3 +323,10 @@ class OrderStatusHistorySerializer(serializers.ModelSerializer):
 
 class InviteByIdSerializer(serializers.Serializer):
     driver_id = serializers.IntegerField(required=True)
+    driver_price = serializers.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        required=True,
+        min_value=0,
+        help_text="Сумма, которую получит водитель",
+    )

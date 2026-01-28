@@ -16,7 +16,7 @@ class UserRole(models.TextChoices):
 
 
 class User(AbstractUser):
-    email = models.EmailField(unique=True)
+    email = models.EmailField(unique=True, blank=True, null=True)
     phone = models.CharField(max_length=20, unique=True, blank=True, null=True, default=None)
 
     company_name = models.CharField(max_length=255, blank=True)
@@ -33,8 +33,6 @@ class User(AbstractUser):
     policy_accepted_at = models.DateTimeField(null=True, blank=True)
 
     fcm_token = models.CharField(max_length=255, blank=True, null=True)
-
-    REQUIRED_FIELDS = ["email"]
 
     class Meta:
         indexes = [

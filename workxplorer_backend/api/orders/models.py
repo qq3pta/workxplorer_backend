@@ -109,6 +109,15 @@ class Order(models.Model):
         default=0,
         validators=[MinValueValidator(0)],
     )
+
+    driver_price = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Сумма, которую получит водитель",
+    )
+
     route_distance_km = models.DecimalField(
         max_digits=10,
         decimal_places=2,

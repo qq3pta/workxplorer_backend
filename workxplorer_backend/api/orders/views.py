@@ -312,34 +312,23 @@ class OrdersViewSet(viewsets.ModelViewSet):
         user = request.user
 
         if order.created_by_id != user.id:
-            return Response(
-                {"detail": "Можно приглашать только в свои заказы"},
-                status=403,
-            )
+            return Response({"detail": "Можно приглашать только в свои заказы"}, status=403)
 
         if order.status != Order.OrderStatus.NO_DRIVER:
-            return Response(
-                {"detail": "У заказа уже есть водитель"},
-                status=400,
-            )
+            return Response({"detail": "У заказа уже есть водитель"}, status=400)
 
         ser = InviteByIdSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
 
         driver_id = ser.validated_data["driver_id"]
+        driver_price = ser.validated_data["driver_price"]  # ← новое поле
 
         try:
             carrier = User.objects.get(id=driver_id, role="CARRIER")
         except User.DoesNotExist:
-            return Response(
-                {"detail": "Перевозчик с таким ID не найден"},
-                status=404,
-            )
+            return Response({"detail": "Перевозчик с таким ID не найден"}, status=404)
 
-        offer = Offer.objects.filter(
-            cargo=order.cargo,
-            carrier=carrier,
-        ).first()
+        offer = Offer.objects.filter(cargo=order.cargo, carrier=carrier).first()
 
         if not offer:
             offer = Offer.objects.create(
@@ -349,13 +338,11 @@ class OrdersViewSet(viewsets.ModelViewSet):
                 deal_type=Offer.DealType.CUSTOMER_CARRIER,
             )
 
-        # 🔥 КРИТИЧНО: СБРОС СОСТОЯНИЯ
         offer.is_active = True
         offer.accepted_by_customer = False
         offer.accepted_by_carrier = False
         offer.accepted_by_logistic = False
         offer.response_status = None
-
         offer.save(
             update_fields=[
                 "is_active",
@@ -366,22 +353,19 @@ class OrdersViewSet(viewsets.ModelViewSet):
             ]
         )
 
-        order.offer = offer
-        order.save(update_fields=["offer"])
+        order.carrier = carrier
+        order.driver_price = driver_price
         order.invited_carrier = carrier
+        order.invite_token = uuid.uuid4()
+        order.save(update_fields=["carrier", "driver_price", "invited_carrier", "invite_token"])
 
-        # Генерируем токен
-        token = uuid.uuid4()
-        order.invite_token = token
-        order.save(update_fields=["invited_carrier", "invite_token"])
-
-        # ✅ ВОТ ЭТОГО НЕ ХВАТАЛО
         return Response(
             {
                 "detail": "Перевозчик успешно приглашён",
                 "order_id": order.id,
                 "carrier_id": carrier.id,
-                "invite_token": str(token),
+                "invite_token": str(order.invite_token),
+                "driver_price": float(order.driver_price),
             },
             status=200,
         )
@@ -397,15 +381,27 @@ class OrdersViewSet(viewsets.ModelViewSet):
         if order.status != Order.OrderStatus.NO_DRIVER:
             return Response({"detail": "У заказа уже есть водитель"}, status=400)
 
+        driver_price = request.data.get("driver_price")
+        if driver_price is not None:
+            order.driver_price = driver_price
+
         # генерируем токен
         token = uuid.uuid4()
 
         # сохраняем токен в заказе (опционально)
         order.invite_token = token
-        order.save(update_fields=["invite_token"])
+        order.save(
+            update_fields=["invite_token", "driver_price"] if driver_price else ["invite_token"]
+        )
 
         # возвращаем только токен, фронт сам соберет URL
-        return Response({"invite_token": str(token)}, status=200)
+        return Response(
+            {
+                "invite_token": str(token),
+                "driver_price": float(order.driver_price) if driver_price else None,
+            },
+            status=200,
+        )
 
     @action(detail=False, methods=["post"], url_path="accept-invite")
     def accept_invite(self, request):
@@ -426,12 +422,10 @@ class OrdersViewSet(viewsets.ModelViewSet):
         if user.role != "CARRIER":
             return Response({"detail": "Только перевозчики могут принять заказ"}, status=403)
 
-        # ✅ ТОЛЬКО ORDER
         order.carrier = user
         order.invite_token = None
         order.status = Order.OrderStatus.NO_DRIVER
         order.carrier_accepted_terms = False
-
         order.save(
             update_fields=[
                 "carrier",
@@ -446,6 +440,7 @@ class OrdersViewSet(viewsets.ModelViewSet):
                 "detail": "Инвайт принят. Подтвердите оффер.",
                 "order_id": order.id,
                 "next_action": "accept_offer",
+                "driver_price": float(order.driver_price) if order.driver_price else None,
             },
             status=200,
         )

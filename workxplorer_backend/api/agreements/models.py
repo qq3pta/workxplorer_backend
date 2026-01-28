@@ -77,7 +77,7 @@ class Agreement(models.Model):
             # --- CUSTOMER SNAPSHOT ---
             "customer_id": customer.id,
             "customer_full_name": customer.get_full_name(),
-            "customer_email": customer.email,
+            "customer_email": customer.email or "",
             "customer_phone": customer.phone,
             "customer_registered_at": customer.date_joined,
         }
@@ -88,7 +88,7 @@ class Agreement(models.Model):
                 {
                     "carrier_id": carrier.id,
                     "carrier_full_name": carrier.get_full_name(),
-                    "carrier_email": carrier.email,
+                    "carrier_email": carrier.email or "",
                     "carrier_phone": carrier.phone,
                     "carrier_registered_at": carrier.date_joined,
                 }
@@ -100,7 +100,7 @@ class Agreement(models.Model):
                 {
                     "logistic_id": logistic.id,
                     "logistic_full_name": logistic.get_full_name(),
-                    "logistic_email": logistic.email,
+                    "logistic_email": logistic.email or "",
                     "logistic_phone": logistic.phone,
                     "logistic_registered_at": logistic.date_joined,
                 }

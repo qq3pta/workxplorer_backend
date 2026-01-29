@@ -42,7 +42,7 @@ class UserRating(models.Model):
     class Meta:
         verbose_name = _("Оценка пользователя")
         verbose_name_plural = _("Оценки пользователей")
-        unique_together = ("rated_user", "order")
+        unique_together = ("rated_by", "rated_user", "order")
         ordering = ["-created_at"]
         indexes = [
             models.Index(fields=["rated_user"]),

@@ -52,8 +52,8 @@ class UserRatingSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Пользователь не участвует в заказе.")
 
         # 5. Проверка: уникальность оценки
-        if UserRating.objects.filter(rated_user=rated_user, order=order).exists():
-            raise serializers.ValidationError("Пользователь уже был оценён в этом заказе.")
+        if UserRating.objects.filter(rated_user=rated_user, rated_by=user, order=order).exists():
+            raise serializers.ValidationError("Вы уже оценивали этого пользователя в этом заказе.")
 
         return attrs
 

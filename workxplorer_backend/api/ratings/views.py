@@ -45,7 +45,6 @@ class UserRatingViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-
         qs = super().get_queryset()
 
         rated_user = self.request.query_params.get("rated_user")
@@ -56,7 +55,12 @@ class UserRatingViewSet(viewsets.ModelViewSet):
         if rated_by:
             qs = qs.filter(rated_by_id=rated_by)
 
-        return qs.filter(Q(order__customer=user) | Q(order__carrier=user) | Q(order__logistic=user))
+        qs = qs.filter(Q(order__customer=user) | Q(order__carrier=user) | Q(order__logistic=user))
+
+        if self.action in ["update", "partial_update", "destroy"]:
+            qs = qs.filter(rated_by=user)
+
+        return qs
 
     def perform_create(self, serializer):
         serializer.save()

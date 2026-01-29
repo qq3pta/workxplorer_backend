@@ -159,21 +159,37 @@ class OrderListSerializer(serializers.ModelSerializer):
 
     def get_rated(self, obj):
         """
-        Возвращает рейтинги участников заказа по ролям:
-        {
-            "by_customer": {"value": 5, "rating_id": 12},
-            "by_carrier": {"value": 4, "rating_id": 13},
-            "by_logistic": {"value": 5, "rating_id": 14},
-        }
+        rated: кто → кому → score + rating_id
         """
-        result = {}
+        result = {
+            "by_customer": {},
+            "by_carrier": {},
+            "by_logistic": {},
+        }
+
         ratings = getattr(obj, "ratings", None)
-        if ratings:
-            for r in ratings.all():
-                if not r.rated_user:
-                    continue
-                role_key = getattr(r.rated_user, "role", "").lower()  # customer/logistic/carrier
-                result[f"by_{role_key}"] = {"value": r.score, "rating_id": r.id}
+        if not ratings:
+            return result
+
+        role_map = {
+            "CUSTOMER": "by_customer",
+            "CARRIER": "by_carrier",
+            "LOGISTIC": "by_logistic",
+        }
+
+        for r in ratings.all():
+            if not r.rated_by or not r.rated_user:
+                continue
+
+            from_role = role_map.get(getattr(r.rated_by, "role", None))
+            to_role = getattr(r.rated_user, "role", "").lower()
+
+            if not from_role or not to_role:
+                continue
+
+            result[from_role][f"{to_role}_value"] = r.score
+            result[from_role][f"{to_role}_rating_id"] = r.id
+
         return result
 
     # --------------------------

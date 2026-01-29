@@ -478,6 +478,14 @@ class OrdersViewSet(viewsets.ModelViewSet):
             ]
         )
 
+        Offer.objects.filter(
+            cargo=order.cargo,
+            carrier=user,
+        ).update(
+            is_active=False,
+            accepted_by_carrier=True,
+        )
+
         return Response(
             {
                 "detail": "Инвайт принят. Подтвердите оффер.",
@@ -522,6 +530,14 @@ class OrdersViewSet(viewsets.ModelViewSet):
                 "carrier_accepted_terms",
                 "status",
             ]
+        )
+
+        Offer.objects.filter(
+            cargo=order.cargo,
+            carrier=user,
+        ).update(
+            is_active=False,
+            response_status=Offer.ResponseStatus.REJECTED,
         )
 
         return Response(

@@ -21,13 +21,15 @@ class UserRatingSerializer(serializers.ModelSerializer):
             "comment",
             "created_at",
         ]
-        read_only_fields = ["id", "rated_by", "created_at"]
+        read_only_fields = ["id", "rated_by", "rated_user", "order", "created_at"]
 
     def validate(self, attrs):
         request = self.context["request"]
         user = request.user
-        order = attrs["order"]
-        rated_user = attrs["rated_user"]
+        order = attrs.get("order") or (self.instance.order if self.instance else None)
+        rated_user = attrs.get("rated_user") or (
+            self.instance.rated_user if self.instance else None
+        )
 
         # 1. Определяем список всех участников, которым разрешено давать оценку
         # Используем set() для уникальности, хотя можно и list, но set безопаснее
@@ -52,7 +54,13 @@ class UserRatingSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Пользователь не участвует в заказе.")
 
         # 5. Проверка: уникальность оценки
-        if UserRating.objects.filter(rated_user=rated_user, rated_by=user, order=order).exists():
+        qs = UserRating.objects.filter(rated_user=rated_user, rated_by=user, order=order)
+
+        # Если UPDATE — исключаем текущую запись
+        if self.instance:
+            qs = qs.exclude(pk=self.instance.pk)
+
+        if qs.exists():
             raise serializers.ValidationError("Вы уже оценивали этого пользователя в этом заказе.")
 
         return attrs

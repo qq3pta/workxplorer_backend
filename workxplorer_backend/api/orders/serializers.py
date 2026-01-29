@@ -166,7 +166,7 @@ class OrderListSerializer(serializers.ModelSerializer):
         }
         """
         result = {}
-        ratings = getattr(obj, "ratings", None)  # связанное поле UserRating
+        ratings = getattr(obj, "ratings", None)
         if ratings:
             for r in ratings.all():
                 if not r.rated_user:

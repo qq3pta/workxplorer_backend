@@ -118,6 +118,22 @@ class Order(models.Model):
         help_text="Сумма, которую получит водитель",
     )
 
+    driver_currency = models.CharField(
+        max_length=3,
+        choices=Currency.choices,
+        null=True,
+        blank=True,
+        help_text="Валюта выплаты водителю",
+    )
+
+    driver_payment_method = models.CharField(
+        max_length=20,
+        choices=PaymentMethod.choices,
+        null=True,
+        blank=True,
+        help_text="Метод оплаты водителю",
+    )
+
     route_distance_km = models.DecimalField(
         max_digits=10,
         decimal_places=2,

@@ -487,6 +487,61 @@ class OrdersViewSet(viewsets.ModelViewSet):
             status=200,
         )
 
+    @action(
+        detail=False,
+        methods=["get"],
+        url_path="invite-preview",
+        permission_classes=[AllowAny],
+    )
+    def invite_preview(self, request):
+        token = request.query_params.get("token")
+
+        if not token:
+            return Response({"detail": "token обязателен"}, status=400)
+
+        try:
+            order = Order.objects.select_related("cargo", "customer", "logistic", "created_by").get(
+                invite_token=token
+            )
+        except Order.DoesNotExist:
+            return Response({"detail": "Инвайт недействителен или истёк"}, status=404)
+
+        cargo = order.cargo
+
+        # Кто пригласил (приоритет: логист → created_by → заказчик)
+        inviter = order.logistic or order.created_by or order.customer
+
+        inviter_data = None
+        if inviter:
+            inviter_data = {
+                "id": inviter.id,
+                "role": getattr(inviter, "role", None),
+                "name": inviter.get_full_name() or inviter.username,
+                "company": getattr(inviter, "company_name", None),
+            }
+
+        return Response(
+            {
+                "order_id": order.id,
+                # Маршрут и даты
+                "origin_city": getattr(cargo, "origin_city", None),
+                "destination_city": getattr(cargo, "destination_city", None),
+                "load_date": getattr(cargo, "load_date", None),
+                "delivery_date": getattr(cargo, "delivery_date", None),
+                "route_distance_km": getattr(order, "route_distance_km", None),
+                # Груз
+                "weight_kg": getattr(cargo, "weight_kg", None),
+                "transport_type": getattr(cargo, "transport_type", None),
+                # Кто пригласил
+                "inviter": inviter_data,
+                # Условия водителю
+                "driver_price": float(order.driver_price) if order.driver_price else None,
+                "driver_currency": getattr(order, "driver_currency", None),
+                "driver_payment_method": getattr(order, "driver_payment_method", None),
+            },
+            status=200,
+        )
+
 
 class SharedOrderView(RetrieveAPIView):
     """

@@ -105,6 +105,12 @@ class Offer(models.Model):
         default=PaymentMethod.CASH,
     )
 
+    driver_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+
+    driver_currency = models.CharField(max_length=10, null=True, blank=True)
+
+    driver_payment_method = models.CharField(max_length=50, null=True, blank=True)
+
     message = models.TextField(blank=True)
 
     accepted_by_customer = models.BooleanField(default=False)

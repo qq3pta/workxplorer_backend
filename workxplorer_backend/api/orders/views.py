@@ -367,7 +367,7 @@ class OrdersViewSet(viewsets.ModelViewSet):
 
         # унифицировано с accept_invite
         order.carrier_accepted_terms = False
-        order.status = Order.OrderStatus.NO_DRIVER
+        order.status = Order.OrderStatus.PENDING
 
         order.save(
             update_fields=[

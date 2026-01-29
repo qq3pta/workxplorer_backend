@@ -356,7 +356,6 @@ class OrdersViewSet(viewsets.ModelViewSet):
             ]
         )
 
-        order.carrier = carrier
         order.driver_price = driver_price
 
         # сохраняем в реальные поля модели
@@ -368,11 +367,10 @@ class OrdersViewSet(viewsets.ModelViewSet):
 
         # унифицировано с accept_invite
         order.carrier_accepted_terms = False
-        order.status = Order.OrderStatus.PENDING
+        order.status = Order.OrderStatus.NO_DRIVER
 
         order.save(
             update_fields=[
-                "carrier",
                 "driver_price",
                 "driver_currency",
                 "driver_payment_method",
@@ -468,11 +466,13 @@ class OrdersViewSet(viewsets.ModelViewSet):
             return Response({"detail": "Только перевозчики могут принять заказ"}, status=403)
 
         order.carrier = user
+        order.invited_carrier = None
         order.invite_token = None
         order.carrier_accepted_terms = False
         order.save(
             update_fields=[
                 "carrier",
+                "invited_carrier",
                 "invite_token",
                 "carrier_accepted_terms",
             ]
@@ -485,6 +485,47 @@ class OrdersViewSet(viewsets.ModelViewSet):
                 "next_action": "accept_offer",
                 "driver_price": float(order.driver_price) if order.driver_price else None,
             },
+            status=200,
+        )
+
+    @action(detail=False, methods=["post"], url_path="decline-invite")
+    def decline_invite(self, request):
+        token = request.data.get("token")
+        user = request.user
+
+        if not token:
+            return Response({"detail": "token обязателен"}, status=400)
+
+        try:
+            order = Order.objects.get(invite_token=token)
+        except Order.DoesNotExist:
+            return Response({"detail": "Инвайт не найден или уже недействителен"}, status=404)
+
+        # только перевозчик может отказаться
+        if user.role != "CARRIER":
+            return Response({"detail": "Только перевозчик может отказаться от инвайта"}, status=403)
+
+        # защита: отказ только если инвайт предназначен ему
+        if order.invited_carrier_id and order.invited_carrier_id != user.id:
+            return Response({"detail": "Этот инвайт предназначен другому перевозчику"}, status=403)
+
+        # очищаем инвайт
+        order.invited_carrier = None
+        order.invite_token = None
+        order.carrier_accepted_terms = False
+        order.status = Order.OrderStatus.NO_DRIVER
+
+        order.save(
+            update_fields=[
+                "invited_carrier",
+                "invite_token",
+                "carrier_accepted_terms",
+                "status",
+            ]
+        )
+
+        return Response(
+            {"detail": "Вы отказались от заказа"},
             status=200,
         )
 

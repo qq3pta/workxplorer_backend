@@ -366,3 +366,28 @@ class InviteByIdSerializer(serializers.Serializer):
         required=True,
         help_text="Способ оплаты водителю",
     )
+
+
+class InvitePreviewSerializer(serializers.Serializer):
+    order_id = serializers.IntegerField()
+
+    origin_city = serializers.CharField(allow_null=True)
+    destination_city = serializers.CharField(allow_null=True)
+
+    load_date = serializers.DateField(allow_null=True)
+    delivery_date = serializers.DateField(allow_null=True)
+
+    route_distance_km = serializers.DecimalField(max_digits=10, decimal_places=2, allow_null=True)
+
+    weight_kg = serializers.IntegerField(allow_null=True)
+    transport_type = serializers.CharField(allow_null=True)
+
+    inviter = serializers.DictField(allow_null=True)
+
+    driver_price = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        allow_null=True,
+    )
+    driver_currency = serializers.CharField(allow_null=True)
+    driver_payment_method = serializers.CharField(allow_null=True)

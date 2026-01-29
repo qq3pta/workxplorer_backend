@@ -26,6 +26,7 @@ from .serializers import (
     OrderDriverStatusUpdateSerializer,
     OrderListSerializer,
     OrderStatusHistorySerializer,
+    InvitePreviewSerializer,
 )
 
 User = get_user_model()
@@ -497,7 +498,7 @@ class OrdersViewSet(viewsets.ModelViewSet):
                 location=OpenApiParameter.QUERY,
             )
         ],
-        responses={200: dict},
+        responses={200: InvitePreviewSerializer},
     )
     @action(
         detail=False,
@@ -530,23 +531,23 @@ class OrdersViewSet(viewsets.ModelViewSet):
                 "company": getattr(inviter, "company_name", None),
             }
 
-        return Response(
-            {
-                "order_id": order.id,
-                "origin_city": getattr(cargo, "origin_city", None),
-                "destination_city": getattr(cargo, "destination_city", None),
-                "load_date": getattr(cargo, "load_date", None),
-                "delivery_date": getattr(cargo, "delivery_date", None),
-                "route_distance_km": getattr(order, "route_distance_km", None),
-                "weight_kg": getattr(cargo, "weight_kg", None),
-                "transport_type": getattr(cargo, "transport_type", None),
-                "inviter": inviter_data,
-                "driver_price": float(order.driver_price) if order.driver_price else None,
-                "driver_currency": getattr(order, "driver_currency", None),
-                "driver_payment_method": getattr(order, "driver_payment_method", None),
-            },
-            status=200,
-        )
+        data = {
+            "order_id": order.id,
+            "origin_city": getattr(cargo, "origin_city", None),
+            "destination_city": getattr(cargo, "destination_city", None),
+            "load_date": getattr(cargo, "load_date", None),
+            "delivery_date": getattr(cargo, "delivery_date", None),
+            "route_distance_km": getattr(order, "route_distance_km", None),
+            "weight_kg": getattr(cargo, "weight_kg", None),
+            "transport_type": getattr(cargo, "transport_type", None),
+            "inviter": inviter_data,
+            "driver_price": order.driver_price,
+            "driver_currency": getattr(order, "driver_currency", None),
+            "driver_payment_method": getattr(order, "driver_payment_method", None),
+        }
+
+        serializer = InvitePreviewSerializer(data)
+        return Response(serializer.data, status=200)
 
 
 class SharedOrderView(RetrieveAPIView):

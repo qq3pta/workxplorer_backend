@@ -5,7 +5,7 @@ from django.db.models import Q, F
 from common.utils import convert_to_uzs
 from django.contrib.auth import get_user_model
 from django.db import models
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import extend_schema, OpenApiParameter
 from rest_framework import status as http_status
 from rest_framework import viewsets
 from rest_framework.decorators import action
@@ -487,6 +487,18 @@ class OrdersViewSet(viewsets.ModelViewSet):
             status=200,
         )
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="token",
+                description="Invite token (UUID)",
+                required=True,
+                type=str,
+                location=OpenApiParameter.QUERY,
+            )
+        ],
+        responses={200: dict},
+    )
     @action(
         detail=False,
         methods=["get"],
@@ -507,8 +519,6 @@ class OrdersViewSet(viewsets.ModelViewSet):
             return Response({"detail": "Инвайт недействителен или истёк"}, status=404)
 
         cargo = order.cargo
-
-        # Кто пригласил (приоритет: логист → created_by → заказчик)
         inviter = order.logistic or order.created_by or order.customer
 
         inviter_data = None
@@ -523,18 +533,14 @@ class OrdersViewSet(viewsets.ModelViewSet):
         return Response(
             {
                 "order_id": order.id,
-                # Маршрут и даты
                 "origin_city": getattr(cargo, "origin_city", None),
                 "destination_city": getattr(cargo, "destination_city", None),
                 "load_date": getattr(cargo, "load_date", None),
                 "delivery_date": getattr(cargo, "delivery_date", None),
                 "route_distance_km": getattr(order, "route_distance_km", None),
-                # Груз
                 "weight_kg": getattr(cargo, "weight_kg", None),
                 "transport_type": getattr(cargo, "transport_type", None),
-                # Кто пригласил
                 "inviter": inviter_data,
-                # Условия водителю
                 "driver_price": float(order.driver_price) if order.driver_price else None,
                 "driver_currency": getattr(order, "driver_currency", None),
                 "driver_payment_method": getattr(order, "driver_payment_method", None),

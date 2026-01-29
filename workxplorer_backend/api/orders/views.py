@@ -357,22 +357,28 @@ class OrdersViewSet(viewsets.ModelViewSet):
 
         order.carrier = carrier
         order.driver_price = driver_price
-        order.driver_currency = driver_currency
-        order.driver_payment_method = driver_payment_method
+
+        # сохраняем в реальные поля модели
+        order.currency = driver_currency
+        order.payment_method = driver_payment_method
+
         order.invited_carrier = carrier
         order.invite_token = uuid.uuid4()
+
+        # унифицировано с accept_invite
         order.carrier_accepted_terms = False
         order.status = Order.OrderStatus.NO_DRIVER
+
         order.save(
             update_fields=[
                 "carrier",
                 "driver_price",
-                "driver_currency",
-                "driver_payment_method",
-                "carrier_accepted_terms",
-                "status",
+                "currency",
+                "payment_method",
                 "invited_carrier",
                 "invite_token",
+                "carrier_accepted_terms",
+                "status",
             ]
         )
 
@@ -383,8 +389,8 @@ class OrdersViewSet(viewsets.ModelViewSet):
                 "carrier_id": carrier.id,
                 "invite_token": str(order.invite_token),
                 "driver_price": float(order.driver_price),
-                "driver_currency": order.driver_currency,
-                "driver_payment_method": order.driver_payment_method,
+                "driver_currency": order.currency,
+                "driver_payment_method": order.payment_method,
             },
             status=200,
         )
@@ -408,10 +414,10 @@ class OrdersViewSet(viewsets.ModelViewSet):
             order.driver_price = driver_price
 
         if driver_currency is not None:
-            order.driver_currency = driver_currency
+            order.currency = driver_currency
 
         if driver_payment_method is not None:
-            order.driver_payment_method = driver_payment_method
+            order.payment_method = driver_payment_method
 
         # генерируем токен
         token = uuid.uuid4()
@@ -424,10 +430,10 @@ class OrdersViewSet(viewsets.ModelViewSet):
             update_fields.append("driver_price")
 
         if driver_currency is not None:
-            update_fields.append("driver_currency")
+            update_fields.append("currency")
 
         if driver_payment_method is not None:
-            update_fields.append("driver_payment_method")
+            update_fields.append("payment_method")
 
         order.save(update_fields=update_fields)
 
@@ -435,8 +441,8 @@ class OrdersViewSet(viewsets.ModelViewSet):
             {
                 "invite_token": str(token),
                 "driver_price": float(order.driver_price) if order.driver_price else None,
-                "driver_currency": order.driver_currency,
-                "driver_payment_method": order.driver_payment_method,
+                "driver_currency": order.currency,
+                "driver_payment_method": order.payment_method,
             },
             status=200,
         )

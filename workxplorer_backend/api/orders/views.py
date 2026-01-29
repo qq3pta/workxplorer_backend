@@ -321,7 +321,9 @@ class OrdersViewSet(viewsets.ModelViewSet):
         ser.is_valid(raise_exception=True)
 
         driver_id = ser.validated_data["driver_id"]
-        driver_price = ser.validated_data["driver_price"]  # ← новое поле
+        driver_price = ser.validated_data["driver_price"]
+        driver_currency = ser.validated_data["driver_currency"]
+        driver_payment_method = ser.validated_data["driver_payment_method"]
 
         try:
             carrier = User.objects.get(id=driver_id, role="CARRIER")
@@ -355,9 +357,24 @@ class OrdersViewSet(viewsets.ModelViewSet):
 
         order.carrier = carrier
         order.driver_price = driver_price
+        order.driver_currency = driver_currency
+        order.driver_payment_method = driver_payment_method
         order.invited_carrier = carrier
         order.invite_token = uuid.uuid4()
-        order.save(update_fields=["carrier", "driver_price", "invited_carrier", "invite_token"])
+        order.carrier_accepted_terms = False
+        order.status = Order.OrderStatus.NO_DRIVER
+        order.save(
+            update_fields=[
+                "carrier",
+                "driver_price",
+                "driver_currency",
+                "driver_payment_method",
+                "carrier_accepted_terms",
+                "status",
+                "invited_carrier",
+                "invite_token",
+            ]
+        )
 
         return Response(
             {
@@ -366,6 +383,8 @@ class OrdersViewSet(viewsets.ModelViewSet):
                 "carrier_id": carrier.id,
                 "invite_token": str(order.invite_token),
                 "driver_price": float(order.driver_price),
+                "driver_currency": order.driver_currency,
+                "driver_payment_method": order.driver_payment_method,
             },
             status=200,
         )
@@ -382,23 +401,42 @@ class OrdersViewSet(viewsets.ModelViewSet):
             return Response({"detail": "У заказа уже есть водитель"}, status=400)
 
         driver_price = request.data.get("driver_price")
+        driver_currency = request.data.get("driver_currency")
+        driver_payment_method = request.data.get("driver_payment_method")
+
         if driver_price is not None:
             order.driver_price = driver_price
+
+        if driver_currency is not None:
+            order.driver_currency = driver_currency
+
+        if driver_payment_method is not None:
+            order.driver_payment_method = driver_payment_method
 
         # генерируем токен
         token = uuid.uuid4()
 
         # сохраняем токен в заказе (опционально)
         order.invite_token = token
-        order.save(
-            update_fields=["invite_token", "driver_price"] if driver_price else ["invite_token"]
-        )
+        update_fields = ["invite_token"]
 
-        # возвращаем только токен, фронт сам соберет URL
+        if driver_price is not None:
+            update_fields.append("driver_price")
+
+        if driver_currency is not None:
+            update_fields.append("driver_currency")
+
+        if driver_payment_method is not None:
+            update_fields.append("driver_payment_method")
+
+        order.save(update_fields=update_fields)
+
         return Response(
             {
                 "invite_token": str(token),
-                "driver_price": float(order.driver_price) if driver_price else None,
+                "driver_price": float(order.driver_price) if order.driver_price else None,
+                "driver_currency": order.driver_currency,
+                "driver_payment_method": order.driver_payment_method,
             },
             status=200,
         )

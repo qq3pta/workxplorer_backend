@@ -4,8 +4,9 @@ from collections.abc import Iterable
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from api.loads.choices import Currency
 from api.payments.serializers import PaymentSerializer
+from api.loads.choices import Currency
+from api.payments.models import PaymentMethod
 
 from .models import Order, OrderDocument, OrderStatusHistory
 
@@ -345,10 +346,23 @@ class OrderStatusHistorySerializer(serializers.ModelSerializer):
 
 class InviteByIdSerializer(serializers.Serializer):
     driver_id = serializers.IntegerField(required=True)
+
     driver_price = serializers.DecimalField(
         max_digits=14,
         decimal_places=2,
         required=True,
         min_value=0,
         help_text="Сумма, которую получит водитель",
+    )
+
+    driver_currency = serializers.ChoiceField(
+        choices=Currency.choices,
+        required=True,
+        help_text="Валюта выплаты водителю",
+    )
+
+    driver_payment_method = serializers.ChoiceField(
+        choices=PaymentMethod.choices,
+        required=True,
+        help_text="Способ оплаты водителю",
     )

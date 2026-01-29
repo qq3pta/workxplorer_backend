@@ -346,8 +346,16 @@ class OrdersViewSet(viewsets.ModelViewSet):
         offer.accepted_by_carrier = False
         offer.accepted_by_logistic = False
         offer.response_status = None
+
+        offer.driver_price = driver_price
+        offer.driver_currency = driver_currency
+        offer.driver_payment_method = driver_payment_method
+
         offer.save(
             update_fields=[
+                "driver_price",
+                "driver_currency",
+                "driver_payment_method",
                 "is_active",
                 "accepted_by_customer",
                 "accepted_by_carrier",
@@ -537,7 +545,7 @@ class OrdersViewSet(viewsets.ModelViewSet):
             carrier=user,
         ).update(
             is_active=False,
-            response_status=Offer.ResponseStatus.REJECTED,
+            response_status="rejected",
         )
 
         return Response(

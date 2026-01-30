@@ -140,7 +140,7 @@ class RatingUserListSerializer(serializers.ModelSerializer):
         )
 
         # Статусы, которые хотим показать в пайчарте
-        statuses = ["no_driver", "pending", "in_process", "delivered", "cancelled"]
+        statuses = ["no_driver", "pending", "in_process", "delivered", "canceled"]
 
         # Инициализация результата
         result = {status: 0 for status in statuses}

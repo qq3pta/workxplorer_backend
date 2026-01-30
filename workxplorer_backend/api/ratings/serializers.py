@@ -26,40 +26,37 @@ class UserRatingSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         request = self.context["request"]
         user = request.user
+
+        # Проверяем, что order передан
         order = attrs.get("order") or (self.instance.order if self.instance else None)
+        if not order:
+            raise serializers.ValidationError({"order": "Order не найден или не передан"})
+
         rated_user = attrs.get("rated_user") or (
             self.instance.rated_user if self.instance else None
         )
+        if not rated_user:
+            raise serializers.ValidationError({"rated_user": "Оцениваемый пользователь не найден"})
 
-        # 1. Определяем список всех участников, которым разрешено давать оценку
-        # Используем set() для уникальности, хотя можно и list, но set безопаснее
-        participants = {order.customer, order.carrier, order.logistic}
-        allowed_users = {
-            p for p in participants if p is not None
-        }  # Отфильтровываем None, если логист не назначен
+        # Список участников, фильтруем None
+        participants = {p for p in [order.customer, order.carrier, order.logistic] if p}
 
-        # 2. Проверка: может ли текущий пользователь давать оценку? (Он должен быть участником)
-        if user not in allowed_users:
-            raise serializers.ValidationError(
-                "Вы не участвуете в этом заказе."
-            )  # ЭТО ИСПРАВЛЯЕТ ВАШУ ОШИБКУ
+        # Проверяем, что текущий пользователь — участник
+        if user not in participants:
+            raise serializers.ValidationError("Вы не участвуете в этом заказе.")
 
-        # 3. Проверка: нельзя оценить самого себя
+        # Проверка: нельзя оценивать самого себя
         if rated_user == user:
             raise serializers.ValidationError("Нельзя оценить самого себя.")
 
-        # 4. Проверка: оцениваемый пользователь должен быть участником заказа
-        # (Например, если Посредник оценивает Заказчика, Заказчик должен быть в заказе)
-        if rated_user not in allowed_users:
+        # Проверка: оцениваемый пользователь должен быть участником
+        if rated_user not in participants:
             raise serializers.ValidationError("Пользователь не участвует в заказе.")
 
-        # 5. Проверка: уникальность оценки
+        # Проверка уникальности
         qs = UserRating.objects.filter(rated_user=rated_user, rated_by=user, order=order)
-
-        # Если UPDATE — исключаем текущую запись
         if self.instance:
             qs = qs.exclude(pk=self.instance.pk)
-
         if qs.exists():
             raise serializers.ValidationError("Вы уже оценивали этого пользователя в этом заказе.")
 
@@ -134,21 +131,24 @@ class RatingUserListSerializer(serializers.ModelSerializer):
     # -----------------------
     def get_pie_chart(self, obj):
         """
-        Pie chart распределения оценок (1–5).
-        Аналогично аналитике.
+        Pie chart распределения заказов пользователя по статусам,
+        включая cancelled, pending, delivered и т.д.
         """
-        qs = UserRating.objects.filter(rated_user=obj).values("score").annotate(count=Count("id"))
+        # Получаем все заказы, где пользователь участвует
+        orders_qs = (
+            obj.orders_as_customer.all()
+            | obj.orders_as_carrier.all()
+            | obj.orders_as_logistic.all()
+        )
 
-        # базовая структура — всегда все ключи
-        result = {
-            "1": 0,
-            "2": 0,
-            "3": 0,
-            "4": 0,
-            "5": 0,
-        }
+        # Статусы, которые хотим показать в пайчарте
+        statuses = ["no_driver", "pending", "en_route", "delivered", "cancelled"]
 
-        for item in qs:
-            result[str(item["score"])] = item["count"]
+        # Инициализация результата
+        result = {status: 0 for status in statuses}
+
+        # Считаем по каждому статусу
+        for status in statuses:
+            result[status] = orders_qs.filter(status=status).count()
 
         return result

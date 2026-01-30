@@ -231,6 +231,10 @@ class Profile(models.Model):
     city = models.CharField("Город", max_length=128, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    cancelled_orders_count = models.PositiveIntegerField(
+        default=0, help_text="Количество заказов, отменённых пользователем"
+    )
+
     class Meta:
         verbose_name = "Профиль"
         verbose_name_plural = "Профили"

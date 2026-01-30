@@ -614,6 +614,47 @@ class OrdersViewSet(viewsets.ModelViewSet):
         serializer = InvitePreviewSerializer(data)
         return Response(serializer.data, status=200)
 
+    @action(detail=True, methods=["post"], url_path="cancel")
+    def cancel_order(self, request, pk=None):
+        order = self.get_object()
+        user = request.user
+
+        if order.status not in [Order.OrderStatus.NO_DRIVER, Order.OrderStatus.PENDING]:
+            return Response(
+                {"detail": "Этот заказ нельзя отменить на данном этапе."},
+                status=http_status.HTTP_400_BAD_REQUEST,
+            )
+
+        if user not in [order.customer, order.carrier, order.logistic]:
+            return Response(
+                {"detail": "Вы не можете отменять чужой заказ."},
+                status=http_status.HTTP_403_FORBIDDEN,
+            )
+
+        old_status = order.status
+        order.status = "canceled"
+        order.save(update_fields=["status"])
+
+        if hasattr(user, "profile"):
+            user.profile.cancelled_orders_count += 1
+            user.profile.save(update_fields=["cancelled_orders_count"])
+
+        OrderStatusHistory.objects.create(
+            order=order,
+            old_status=old_status,
+            new_status=order.status,
+            user=user,
+        )
+
+        return Response(
+            {
+                "detail": "Заказ успешно отменён",
+                "order_id": order.id,
+                "new_status": order.status,
+            },
+            status=http_status.HTTP_200_OK,
+        )
+
 
 class SharedOrderView(RetrieveAPIView):
     """

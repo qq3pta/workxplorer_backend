@@ -31,16 +31,17 @@ class UserRatingSerializer(serializers.ModelSerializer):
         if not order:
             raise serializers.ValidationError({"order": "Order не найден или не передан"})
 
+        # Проверяем, что оцениваемый пользователь передан
         rated_user = attrs.get("rated_user") or (
             self.instance.rated_user if self.instance else None
         )
         if not rated_user:
             raise serializers.ValidationError({"rated_user": "Оцениваемый пользователь не найден"})
 
-        # Список участников, фильтруем None
+        # Участники заказа (фильтруем None)
         participants = {p for p in [order.customer, order.carrier, order.logistic] if p}
 
-        # Проверяем, что текущий пользователь — участник
+        # Проверка: текущий пользователь — участник заказа
         if user not in participants:
             raise serializers.ValidationError("Вы не участвуете в этом заказе.")
 
@@ -48,11 +49,11 @@ class UserRatingSerializer(serializers.ModelSerializer):
         if rated_user == user:
             raise serializers.ValidationError("Нельзя оценить самого себя.")
 
-        # Проверка: оцениваемый пользователь должен быть участником
+        # Проверка: оцениваемый пользователь должен быть участником заказа
         if rated_user not in participants:
             raise serializers.ValidationError("Пользователь не участвует в заказе.")
 
-        # Проверка уникальности
+        # Проверка уникальности: один рейтинг на одного пользователя в рамках заказа
         qs = UserRating.objects.filter(rated_user=rated_user, rated_by=user, order=order)
         if self.instance:
             qs = qs.exclude(pk=self.instance.pk)

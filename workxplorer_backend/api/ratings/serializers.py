@@ -20,7 +20,7 @@ class UserRatingSerializer(serializers.ModelSerializer):
             "comment",
             "created_at",
         ]
-        read_only_fields = ["id", "rated_by", "rated_user", "order", "created_at"]
+        read_only_fields = ["id", "rated_by", "created_at"]
 
     def validate(self, attrs):
         request = self.context["request"]

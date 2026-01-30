@@ -136,13 +136,11 @@ class RatingUserListSerializer(serializers.ModelSerializer):
         """
         # Получаем все заказы, где пользователь участвует
         orders_qs = (
-            obj.orders_as_customer.all()
-            | obj.orders_as_carrier.all()
-            | obj.orders_as_logistic.all()
+            obj.orders_as_customer.all() | obj.orders_as_carrier.all() | obj.logistic_orders.all()
         )
 
         # Статусы, которые хотим показать в пайчарте
-        statuses = ["no_driver", "pending", "en_route", "delivered", "cancelled"]
+        statuses = ["no_driver", "pending", "in_process", "delivered", "cancelled"]
 
         # Инициализация результата
         result = {status: 0 for status in statuses}

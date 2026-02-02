@@ -17,7 +17,6 @@ from api.geo.services import GeocodingError, geocode_city
 
 from .choices import ModerationStatus
 from .models import Cargo, PaymentMethod
-from .serializers import CargoListSerializer
 
 
 class RouteKmMixin(serializers.Serializer):

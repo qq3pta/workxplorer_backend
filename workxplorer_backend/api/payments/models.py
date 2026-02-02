@@ -39,10 +39,8 @@ class Payment(models.Model):
     confirmed_by_logistic = models.BooleanField(default=False)
     confirmed_by_carrier = models.BooleanField(default=False)
 
-    # Информация для внешних платежных систем (если будут)
     external_transaction_id = models.CharField(max_length=100, null=True, blank=True)
 
-    # Теперь реальные методы оплаты:
     method = models.CharField(
         max_length=32,
         choices=PaymentMethod.choices,

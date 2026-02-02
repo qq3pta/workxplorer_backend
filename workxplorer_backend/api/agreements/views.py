@@ -22,7 +22,6 @@ class AgreementViewSet(ReadOnlyModelViewSet):
     permission_classes = [IsAgreementParticipant]
     queryset = Agreement.objects.all()
 
-    # 🔹 ВАЖНО: правильный выбор сериализатора
     def get_serializer_class(self):
         if self.action == "list":
             return AgreementListSerializer
@@ -30,7 +29,7 @@ class AgreementViewSet(ReadOnlyModelViewSet):
             return AgreementDetailSerializer
         return AgreementActionSerializer
 
-    # 🔹 ФИЛЬТРАЦИЯ ПО РОЛЯМ
+    #  ФИЛЬТРАЦИЯ ПО РОЛЯМ
     def get_queryset(self):
         if getattr(self, "swagger_fake_view", False):
             return Agreement.objects.none()

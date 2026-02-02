@@ -84,7 +84,6 @@ class SendPhoneOTPSerializer(serializers.Serializer):
                     {"detail": "Код уже отправлен. Подождите.", "seconds_left": left}
                 )
 
-        # ✅ ВОТ ЗДЕСЬ КЛЮЧЕВОЕ ИЗМЕНЕНИЕ
         send_sms_otp(phone)
 
         PhoneOTP.objects.create(
@@ -119,10 +118,10 @@ class VerifyPhoneOTPSerializer(serializers.Serializer):
         code = self.validated_data["code"]
         purpose = self.validated_data["purpose"]
 
-        # 1️⃣ Проверяем SMS код через Twilio
+        # Проверяем SMS код через Twilio
         check_sms_otp(phone, code)
 
-        # 2️⃣ Проверяем OTP запись в БД
+        # Проверяем OTP запись в БД
         otp = (
             PhoneOTP.objects.filter(phone=phone, purpose=purpose, is_used=False)
             .order_by("-created_at")
@@ -135,7 +134,7 @@ class VerifyPhoneOTPSerializer(serializers.Serializer):
         otp.is_used = True
         otp.save(update_fields=["is_used"])
 
-        # 3️⃣ Если пользователь существует — отмечаем verified
+        # Если пользователь существует — отмечаем verified
         user = User.objects.filter(phone=phone).first()
         if user:
             user.is_phone_verified = True

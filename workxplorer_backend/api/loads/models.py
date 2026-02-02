@@ -195,7 +195,6 @@ class Cargo(models.Model):
             return
 
         if old_moderation != self.moderation_status:
-            # публикация
             if self.moderation_status == ModerationStatus.APPROVED:
                 notify(
                     user=self.customer,

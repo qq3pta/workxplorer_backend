@@ -62,10 +62,6 @@ class Agreement(models.Model):
     class Meta:
         ordering = ["-created_at"]
 
-    # --------------------------------------------------
-    # FACTORY
-    # --------------------------------------------------
-
     @classmethod
     def get_or_create_from_offer(cls, offer):
         customer = offer.cargo.customer
@@ -74,7 +70,6 @@ class Agreement(models.Model):
 
         defaults = {
             "expires_at": timezone.now() + timedelta(minutes=30),
-            # --- CUSTOMER SNAPSHOT ---
             "customer_id": customer.id,
             "customer_full_name": customer.get_full_name(),
             "customer_email": customer.email or "",
@@ -82,7 +77,6 @@ class Agreement(models.Model):
             "customer_registered_at": customer.date_joined,
         }
 
-        # --- CARRIER SNAPSHOT ---
         if carrier:
             defaults.update(
                 {
@@ -94,7 +88,6 @@ class Agreement(models.Model):
                 }
             )
 
-        # --- LOGISTIC SNAPSHOT ---
         if logistic:
             defaults.update(
                 {
@@ -112,10 +105,6 @@ class Agreement(models.Model):
         )
         return agreement
 
-    # --------------------------------------------------
-    # ACCEPT
-    # --------------------------------------------------
-
     def accept_by(self, user):
         if self.status != self.Status.PENDING:
             raise ValidationError("Соглашение уже обработано")
@@ -124,17 +113,17 @@ class Agreement(models.Model):
         cargo = offer.cargo
         accepted_as_participant = False
 
-        # ✅ ЗАКАЗЧИК ПО ID (включая LOGISTIC-заказчика)
+        # ЗАКАЗЧИК ПО ID (включая LOGISTIC-заказчика)
         if user.id in (cargo.customer_id, cargo.created_by_id):
             self.accepted_by_customer = True
             accepted_as_participant = True
 
-        # ✅ ПЕРЕВОЗЧИК
+        # ПЕРЕВОЗЧИК
         elif user.id == offer.carrier_id:
             self.accepted_by_carrier = True
             accepted_as_participant = True
 
-        # ✅ ЛОГИСТ / ПОСРЕДНИК
+        # ЛОГИСТ / ПОСРЕДНИК
         elif user.id in (offer.logistic_id, offer.intermediary_id):
             self.accepted_by_logistic = True
             accepted_as_participant = True
@@ -144,10 +133,6 @@ class Agreement(models.Model):
 
         self.save()
         self.try_finalize()
-
-    # --------------------------------------------------
-    # FINALIZE
-    # --------------------------------------------------
 
     def try_finalize(self):
         if self.status != self.Status.PENDING:
@@ -181,7 +166,6 @@ class Agreement(models.Model):
             if cargo.status == CargoStatus.MATCHED:
                 return
 
-            # -------- РАССТОЯНИЕ --------
             if cargo.route_km_cached:
                 route_km = Decimal(cargo.route_km_cached)
 
@@ -195,7 +179,6 @@ class Agreement(models.Model):
             if route_km <= 0:
                 raise ValidationError("Не удалось рассчитать расстояние маршрута")
 
-            # -------- ЦЕНА --------
             price_total = offer.price_value or Decimal("0.00")
 
             Order.objects.create(
@@ -227,10 +210,6 @@ class Agreement(models.Model):
             self.status = self.Status.ACCEPTED
             self.save()
 
-    # --------------------------------------------------
-    # EXPIRE
-    # --------------------------------------------------
-
     def expire(self):
         if self.status != self.Status.PENDING:
             return
@@ -248,7 +227,7 @@ class Agreement(models.Model):
         offer = self.offer
         cargo = offer.cargo
 
-        # 🔐 Проверка участия (симметрично accept_by)
+        # Проверка участия (симметрично accept_by)
         if by_user.id in (cargo.customer_id, cargo.created_by_id):
             pass  # заказчик
         elif by_user.id == offer.carrier_id:
@@ -258,10 +237,8 @@ class Agreement(models.Model):
         else:
             raise PermissionDenied("Вы не участник соглашения")
 
-        # ❌ Отмена соглашения
         self.status = self.Status.CANCELLED
         self.save(update_fields=["status"])
 
-        # ❌ Деактивируем оффер
         offer.is_active = False
         offer.save(update_fields=["is_active"])

@@ -83,7 +83,6 @@ class CitySuggestView(APIView):
         if not q:
             return Response({"results": []})
 
-        # Поиск всех городов из базы, регистронезависимо
         qs = GeoPlace.objects.filter(name__icontains=q)[:limit]
 
         results = [

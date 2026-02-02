@@ -442,8 +442,6 @@ class AnalyticsView(APIView):
             "earned": [earned_map.get(m, 0) for m in months],
         }
 
-        # ---------- PIE CHART ----------
-        # ---------- PIE CHART ----------
         orders_qs = Order.objects.all()
 
         if role == UserRole.LOGISTIC:
@@ -464,7 +462,6 @@ class AnalyticsView(APIView):
 
         successful = orders_qs.filter(status=Order.OrderStatus.DELIVERED).count()
 
-        # ❗️ У ТЕБЯ НЕТ CANCELLED → считаем "всё остальное"
         cancelled = orders_qs.exclude(
             status__in=[
                 Order.OrderStatus.NO_DRIVER,

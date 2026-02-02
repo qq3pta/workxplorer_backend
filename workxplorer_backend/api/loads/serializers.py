@@ -7,6 +7,9 @@ from django.utils import timezone
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 from unidecode import unidecode
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
+
 
 from api.geo.management.commands.import_cities import COUNTRY_NORMALIZATION
 from api.geo.models import GeoPlace
@@ -14,6 +17,7 @@ from api.geo.services import GeocodingError, geocode_city
 
 from .choices import ModerationStatus
 from .models import Cargo, PaymentMethod
+from .serializers import CargoListSerializer
 
 
 class RouteKmMixin(serializers.Serializer):
@@ -249,6 +253,24 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
 
         cargo.update_route_cache(save=True)
         cargo.update_price_uzs()
+
+        # --- ДОБАВИТЬ ЭТОТ БЛОК ---
+        try:
+            channel_layer = get_channel_layer()
+            # Сериализуем данные через ListSerializer, чтобы фронт получил полный объект
+            broadcast_data = CargoListSerializer(cargo, context=self.context).data
+
+            async_to_sync(channel_layer.group_send)(
+                "loads_all",  # Группа, которую слушают все
+                {
+                    "type": "cargo_updated",  # Метод в consumers.py
+                    "data": {"action": "create", "item": broadcast_data},
+                },
+            )
+        except Exception as e:
+            print(f"WS Broadcast error: {e}")
+        # -------------------------
+
         return cargo
 
     def update(self, instance, validated_data):

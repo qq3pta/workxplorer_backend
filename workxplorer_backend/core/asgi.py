@@ -11,7 +11,7 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "core.settings.prod")
 django.setup()
 
 # --------------------------------------------------------------
-# Теперь можно импортировать зависимости Django
+#
 # --------------------------------------------------------------
 from api.notifications.middleware import JwtAuthMiddleware  # noqa: E402
 from api.notifications.routing import websocket_urlpatterns  # noqa: E402

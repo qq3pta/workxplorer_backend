@@ -7,7 +7,6 @@ class NotificationsConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         user = self.scope.get("user")
 
-        # user гарантированно Django user, а не payload
         if not user or user.is_anonymous:
             await self.close()
             return

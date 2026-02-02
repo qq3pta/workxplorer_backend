@@ -11,6 +11,8 @@ from django.db import models
 from django.db.models.manager import Manager as DjangoManager
 from django.utils import timezone
 from unidecode import unidecode
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
 
 from api.notifications.services import notify
 
@@ -223,6 +225,20 @@ class Cargo(models.Model):
                 message=f"Статус изменён: {self.get_status_display()}",
                 cargo=self,
                 payload={"cargo_id": self.id},
+            )
+
+            channel_layer = get_channel_layer()
+            async_to_sync(channel_layer.group_send)(
+                f"user_{self.customer_id}",
+                {
+                    "type": "cargo_updated",
+                    "data": {
+                        "event": "cargo_status_changed",
+                        "cargo_id": self.id,
+                        "status": self.status,
+                        "status_label": self.get_status_display(),
+                    },
+                },
             )
 
     @property

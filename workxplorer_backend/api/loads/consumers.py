@@ -11,12 +11,23 @@ class CargoConsumer(AsyncJsonWebsocketConsumer):
 
         await self.accept()
 
+        # Добавляем пользователя в персональную группу и в общую группу грузов
         await self.channel_layer.group_add(f"user_{self.user.id}", self.channel_name)
         await self.channel_layer.group_add("loads_all", self.channel_name)
 
     async def disconnect(self, close_code):
+        # Удаляем из групп при отключении
         await self.channel_layer.group_discard(f"user_{self.user.id}", self.channel_name)
         await self.channel_layer.group_discard("loads_all", self.channel_name)
 
     async def cargo_updated(self, event):
+        """Обработка сообщений типа 'cargo.updated'"""
+        await self.send_json(event["data"])
+
+    async def notify(self, event):
+        """
+        НОВЫЙ МЕТОД: Обработка сообщений типа 'notify'.
+        Именно его отсутствие вызывало ошибку в логах.
+        """
+        # Отправляем данные клиенту по WebSocket
         await self.send_json(event["data"])

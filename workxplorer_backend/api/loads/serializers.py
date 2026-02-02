@@ -230,7 +230,7 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
 
         wt = validated_data.pop("weight_tons", None)
         if wt is not None:
-            if isinstance(wt, float) or isinstance(wt, int):  # FIXED UP038
+            if isinstance(wt, (float, int)):
                 wt = Decimal(f"{wt:.6f}")
             else:
                 wt = Decimal(str(wt))
@@ -253,22 +253,25 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
         cargo.update_route_cache(save=True)
         cargo.update_price_uzs()
 
-        # --- ДОБАВИТЬ ЭТОТ БЛОК ---
+        # --- ИСПРАВЛЕННЫЙ БЛОК ДЛЯ WEBSOCKET ---
         try:
             channel_layer = get_channel_layer()
-            # Сериализуем данные через ListSerializer, чтобы фронт получил полный объект
+
+            # ВАЖНО: импортируем локально, чтобы избежать ошибки циклического импорта
+            from .serializers import CargoListSerializer
+
             broadcast_data = CargoListSerializer(cargo, context=self.context).data
 
             async_to_sync(channel_layer.group_send)(
-                "loads_all",  # Группа, которую слушают все
+                "loads_all",
                 {
-                    "type": "cargo_updated",  # Метод в consumers.py
+                    "type": "cargo_updated",
                     "data": {"action": "create", "item": broadcast_data},
                 },
             )
         except Exception as e:
             print(f"WS Broadcast error: {e}")
-        # -------------------------
+        # --------------------------------------
 
         return cargo
 

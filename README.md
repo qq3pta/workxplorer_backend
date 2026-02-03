@@ -27,31 +27,42 @@ Django/DRF backend для онлайн-платформы грузоперево
 ## Стек
 
 - **Python 3.12**, **Django**, **Django REST Framework**
+- **Django** Channels (WebSocket, real-time)
 - **JWT** (`rest_framework_simplejwt`)
 - **drf-spectacular** (OpenAPI/Swagger)
 - **django-filter**, **corsheaders**, **whitenoise**
 - **PostgreSQL** + **PostGIS** (геопоиск, расстояния)
-- (Dev/Prod) **Docker Compose**; опционально **Redis** для фоновых задач/кэша
+- **Redis** (channels / кэш / фоновые задачи — опционально)
+- **Docker Compose**; опционально **Redis** для фоновых задач/кэша
 
 ---
 
 ## Структура проекта
 
 ```bash
-workxplorer_backend/
+kad-one/
 ├── api/
 │   ├── accounts/       # Регистрация, аутентификация, роли
-│   ├── loads/          # Грузы/заявки, публикация, поднятие
-│   ├── offers/         # Предложения и торг
-│   ├── search/         # Поиск (георадиус, фильтры, сортировки)
-│   ├── geo/            # Геослужба (геокодинг, утилиты)
-│   └── routing/        # Маршруты/км/стоимость за км (опц.)
+│   ├── agreements/     # Договоры и соглашения
+│   ├── geo/            # Геосервисы (координаты, расстояния)
+│   ├── loads/          # Грузы / заявки на перевозку
+│   ├── notifications/  # Уведомления (real-time, системные)
+│   ├── offers/         # Предложения перевозчиков
+│   ├── orders/         # Заказы и жизненный цикл перевозки
+│   ├── payments/       # Платежи, списания, статусы
+│   ├── ratings/        # Рейтинги и отзывы
+│   ├── routing/        # Маршруты и расчёт расстояний
+│   ├── search/         # Поиск и фильтрация
+│   ├── support/        # Поддержка и обращения
+│   └── __init__.py
+├── common/             # Общие утилиты и базовые классы
 ├── core/
-│   ├── settings/       # settings/base|dev|prod
-│   ├── urls.py         # /api/*, /api/docs/, /api/schema/
+│   ├── settings/       # base / dev / prod
+│   ├── urls.py         # API, schema, docs
+│   ├── asgi.py         # ASGI + Channels
 │   └── wsgi.py
+├── media/              # Загружаемые файлы
 ├── Dockerfile
 ├── docker-compose.yml
 ├── pyproject.toml
 └── README.md
-

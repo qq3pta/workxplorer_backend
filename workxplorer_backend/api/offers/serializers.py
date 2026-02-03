@@ -6,6 +6,8 @@ from typing import Any
 from django.contrib.auth import get_user_model
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
 
 from api.loads.choices import Currency, ModerationStatus
 from api.loads.models import Cargo, CargoStatus
@@ -123,6 +125,40 @@ class OfferCreateSerializer(serializers.ModelSerializer):
 
         print("[SERIALIZER CREATE OFFER] created offer.id =", offer.id)
         offer.send_create_notifications()
+
+        channel_layer = get_channel_layer()
+
+        from .serializers import OfferShortSerializer
+
+        payload = OfferShortSerializer(offer, context={"request": self.context["request"]}).data
+
+        # КОМУ ПОКАЗЫВАЕМ ОФФЕР
+        recipients = set()
+
+        # заказчик
+        if offer.cargo.customer_id:
+            recipients.add(offer.cargo.customer_id)
+
+        # перевозчик
+        if offer.carrier_id:
+            recipients.add(offer.carrier_id)
+
+        # логист
+        if offer.logistic_id:
+            recipients.add(offer.logistic_id)
+
+        for user_id in recipients:
+            async_to_sync(channel_layer.group_send)(
+                f"user_{user_id}",
+                {
+                    "type": "notify",
+                    "data": {
+                        "event": "offer_created",
+                        "offer": payload,
+                    },
+                },
+            )
+
         return offer
 
 

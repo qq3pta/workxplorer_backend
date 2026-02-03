@@ -19,6 +19,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
 from .permissions import IsOfferParticipant
 
 from api.orders.models import Order
@@ -510,6 +512,30 @@ class OfferViewSet(ModelViewSet):
 
         # Обновляем offer, чтобы увидеть созданный Order
         offer.refresh_from_db()
+
+        channel_layer = get_channel_layer()
+
+        payload = OfferShortSerializer(offer, context={"request": request}).data
+
+        participants = {
+            offer.cargo.customer_id,
+            offer.carrier_id,
+            offer.logistic_id,
+            offer.intermediary_id,
+        }
+
+        for user_id in filter(None, participants):
+            async_to_sync(channel_layer.group_send)(
+                f"user_{user_id}",
+                {
+                    "type": "notify",
+                    "data": {
+                        "event": "offer_accepted",
+                        "offer": payload,
+                    },
+                },
+            )
+
         print(
             "[VIEW accept] flags AFTER:",
             "customer =",
@@ -585,6 +611,31 @@ class OfferViewSet(ModelViewSet):
         offer = self.get_object()
         try:
             offer.reject_by(request.user)
+            offer.refresh_from_db()
+
+            channel_layer = get_channel_layer()
+
+            payload = OfferShortSerializer(offer, context={"request": request}).data
+
+            participants = {
+                offer.cargo.customer_id,
+                offer.carrier_id,
+                offer.logistic_id,
+                offer.intermediary_id,
+            }
+
+            for user_id in filter(None, participants):
+                async_to_sync(channel_layer.group_send)(
+                    f"user_{user_id}",
+                    {
+                        "type": "notify",
+                        "data": {
+                            "event": "offer_rejected",
+                            "offer": payload,
+                        },
+                    },
+                )
+
         except PermissionDenied as e:
             return Response({"detail": str(e)}, status=status.HTTP_403_FORBIDDEN)
         return Response({"detail": "Отклонено"}, status=status.HTTP_200_OK)
@@ -612,6 +663,32 @@ class OfferViewSet(ModelViewSet):
                 by_user=request.user,
             )
 
+        # 🔥 ВАЖНО
+        offer.refresh_from_db()
+
+        channel_layer = get_channel_layer()
+
+        payload = OfferShortSerializer(offer, context={"request": request}).data
+
+        participants = {
+            offer.cargo.customer_id,
+            offer.carrier_id,
+            offer.logistic_id,
+            offer.intermediary_id,
+        }
+
+        for user_id in filter(None, participants):
+            async_to_sync(channel_layer.group_send)(
+                f"user_{user_id}",
+                {
+                    "type": "notify",
+                    "data": {
+                        "event": "offer_updated",
+                        "offer": payload,
+                    },
+                },
+            )
+
         return Response(
             OfferDetailSerializer(offer).data,
             status=status.HTTP_200_OK,
@@ -630,6 +707,30 @@ class OfferViewSet(ModelViewSet):
         ser.is_valid(raise_exception=True)
         with transaction.atomic():
             offer = ser.save()
+            offer.refresh_from_db()
+
+            channel_layer = get_channel_layer()
+
+            payload = OfferShortSerializer(offer, context={"request": request}).data
+
+            participants = {
+                offer.cargo.customer_id,
+                offer.carrier_id,
+                offer.logistic_id,
+            }
+
+            for user_id in filter(None, participants):
+                async_to_sync(channel_layer.group_send)(
+                    f"user_{user_id}",
+                    {
+                        "type": "notify",
+                        "data": {
+                            "event": "offer_created",
+                            "offer": payload,
+                        },
+                    },
+                )
+
         return Response(OfferDetailSerializer(offer).data, status=status.HTTP_201_CREATED)
 
 

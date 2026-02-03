@@ -16,6 +16,10 @@ from rest_framework.permissions import AllowAny
 
 from rest_framework.response import Response
 
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
+
+
 from .models import Order, OrderStatusHistory
 from api.offers.models import Offer
 from .permissions import IsOrderParticipant
@@ -229,6 +233,29 @@ class OrdersViewSet(viewsets.ModelViewSet):
         old_status = order.driver_status
         ser.save()
 
+        channel_layer = get_channel_layer()
+        order.refresh_from_db()
+
+        payload = OrderListSerializer(order, context={"request": request}).data
+
+        participants = {
+            order.customer_id,
+            order.carrier_id,
+            order.logistic_id,
+        }
+
+        for user_id in filter(None, participants):
+            async_to_sync(channel_layer.group_send)(
+                f"user_{user_id}",
+                {
+                    "type": "notify",
+                    "data": {
+                        "event": "order_driver_status_changed",
+                        "order": payload,
+                    },
+                },
+            )
+
         if new_status != old_status:
             OrderStatusHistory.objects.create(
                 order=order,
@@ -258,6 +285,23 @@ class OrdersViewSet(viewsets.ModelViewSet):
         ser = self.get_serializer(data=request.data, context=self.get_serializer_context())
         ser.is_valid(raise_exception=True)
         ser.save(order=order, uploaded_by=request.user)
+
+        channel_layer = get_channel_layer()
+        order.refresh_from_db()
+
+        payload = OrderListSerializer(order, context={"request": request}).data
+
+        for user_id in filter(None, {order.customer_id, order.carrier_id, order.logistic_id}):
+            async_to_sync(channel_layer.group_send)(
+                f"user_{user_id}",
+                {
+                    "type": "notify",
+                    "data": {
+                        "event": "order_document_added",
+                        "order": payload,
+                    },
+                },
+            )
 
         return Response(ser.data, http_status.HTTP_201_CREATED)
 
@@ -291,6 +335,23 @@ class OrdersViewSet(viewsets.ModelViewSet):
         order.carrier_accepted_terms = True
         order.status = Order.OrderStatus.PENDING  # Переводим в рабочий статус
         order.save(update_fields=["carrier_accepted_terms", "status"])
+
+        channel_layer = get_channel_layer()
+        order.refresh_from_db()
+
+        payload = OrderListSerializer(order, context={"request": request}).data
+
+        for user_id in filter(None, {order.customer_id, order.carrier_id, order.logistic_id}):
+            async_to_sync(channel_layer.group_send)(
+                f"user_{user_id}",
+                {
+                    "type": "notify",
+                    "data": {
+                        "event": "order_confirmed",
+                        "order": payload,
+                    },
+                },
+            )
 
         serializer = self.get_serializer(order)
         return Response(serializer.data, status=http_status.HTTP_200_OK)
@@ -389,6 +450,29 @@ class OrdersViewSet(viewsets.ModelViewSet):
             ]
         )
 
+        channel_layer = get_channel_layer()
+        order.refresh_from_db()
+
+        payload = OrderListSerializer(order, context={"request": request}).data
+
+        participants = {
+            order.customer_id,
+            carrier.id,
+            order.logistic_id,
+        }
+
+        for user_id in filter(None, participants):
+            async_to_sync(channel_layer.group_send)(
+                f"user_{user_id}",
+                {
+                    "type": "notify",
+                    "data": {
+                        "event": "order_invited_carrier",
+                        "order": payload,
+                    },
+                },
+            )
+
         return Response(
             {
                 "detail": "Перевозчик успешно приглашён",
@@ -444,6 +528,23 @@ class OrdersViewSet(viewsets.ModelViewSet):
 
         order.save(update_fields=update_fields)
 
+        channel_layer = get_channel_layer()
+        order.refresh_from_db()
+
+        payload = OrderListSerializer(order, context={"request": request}).data
+
+        for user_id in filter(None, {order.customer_id, order.logistic_id}):
+            async_to_sync(channel_layer.group_send)(
+                f"user_{user_id}",
+                {
+                    "type": "notify",
+                    "data": {
+                        "event": "order_invite_generated",
+                        "order": payload,
+                    },
+                },
+            )
+
         return Response(
             {
                 "invite_token": str(token),
@@ -485,6 +586,23 @@ class OrdersViewSet(viewsets.ModelViewSet):
                 "carrier_accepted_terms",
             ]
         )
+
+        channel_layer = get_channel_layer()
+        order.refresh_from_db()
+
+        payload = OrderListSerializer(order, context={"request": request}).data
+
+        for user_id in filter(None, {order.customer_id, user.id, order.logistic_id}):
+            async_to_sync(channel_layer.group_send)(
+                f"user_{user_id}",
+                {
+                    "type": "notify",
+                    "data": {
+                        "event": "order_invite_accepted",
+                        "order": payload,
+                    },
+                },
+            )
 
         Offer.objects.filter(
             cargo=order.cargo,
@@ -539,6 +657,23 @@ class OrdersViewSet(viewsets.ModelViewSet):
                 "status",
             ]
         )
+
+        channel_layer = get_channel_layer()
+        order.refresh_from_db()
+
+        payload = OrderListSerializer(order, context={"request": request}).data
+
+        for user_id in filter(None, {order.customer_id, user.id, order.logistic_id}):
+            async_to_sync(channel_layer.group_send)(
+                f"user_{user_id}",
+                {
+                    "type": "notify",
+                    "data": {
+                        "event": "order_invite_declined",
+                        "order": payload,
+                    },
+                },
+            )
 
         Offer.objects.filter(
             cargo=order.cargo,
@@ -634,6 +769,23 @@ class OrdersViewSet(viewsets.ModelViewSet):
         old_status = order.status
         order.status = "canceled"
         order.save(update_fields=["status"])
+
+        channel_layer = get_channel_layer()
+        order.refresh_from_db()
+
+        payload = OrderListSerializer(order, context={"request": request}).data
+
+        for user_id in filter(None, {order.customer_id, order.carrier_id, order.logistic_id}):
+            async_to_sync(channel_layer.group_send)(
+                f"user_{user_id}",
+                {
+                    "type": "notify",
+                    "data": {
+                        "event": "order_canceled",
+                        "order": payload,
+                    },
+                },
+            )
 
         if hasattr(user, "profile"):
             user.profile.cancelled_orders_count += 1

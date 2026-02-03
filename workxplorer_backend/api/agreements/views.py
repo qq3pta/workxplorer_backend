@@ -4,6 +4,8 @@ from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.viewsets import ReadOnlyModelViewSet
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
 
 from .models import Agreement
 from .permissions import IsAgreementParticipant
@@ -65,6 +67,31 @@ class AgreementViewSet(ReadOnlyModelViewSet):
     def accept(self, request, pk=None):
         agreement = self.get_object()
         agreement.accept_by(request.user)
+
+        channel_layer = get_channel_layer()
+        agreement.refresh_from_db()
+
+        payload = AgreementDetailSerializer(agreement, context={"request": request}).data
+
+        participants = {
+            agreement.offer.cargo.customer_id,
+            agreement.offer.carrier_id,
+            agreement.offer.logistic_id,
+            agreement.offer.intermediary_id,
+        }
+
+        for user_id in filter(None, participants):
+            async_to_sync(channel_layer.group_send)(
+                f"user_{user_id}",
+                {
+                    "type": "notify",
+                    "data": {
+                        "event": "agreement_accepted",
+                        "agreement": payload,
+                    },
+                },
+            )
+
         return Response(
             {"detail": "Соглашение принято"},
             status=status.HTTP_200_OK,
@@ -77,6 +104,31 @@ class AgreementViewSet(ReadOnlyModelViewSet):
     def reject(self, request, pk=None):
         agreement = self.get_object()
         agreement.reject(by_user=request.user)
+
+        channel_layer = get_channel_layer()
+        agreement.refresh_from_db()
+
+        payload = AgreementDetailSerializer(agreement, context={"request": request}).data
+
+        participants = {
+            agreement.offer.cargo.customer_id,
+            agreement.offer.carrier_id,
+            agreement.offer.logistic_id,
+            agreement.offer.intermediary_id,
+        }
+
+        for user_id in filter(None, participants):
+            async_to_sync(channel_layer.group_send)(
+                f"user_{user_id}",
+                {
+                    "type": "notify",
+                    "data": {
+                        "event": "agreement_rejected",
+                        "agreement": payload,
+                    },
+                },
+            )
+
         return Response(
             {"detail": "Соглашение отклонено"},
             status=status.HTTP_200_OK,

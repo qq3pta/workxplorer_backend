@@ -973,16 +973,12 @@ class Offer(models.Model):
         if not self.is_active:
             return "rejected"
 
+        # 🔥 counter-статус — это состояние оффера, не пользователя
+        if self.is_counter:
+            return self.response_status or "counter"
+
         role = getattr(user, "role", None)
 
-        # ---------------- Counter Logic ----------------
-        if self.is_counter:
-            # Смотрим на АВТОРА оффера, а не на того, кто смотрит
-            if self.created_by_id == self.cargo.customer_id:
-                return "counter_from_customer"
-            return "counter"
-
-        # ---------------- Regular Response Logic ----------------
         if role == "CUSTOMER":
             return "waiting" if self.accepted_by_customer else "action_required"
 

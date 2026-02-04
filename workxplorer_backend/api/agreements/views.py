@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from rest_framework.viewsets import ReadOnlyModelViewSet
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
+from common.ws_utils import to_ws_safe
 
 from .models import Agreement
 from .permissions import IsAgreementParticipant
@@ -81,15 +82,18 @@ class AgreementViewSet(ReadOnlyModelViewSet):
         }
 
         for user_id in filter(None, participants):
+            payload = AgreementDetailSerializer(agreement, context={"request": request}).data
+            message = {
+                "type": "notify",
+                "data": {
+                    "event": "agreement_accepted",
+                    "order": payload,
+                },
+            }
+
             async_to_sync(channel_layer.group_send)(
                 f"user_{user_id}",
-                {
-                    "type": "notify",
-                    "data": {
-                        "event": "agreement_accepted",
-                        "agreement": payload,
-                    },
-                },
+                to_ws_safe(message),
             )
 
         return Response(
@@ -118,15 +122,18 @@ class AgreementViewSet(ReadOnlyModelViewSet):
         }
 
         for user_id in filter(None, participants):
+            payload = AgreementDetailSerializer(agreement, context={"request": request}).data
+            message = {
+                "type": "notify",
+                "data": {
+                    "event": "agreement_rejected",
+                    "order": payload,
+                },
+            }
+
             async_to_sync(channel_layer.group_send)(
                 f"user_{user_id}",
-                {
-                    "type": "notify",
-                    "data": {
-                        "event": "agreement_rejected",
-                        "agreement": payload,
-                    },
-                },
+                to_ws_safe(message),
             )
 
         return Response(

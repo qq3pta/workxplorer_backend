@@ -11,13 +11,13 @@ def to_ws_safe(obj: Any):
     if isinstance(obj, Decimal):
         return str(obj)
 
-    if isinstance(obj, (datetime, date)):
+    if isinstance(obj, (datetime, date)):  # noqa: UP038
         return obj.isoformat()
 
     if isinstance(obj, dict):
         return {k: to_ws_safe(v) for k, v in obj.items()}
 
-    if isinstance(obj, (list, tuple)):
+    if isinstance(obj, (list, tuple)):  # noqa: UP038
         return [to_ws_safe(v) for v in obj]
 
     return obj

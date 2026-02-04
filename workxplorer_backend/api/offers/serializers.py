@@ -11,6 +11,7 @@ from asgiref.sync import async_to_sync
 
 from api.loads.choices import Currency, ModerationStatus
 from api.loads.models import Cargo, CargoStatus
+from common.ws_utils import to_ws_safe
 
 from .models import Offer, OfferStatusLog
 
@@ -128,9 +129,8 @@ class OfferCreateSerializer(serializers.ModelSerializer):
 
         channel_layer = get_channel_layer()
 
-        from .serializers import OfferShortSerializer
-
-        payload = OfferShortSerializer(offer, context={"request": self.context["request"]}).data
+        raw_payload = OfferShortSerializer(offer, context={"request": self.context["request"]}).data
+        payload = to_ws_safe(raw_payload)
 
         # КОМУ ПОКАЗЫВАЕМ ОФФЕР
         recipients = set()
@@ -148,15 +148,17 @@ class OfferCreateSerializer(serializers.ModelSerializer):
             recipients.add(offer.logistic_id)
 
         for user_id in recipients:
+            message = {
+                "type": "notify",
+                "data": {
+                    "event": "offer_created",
+                    "offer": raw_payload,  # можно raw_payload
+                },
+            }
+
             async_to_sync(channel_layer.group_send)(
                 f"user_{user_id}",
-                {
-                    "type": "notify",
-                    "data": {
-                        "event": "offer_created",
-                        "offer": payload,
-                    },
-                },
+                to_ws_safe(message),  # <-- важно: to_ws_safe на весь message
             )
 
         return offer

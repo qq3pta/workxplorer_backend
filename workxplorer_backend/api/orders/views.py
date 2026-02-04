@@ -18,6 +18,7 @@ from rest_framework.response import Response
 
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
+from common.ws_utils import to_ws_safe
 
 
 from .models import Order, OrderStatusHistory
@@ -236,8 +237,6 @@ class OrdersViewSet(viewsets.ModelViewSet):
         channel_layer = get_channel_layer()
         order.refresh_from_db()
 
-        payload = OrderListSerializer(order, context={"request": request}).data
-
         participants = {
             order.customer_id,
             order.carrier_id,
@@ -245,15 +244,19 @@ class OrdersViewSet(viewsets.ModelViewSet):
         }
 
         for user_id in filter(None, participants):
+            payload = OrderListSerializer(order, context={"request": request}).data
+
+            message = {
+                "type": "notify",
+                "data": {
+                    "event": "driver_status_changed",
+                    "order": payload,
+                },
+            }
+
             async_to_sync(channel_layer.group_send)(
                 f"user_{user_id}",
-                {
-                    "type": "notify",
-                    "data": {
-                        "event": "order_driver_status_changed",
-                        "order": payload,
-                    },
-                },
+                to_ws_safe(message),
             )
 
         if new_status != old_status:
@@ -292,15 +295,17 @@ class OrdersViewSet(viewsets.ModelViewSet):
         payload = OrderListSerializer(order, context={"request": request}).data
 
         for user_id in filter(None, {order.customer_id, order.carrier_id, order.logistic_id}):
+            message = {
+                "type": "notify",
+                "data": {
+                    "event": "order_documents_added",
+                    "order": payload,
+                },
+            }
+
             async_to_sync(channel_layer.group_send)(
                 f"user_{user_id}",
-                {
-                    "type": "notify",
-                    "data": {
-                        "event": "order_document_added",
-                        "order": payload,
-                    },
-                },
+                to_ws_safe(message),
             )
 
         return Response(ser.data, http_status.HTTP_201_CREATED)
@@ -342,15 +347,17 @@ class OrdersViewSet(viewsets.ModelViewSet):
         payload = OrderListSerializer(order, context={"request": request}).data
 
         for user_id in filter(None, {order.customer_id, order.carrier_id, order.logistic_id}):
+            message = {
+                "type": "notify",
+                "data": {
+                    "event": "order_confirmed",
+                    "order": payload,
+                },
+            }
+
             async_to_sync(channel_layer.group_send)(
                 f"user_{user_id}",
-                {
-                    "type": "notify",
-                    "data": {
-                        "event": "order_confirmed",
-                        "order": payload,
-                    },
-                },
+                to_ws_safe(message),
             )
 
         serializer = self.get_serializer(order)
@@ -462,15 +469,17 @@ class OrdersViewSet(viewsets.ModelViewSet):
         }
 
         for user_id in filter(None, participants):
+            message = {
+                "type": "notify",
+                "data": {
+                    "event": "order_invited_carrier",
+                    "order": payload,
+                },
+            }
+
             async_to_sync(channel_layer.group_send)(
                 f"user_{user_id}",
-                {
-                    "type": "notify",
-                    "data": {
-                        "event": "order_invited_carrier",
-                        "order": payload,
-                    },
-                },
+                to_ws_safe(message),
             )
 
         return Response(
@@ -534,15 +543,17 @@ class OrdersViewSet(viewsets.ModelViewSet):
         payload = OrderListSerializer(order, context={"request": request}).data
 
         for user_id in filter(None, {order.customer_id, order.logistic_id}):
+            message = {
+                "type": "notify",
+                "data": {
+                    "event": "invite_generated",
+                    "order": payload,
+                },
+            }
+
             async_to_sync(channel_layer.group_send)(
                 f"user_{user_id}",
-                {
-                    "type": "notify",
-                    "data": {
-                        "event": "order_invite_generated",
-                        "order": payload,
-                    },
-                },
+                to_ws_safe(message),
             )
 
         return Response(
@@ -593,15 +604,17 @@ class OrdersViewSet(viewsets.ModelViewSet):
         payload = OrderListSerializer(order, context={"request": request}).data
 
         for user_id in filter(None, {order.customer_id, user.id, order.logistic_id}):
+            message = {
+                "type": "notify",
+                "data": {
+                    "event": "order_invite_accepted",
+                    "order": payload,
+                },
+            }
+
             async_to_sync(channel_layer.group_send)(
                 f"user_{user_id}",
-                {
-                    "type": "notify",
-                    "data": {
-                        "event": "order_invite_accepted",
-                        "order": payload,
-                    },
-                },
+                to_ws_safe(message),
             )
 
         Offer.objects.filter(
@@ -664,15 +677,17 @@ class OrdersViewSet(viewsets.ModelViewSet):
         payload = OrderListSerializer(order, context={"request": request}).data
 
         for user_id in filter(None, {order.customer_id, user.id, order.logistic_id}):
+            message = {
+                "type": "notify",
+                "data": {
+                    "event": "order_invite_declined",
+                    "order": payload,
+                },
+            }
+
             async_to_sync(channel_layer.group_send)(
                 f"user_{user_id}",
-                {
-                    "type": "notify",
-                    "data": {
-                        "event": "order_invite_declined",
-                        "order": payload,
-                    },
-                },
+                to_ws_safe(message),
             )
 
         Offer.objects.filter(

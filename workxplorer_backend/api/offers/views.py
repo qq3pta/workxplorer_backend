@@ -21,6 +21,7 @@ from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
+from common.ws_utils import to_ws_safe
 from .permissions import IsOfferParticipant
 
 from api.orders.models import Order
@@ -525,15 +526,17 @@ class OfferViewSet(ModelViewSet):
         }
 
         for user_id in filter(None, participants):
+            message = {
+                "type": "notify",
+                "data": {
+                    "event": "offer_updated",
+                    "offer": payload,
+                },
+            }
+
             async_to_sync(channel_layer.group_send)(
                 f"user_{user_id}",
-                {
-                    "type": "notify",
-                    "data": {
-                        "event": "offer_accepted",
-                        "offer": payload,
-                    },
-                },
+                to_ws_safe(message),
             )
 
         print(
@@ -625,15 +628,17 @@ class OfferViewSet(ModelViewSet):
             }
 
             for user_id in filter(None, participants):
+                message = {
+                    "type": "notify",
+                    "data": {
+                        "event": "offer_updated",
+                        "offer": payload,
+                    },
+                }
+
                 async_to_sync(channel_layer.group_send)(
                     f"user_{user_id}",
-                    {
-                        "type": "notify",
-                        "data": {
-                            "event": "offer_rejected",
-                            "offer": payload,
-                        },
-                    },
+                    to_ws_safe(message),
                 )
 
         except PermissionDenied as e:
@@ -678,15 +683,17 @@ class OfferViewSet(ModelViewSet):
         }
 
         for user_id in filter(None, participants):
+            message = {
+                "type": "notify",
+                "data": {
+                    "event": "offer_updated",
+                    "offer": payload,
+                },
+            }
+
             async_to_sync(channel_layer.group_send)(
                 f"user_{user_id}",
-                {
-                    "type": "notify",
-                    "data": {
-                        "event": "offer_updated",
-                        "offer": payload,
-                    },
-                },
+                to_ws_safe(message),
             )
 
         return Response(
@@ -720,15 +727,17 @@ class OfferViewSet(ModelViewSet):
             }
 
             for user_id in filter(None, participants):
+                message = {
+                    "type": "notify",
+                    "data": {
+                        "event": "offer_updated",
+                        "offer": payload,
+                    },
+                }
+
                 async_to_sync(channel_layer.group_send)(
                     f"user_{user_id}",
-                    {
-                        "type": "notify",
-                        "data": {
-                            "event": "offer_created",
-                            "offer": payload,
-                        },
-                    },
+                    to_ws_safe(message),
                 )
 
         return Response(OfferDetailSerializer(offer).data, status=status.HTTP_201_CREATED)

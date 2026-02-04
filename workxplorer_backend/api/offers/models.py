@@ -977,8 +977,9 @@ class Offer(models.Model):
 
         # ---------------- Counter Logic ----------------
         if self.is_counter:
-            # counter_from_customer ТОЛЬКО на первом контре от заказчика
-            if self.counter_round == 1 and (
+            counter_round = getattr(self, "counter_round", 1)
+
+            if counter_round == 1 and (
                 self.initiator == self.Initiator.CUSTOMER
                 or (
                     self.initiator == self.Initiator.LOGISTIC

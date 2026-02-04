@@ -967,8 +967,8 @@ class Offer(models.Model):
         waiting — пользователь уже ответил, ждёт другую сторону
         action_required — пользователю нужно ответить
         rejected — оффер отклонён / неактивен
-        counter_from_customer — контр от заказчика (видят все, если инициатор заказчик или логист-заказчик)
-        counter — контр от логиста/перевозчика
+        counter_from_customer — контр от заказчика заявки (кем бы он ни был)
+        counter — контр от любого другого участника
         """
         if not self.is_active:
             return "rejected"
@@ -977,17 +977,11 @@ class Offer(models.Model):
 
         # ---------------- Counter Logic ----------------
         if self.is_counter:
-            counter_round = getattr(self, "counter_round", 1)
-
-            if counter_round == 1 and (
-                self.initiator == self.Initiator.CUSTOMER
-                or (
-                    self.initiator == self.Initiator.LOGISTIC
-                    and self.cargo.customer_id == getattr(user, "id", None)
-                )
-            ):
+            # Контр от заказчика заявки (CUSTOMER или LOGISTIC)
+            if getattr(user, "id", None) == self.cargo.customer_id:
                 return "counter_from_customer"
 
+            # Контр от логиста / перевозчика / любого не-заказчика
             return "counter"
 
         # ---------------- Regular Response Logic ----------------

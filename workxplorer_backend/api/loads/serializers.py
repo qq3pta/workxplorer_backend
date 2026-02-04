@@ -21,6 +21,7 @@ class RouteKmMixin(serializers.Serializer):
     route_km = serializers.SerializerMethodField()
 
     def get_route_km(self, obj: Cargo) -> float | None:
+        # 1) annotate (если есть в queryset)
         val = getattr(obj, "route_km", None)
         if val is not None:
             try:
@@ -28,23 +29,15 @@ class RouteKmMixin(serializers.Serializer):
             except Exception:
                 pass
 
+        # 2) cached field (реальное поле модели)
         cached = getattr(obj, "route_km_cached", None)
         if cached is not None:
             try:
                 return round(float(cached), 1)
             except Exception:
-                pass
+                return None
 
-        try:
-            if obj.origin_point and obj.dest_point:
-                from api.routing.services import get_route
-
-                rc = get_route(obj.origin_point, obj.dest_point)
-                if rc:
-                    return round(float(rc.distance_km), 1)
-        except Exception:
-            pass
-
+        # 3) fallback на path_km (если есть)
         pk = getattr(obj, "path_km", None)
         try:
             return round(float(pk), 1) if pk is not None else None
@@ -419,7 +412,7 @@ class CargoListSerializer(RouteKmMixin, serializers.ModelSerializer):
     @extend_schema_field(Decimal)
     def get_price_per_km(self, obj):
         price = obj.price_value
-        dist = obj.route_km or obj.route_km_cached or obj.path_km
+        dist = getattr(obj, "route_km", None) or obj.route_km_cached or obj.path_km
         if not price or not dist:
             return None
 

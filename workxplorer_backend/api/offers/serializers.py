@@ -130,7 +130,6 @@ class OfferCreateSerializer(serializers.ModelSerializer):
         channel_layer = get_channel_layer()
 
         raw_payload = OfferShortSerializer(offer, context={"request": self.context["request"]}).data
-        payload = to_ws_safe(raw_payload)
 
         # КОМУ ПОКАЗЫВАЕМ ОФФЕР
         recipients = set()

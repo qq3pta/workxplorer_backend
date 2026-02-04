@@ -252,27 +252,6 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
 
         cargo.update_route_cache(save=True)
         cargo.update_price_uzs()
-
-        # --- ИСПРАВЛЕННЫЙ БЛОК ДЛЯ WEBSOCKET ---
-        try:
-            channel_layer = get_channel_layer()
-
-            # ВАЖНО: импортируем локально, чтобы избежать ошибки циклического импорта
-            from .serializers import CargoListSerializer
-
-            broadcast_data = CargoListSerializer(cargo, context=self.context).data
-
-            async_to_sync(channel_layer.group_send)(
-                "loads_all",
-                {
-                    "type": "cargo_updated",
-                    "data": {"action": "create", "item": broadcast_data},
-                },
-            )
-        except Exception as e:
-            print(f"WS Broadcast error: {e}")
-        # --------------------------------------
-
         return cargo
 
     def update(self, instance, validated_data):

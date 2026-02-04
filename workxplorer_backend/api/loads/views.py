@@ -17,6 +17,10 @@ from rest_framework import generics, status
 from rest_framework import serializers as drf_serializers
 from rest_framework.response import Response
 
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
+from common.ws_utils import to_ws_safe
+
 from api.loads.models import LoadInvite
 from api.offers.models import Offer
 
@@ -57,6 +61,22 @@ class PublishCargoView(generics.CreateAPIView):
         cargo = serializer.save(created_by=user if user.role == "logistic" else None)
 
         cargo.update_price_uzs()
+
+        channel_layer = get_channel_layer()
+
+        async_to_sync(channel_layer.group_send)(
+            "loads_all",
+            to_ws_safe(
+                {
+                    "type": "cargo_updated",
+                    "data": {
+                        "action": "create",
+                        "item": CargoListSerializer(cargo, context={"request": self.request}).data,
+                    },
+                }
+            ),
+        )
+
         return cargo
 
     def create(self, request, *args, **kwargs):
@@ -102,6 +122,21 @@ class CargoDetailView(generics.RetrieveUpdateAPIView):
         cargo.update_price_uzs()
         cargo.save(update_fields=["refreshed_at", "price_uzs"])
 
+        channel_layer = get_channel_layer()
+
+        async_to_sync(channel_layer.group_send)(
+            "loads_all",
+            to_ws_safe(
+                {
+                    "type": "cargo_updated",
+                    "data": {
+                        "action": "update",
+                        "item": CargoListSerializer(cargo, context={"request": self.request}).data,
+                    },
+                }
+            ),
+        )
+
 
 @extend_schema(tags=["loads"], responses=RefreshResponseSerializer)
 class CargoRefreshView(generics.GenericAPIView):
@@ -118,6 +153,21 @@ class CargoRefreshView(generics.GenericAPIView):
             cargo.bump()
         except ValidationError as e:
             return Response({"detail": str(e)}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+
+        channel_layer = get_channel_layer()
+
+        async_to_sync(channel_layer.group_send)(
+            "loads_all",
+            to_ws_safe(
+                {
+                    "type": "cargo_updated",
+                    "data": {
+                        "action": "update",
+                        "item": CargoListSerializer(cargo, context={"request": request}).data,
+                    },
+                }
+            ),
+        )
 
         return Response({"detail": "Обновлено"}, status=status.HTTP_200_OK)
 
@@ -236,6 +286,21 @@ class CargoCancelView(generics.GenericAPIView):
         cargo.status = CargoStatus.CANCELLED
         cargo.save(update_fields=["status"])
 
+        channel_layer = get_channel_layer()
+
+        async_to_sync(channel_layer.group_send)(
+            "loads_all",
+            to_ws_safe(
+                {
+                    "type": "cargo_updated",
+                    "data": {
+                        "action": "remove",
+                        "id": cargo.id,
+                    },
+                }
+            ),
+        )
+
         cargo.offers.update(is_active=False)
 
         return Response({"detail": "Перевозка отменена"}, status=status.HTTP_200_OK)
@@ -293,6 +358,21 @@ class CargoVisibilityView(generics.GenericAPIView):
 
         cargo.is_hidden = is_hidden
         cargo.save(update_fields=["is_hidden"])
+
+        channel_layer = get_channel_layer()
+
+        async_to_sync(channel_layer.group_send)(
+            "loads_all",
+            to_ws_safe(
+                {
+                    "type": "cargo_updated",
+                    "data": {
+                        "action": "update",
+                        "item": CargoListSerializer(cargo, context={"request": request}).data,
+                    },
+                }
+            ),
+        )
 
         return Response(
             {

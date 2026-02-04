@@ -967,7 +967,6 @@ class Offer(models.Model):
         waiting — пользователь уже ответил, ждёт другую сторону
         action_required — пользователю нужно ответить
         rejected — оффер отклонён / неактивен
-        counter_from_customer — контр от заказчика заявки (кем бы он ни был)
         counter — контр от любого другого участника
         """
         if not self.is_active:

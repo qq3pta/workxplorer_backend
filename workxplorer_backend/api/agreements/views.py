@@ -71,7 +71,6 @@ class AgreementViewSet(ReadOnlyModelViewSet):
 
         channel_layer = get_channel_layer()
         agreement.refresh_from_db()
-
         payload = AgreementDetailSerializer(agreement, context={"request": request}).data
 
         participants = {
@@ -82,7 +81,6 @@ class AgreementViewSet(ReadOnlyModelViewSet):
         }
 
         for user_id in filter(None, participants):
-            payload = AgreementDetailSerializer(agreement, context={"request": request}).data
             message = {
                 "type": "notify",
                 "data": {
@@ -122,7 +120,6 @@ class AgreementViewSet(ReadOnlyModelViewSet):
         }
 
         for user_id in filter(None, participants):
-            payload = AgreementDetailSerializer(agreement, context={"request": request}).data
             message = {
                 "type": "notify",
                 "data": {

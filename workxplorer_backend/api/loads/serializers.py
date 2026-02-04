@@ -7,8 +7,6 @@ from django.utils import timezone
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 from unidecode import unidecode
-from channels.layers import get_channel_layer
-from asgiref.sync import async_to_sync
 
 
 from api.geo.management.commands.import_cities import COUNTRY_NORMALIZATION

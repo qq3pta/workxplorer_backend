@@ -977,11 +977,9 @@ class Offer(models.Model):
 
         # ---------------- Counter Logic ----------------
         if self.is_counter:
-            # Контр от заказчика заявки (CUSTOMER или LOGISTIC)
-            if getattr(user, "id", None) == self.cargo.customer_id:
+            # Смотрим на АВТОРА оффера, а не на того, кто смотрит
+            if self.created_by_id == self.cargo.customer_id:
                 return "counter_from_customer"
-
-            # Контр от логиста / перевозчика / любого не-заказчика
             return "counter"
 
         # ---------------- Regular Response Logic ----------------

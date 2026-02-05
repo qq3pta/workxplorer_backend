@@ -52,7 +52,7 @@ def _notify_dashboard(event="dashboard_updated"):
 
     payload = {
         "total_users": User.objects.count(),
-        "online_users": User.objects.filter(last_login__gte=five_minutes_ago).count(),
+        "online_users": User.objects.filter(last_seen__gte=five_minutes_ago).count(),
         "total_cargos": Cargo.objects.count(),
     }
 

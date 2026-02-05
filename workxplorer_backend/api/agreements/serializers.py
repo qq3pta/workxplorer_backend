@@ -28,9 +28,9 @@ class AgreementDetailSerializer(serializers.ModelSerializer):
     travel_time = serializers.SerializerMethodField()
 
     # ---------- Цена ----------
-    price_currency = serializers.CharField(source="offer.cargo.currency", read_only=True)
-    price_value = serializers.CharField(source="offer.cargo.value", read_only=True)
-    payment_method = serializers.CharField(source="offer.cargo.payment_method", read_only=True)
+    price_currency = serializers.CharField(source="offer.price_currency", read_only=True)
+    price_value = serializers.CharField(source="offer.price_value", read_only=True)
+    payment_method = serializers.CharField(source="offer.payment_method", read_only=True)
 
     class Meta:
         model = Agreement

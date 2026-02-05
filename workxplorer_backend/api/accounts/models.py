@@ -31,6 +31,7 @@ class User(AbstractUser):
     is_email_verified = models.BooleanField(default=False)
     is_accept_policy = models.BooleanField(default=False)
     policy_accepted_at = models.DateTimeField(null=True, blank=True)
+    last_seen = models.DateTimeField(null=True, blank=True, db_index=True)
 
     fcm_token = models.CharField(max_length=255, blank=True, null=True)
 

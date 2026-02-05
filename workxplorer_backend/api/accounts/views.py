@@ -557,15 +557,11 @@ class AnalyticsView(APIView):
 )
 @api_view(["GET"])
 def dashboard_stats(request):
-    """
-    Возвращает статистику:
-    - total_users: общее количество пользователей
-    - online_users: пользователи с last_login в последние 5 минут
-    - total_cargos: общее количество заявок
-    """
     total_users = User.objects.count()
+
     five_minutes_ago = timezone.now() - timedelta(minutes=5)
-    online_users = User.objects.filter(last_login__gte=five_minutes_ago).count()
+    online_users = User.objects.filter(last_seen__gte=five_minutes_ago).count()
+
     total_cargos = Cargo.objects.count()
 
     return Response(

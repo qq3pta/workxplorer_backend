@@ -7,6 +7,9 @@ from django.db.models.functions import TruncMonth
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import generics, serializers
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
+from common.ws_utils import to_ws_safe
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -40,6 +43,47 @@ from .serializers import (
 )
 
 User = get_user_model()
+
+
+def _notify_dashboard(event="dashboard_updated"):
+    channel_layer = get_channel_layer()
+
+    five_minutes_ago = timezone.now() - timedelta(minutes=5)
+
+    payload = {
+        "total_users": User.objects.count(),
+        "online_users": User.objects.filter(last_login__gte=five_minutes_ago).count(),
+        "total_cargos": Cargo.objects.count(),
+    }
+
+    async_to_sync(channel_layer.group_send)(
+        "dashboard",
+        to_ws_safe(
+            {
+                "type": "notify",
+                "data": {
+                    "event": event,
+                    "stats": payload,
+                },
+            }
+        ),
+    )
+
+
+def _notify_analytics(user_id, event="analytics_updated"):
+    channel_layer = get_channel_layer()
+
+    async_to_sync(channel_layer.group_send)(
+        f"user_{user_id}",
+        to_ws_safe(
+            {
+                "type": "notify",
+                "data": {
+                    "event": event,
+                },
+            }
+        ),
+    )
 
 
 def issue_tokens(user, remember: bool):
@@ -103,6 +147,7 @@ class RegisterView(generics.CreateAPIView):
         s = self.get_serializer(data=request.data)
         s.is_valid(raise_exception=True)
         s.save()
+        _notify_dashboard()
         return Response({"detail": "Регистрация успешна."}, status=201)
 
 
@@ -180,6 +225,7 @@ class LoginView(APIView):
             user.save(update_fields=["fcm_token"])
 
         Profile.objects.get_or_create(user=user)
+        _notify_dashboard()
         return Response({"user": MeSerializer(user).data, **issue_tokens(user, remember)})
 
 
@@ -244,6 +290,7 @@ class LogoutView(APIView):
             for t in OutstandingToken.objects.filter(user=request.user):
                 BlacklistedToken.objects.get_or_create(token=t)
 
+        _notify_dashboard()
         return Response({"detail": "Вы вышли из системы"})
 
 

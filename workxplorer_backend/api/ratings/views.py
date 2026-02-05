@@ -3,6 +3,9 @@ from django.db.models import Avg, Count, Q, Sum
 from rest_framework import permissions, viewsets
 from django.db.models.functions import Coalesce
 from django.db.models import IntegerField, ExpressionWrapper
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
+from common.ws_utils import to_ws_safe
 
 from .models import UserRating
 from .serializers import RatingUserListSerializer, UserRatingSerializer
@@ -36,6 +39,35 @@ COUNTRY_CODE_MAP = {
 }
 
 
+def _notify_rating(rating, request, event: str):
+    channel_layer = get_channel_layer()
+
+    order = rating.order
+    participants = {
+        order.customer_id,
+        order.carrier_id,
+        order.logistic_id,
+        rating.rated_user_id,
+        rating.rated_by_id,
+    }
+
+    payload = UserRatingSerializer(rating, context={"request": request}).data
+
+    for user_id in filter(None, participants):
+        async_to_sync(channel_layer.group_send)(
+            f"user_{user_id}",
+            to_ws_safe(
+                {
+                    "type": "notify",
+                    "data": {
+                        "event": event,
+                        "rating": payload,
+                    },
+                }
+            ),
+        )
+
+
 class UserRatingViewSet(viewsets.ModelViewSet):
     """CRUD API для оценок пользователей."""
 
@@ -63,7 +95,18 @@ class UserRatingViewSet(viewsets.ModelViewSet):
         return qs
 
     def perform_create(self, serializer):
-        serializer.save()
+        rating = serializer.save()
+        rating.refresh_from_db()
+        _notify_rating(rating, self.request, "rating_updated")
+
+    def perform_update(self, serializer):
+        rating = serializer.save()
+        rating.refresh_from_db()
+        _notify_rating(rating, self.request, "rating_updated")
+
+    def perform_destroy(self, instance):
+        _notify_rating(instance, self.request, "rating_deleted")
+        instance.delete()
 
 
 User = get_user_model()

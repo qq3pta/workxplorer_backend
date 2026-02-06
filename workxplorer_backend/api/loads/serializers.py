@@ -412,11 +412,21 @@ class CargoListSerializer(RouteKmMixin, serializers.ModelSerializer):
     @extend_schema_field(Decimal)
     def get_price_per_km(self, obj):
         price = obj.price_value
-        dist = getattr(obj, "route_km", None) or obj.route_km_cached or obj.path_km
+
+        dist = (
+            getattr(obj, "route_km", None)
+            or getattr(obj, "route_km_cached", None)
+            or getattr(obj, "path_km", None)
+        )
+
         if not price or not dist:
             return None
 
-        if float(dist) == 0:
+        try:
+            dist_val = float(dist)
+            if dist_val == 0:
+                return None
+        except Exception:
             return None
 
         try:

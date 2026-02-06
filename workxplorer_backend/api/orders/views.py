@@ -338,7 +338,7 @@ class OrdersViewSet(viewsets.ModelViewSet):
 
         # 3. Установка флага и перевод в рабочий статус
         order.carrier_accepted_terms = True
-        order.status = Order.OrderStatus.PENDING  # Переводим в рабочий статус
+        order.status = Order.OrderStatus.PENDING
         order.save(update_fields=["carrier_accepted_terms", "status"])
 
         channel_layer = get_channel_layer()

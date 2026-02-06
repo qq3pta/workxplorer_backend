@@ -235,7 +235,6 @@ class Order(models.Model):
                     )
 
         if new_status == Order.OrderStatus.DELIVERED:
-            # 🔑 СОЗДАЁМ ПЛАТЁЖ ТОЛЬКО ЗДЕСЬ
             if not self.payments.exists():
                 Payment.objects.create(
                     order=self,

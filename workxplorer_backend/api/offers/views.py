@@ -653,7 +653,7 @@ class OfferViewSet(ModelViewSet):
         responses=OfferDetailSerializer,
     )
     @action(detail=True, methods=["post"])
-    def counter(self, request, pk=None):
+    def bids(self, request, pk=None):
         offer = self.get_object()
 
         ser = self.get_serializer(data=request.data)

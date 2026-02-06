@@ -291,7 +291,7 @@ class OfferViewSet(ModelViewSet):
       GET    /api/offers/{id}/             — детали
       POST   /api/offers/{id}/accept/      — принять
       POST   /api/offers/{id}/reject/      — отклонить
-      POST   /api/offers/{id}/counter/     — контр-предложение
+      POST   /api/offers/{id}/bids/     — контр-предложение
       POST   /api/offers/invite/           — инвайт (Заказчик → Перевозчик)
     """
 
@@ -326,7 +326,7 @@ class OfferViewSet(ModelViewSet):
             "create": OfferCreateSerializer,
             "my": OfferShortSerializer,
             "incoming": OfferShortSerializer,
-            "counter": OfferCounterSerializer,
+            "bids": OfferCounterSerializer,
             "accept": EmptySerializer,
             "reject": EmptySerializer,
             "invite": OfferInviteSerializer,

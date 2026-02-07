@@ -6,7 +6,7 @@ from core.health import health
 
 
 def sentry_test(request):
-    1 / 0
+    raise ZeroDivisionError("Sentry test error")
 
 
 urlpatterns = [

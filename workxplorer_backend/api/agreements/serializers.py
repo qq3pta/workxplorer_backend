@@ -5,6 +5,7 @@ from .models import Agreement
 
 
 class AgreementDetailSerializer(serializers.ModelSerializer):
+    # ---------- ГРУЗЫ ----------
     offer_id = serializers.IntegerField(source="offer.id", read_only=True)
     cargo_id = serializers.IntegerField(source="offer.cargo.id", read_only=True)
 
@@ -13,6 +14,7 @@ class AgreementDetailSerializer(serializers.ModelSerializer):
     loading_address = serializers.CharField(source="offer.cargo.origin_address", read_only=True)
     loading_date = serializers.DateField(source="offer.cargo.load_date", read_only=True)
 
+    # ---------- УЧАСТНИКИ ----------
     customer = serializers.SerializerMethodField()
     other_party = serializers.SerializerMethodField()
 

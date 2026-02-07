@@ -1,3 +1,5 @@
+import sentry_sdk
+from sentry_sdk.integrations.django import DjangoIntegration
 from datetime import timedelta
 from os import getenv
 from pathlib import Path
@@ -20,6 +22,18 @@ def _csv(name: str, default: str = "") -> list[str]:
 # Core
 SECRET_KEY = getenv("DJANGO_SECRET_KEY", "dev-secret")
 DEBUG = getenv("DJANGO_DEBUG", "True").lower() == "true"
+SENTRY_DSN = getenv("SENTRY_DSN")
+
+if SENTRY_DSN:
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        integrations=[DjangoIntegration()],
+        send_default_pii=True,
+        # Sampling (prod меньше, dev всё)
+        traces_sample_rate=0.2 if not DEBUG else 1.0,
+        profiles_sample_rate=0.2 if not DEBUG else 1.0,
+        environment="production" if not DEBUG else "development",
+    )
 
 ALLOWED_HOSTS = (
     _csv("ALLOWED_HOSTS")

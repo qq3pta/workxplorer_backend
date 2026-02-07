@@ -24,27 +24,28 @@ class Agreement(models.Model):
         related_name="agreement",
     )
 
-    # --- CUSTOMER ---
+    # --- ЗАКАЗЧИК ---
     customer_id = models.BigIntegerField(null=True, blank=True)
     customer_full_name = models.CharField(max_length=255, blank=True, default="")
     customer_email = models.EmailField(blank=True, default="")
     customer_phone = models.CharField(max_length=32, blank=True, default="")
     customer_registered_at = models.DateTimeField(null=True, blank=True)
 
-    # --- CARRIER ---
+    # --- ПЕРЕВОЗЧИК ---
     carrier_id = models.BigIntegerField(null=True, blank=True)
     carrier_full_name = models.CharField(max_length=255, blank=True)
     carrier_email = models.EmailField(blank=True)
     carrier_phone = models.CharField(max_length=32, blank=True)
     carrier_registered_at = models.DateTimeField(null=True, blank=True)
 
-    # --- LOGISTIC ---
+    # --- ЛОГИСТ ---
     logistic_id = models.BigIntegerField(null=True, blank=True)
     logistic_full_name = models.CharField(max_length=255, blank=True)
     logistic_email = models.EmailField(blank=True)
     logistic_phone = models.CharField(max_length=32, blank=True)
     logistic_registered_at = models.DateTimeField(null=True, blank=True)
 
+    # --- СОГЛАШЕНИЕ ---
     accepted_by_customer = models.BooleanField(default=False)
     accepted_by_carrier = models.BooleanField(default=False)
     accepted_by_logistic = models.BooleanField(default=False)
@@ -55,6 +56,7 @@ class Agreement(models.Model):
         default=Status.PENDING,
     )
 
+    # --- ВРЕМЯ ---
     expires_at = models.DateTimeField()
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -62,6 +64,7 @@ class Agreement(models.Model):
     class Meta:
         ordering = ["-created_at"]
 
+    # --- CREATE ---
     @classmethod
     def get_or_create_from_offer(cls, offer):
         customer = offer.cargo.customer
@@ -105,6 +108,7 @@ class Agreement(models.Model):
         )
         return agreement
 
+    # --- ACCEPT ---
     def accept_by(self, user):
         if self.status != self.Status.PENDING:
             raise ValidationError("Соглашение уже обработано")
@@ -220,6 +224,7 @@ class Agreement(models.Model):
         self.offer.is_active = False
         self.offer.save()
 
+    # --- REJECT ---
     def reject(self, by_user):
         if self.status != self.Status.PENDING:
             raise ValidationError("Соглашение уже обработано")

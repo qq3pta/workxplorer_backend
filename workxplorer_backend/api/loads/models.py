@@ -52,20 +52,26 @@ class Cargo(models.Model):
         verbose_name="Создано логистом",
     )
 
+    # --- ДЕТАЛИ ГРУЗА ---
     product = models.CharField("Название груза", max_length=120)
     description = models.TextField("Описание", blank=True)
+    # --- ОТКУДА ---
     origin_country = models.CharField(max_length=100, default="", blank=True)
     origin_address = models.CharField(max_length=255)
     origin_city = models.CharField(max_length=100)
     origin_city_latin = models.CharField(max_length=120, blank=True, null=True)
+    # --- КУДА ---
     destination_country = models.CharField(max_length=100, default="", blank=True)
     destination_address = models.CharField(max_length=255)
     destination_city = models.CharField(max_length=100)
     destination_city_latin = models.CharField(max_length=120, blank=True, null=True)
+    # --- КООРДИНАТЫ ---
     origin_point = gis_models.PointField(geography=True, srid=4326, null=True, blank=True)
     dest_point = gis_models.PointField(geography=True, srid=4326, null=True, blank=True)
+    # --- ДАТА ---
     load_date = models.DateField("Дата загрузки")
     delivery_date = models.DateField("Дата доставки", null=True, blank=True)
+    # --- ТРАНСПОРТ ---
     transport_type = models.CharField(max_length=10, choices=TransportType.choices)
     weight_kg = models.DecimalField(max_digits=12, decimal_places=2)
     axles = models.PositiveSmallIntegerField(
@@ -82,6 +88,7 @@ class Cargo(models.Model):
         help_text="Объём, м³",
     )
 
+    # --- ЦЕНА ---
     price_value = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
     price_currency = models.CharField(max_length=3, choices=Currency.choices, default=Currency.UZS)
     price_uzs = models.DecimalField(

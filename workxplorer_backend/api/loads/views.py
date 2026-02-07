@@ -229,11 +229,14 @@ class PublicLoadsView(generics.ListAPIView):
     serializer_class = CargoListSerializer
 
     def get_queryset(self):
+        today = timezone.localdate()
+
         qs = (
             Cargo.objects.filter(
                 moderation_status=ModerationStatus.APPROVED,
                 is_hidden=False,
                 status=CargoStatus.POSTED,
+                load_date__gte=today,
             )
             .exclude(
                 origin_point__isnull=True,

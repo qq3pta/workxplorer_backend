@@ -210,7 +210,7 @@ class MyCargosBoardView(generics.ListAPIView):
             Cargo.objects.filter(
                 Q(customer=user) | Q(created_by=user),
                 status=CargoStatus.POSTED,
-                is_hiden=False,
+                is_hidden=False,
                 load_date__gte=today,
             )
             .annotate(

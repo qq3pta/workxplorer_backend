@@ -5,10 +5,6 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from core.health import health
 
 
-def sentry_test(request):
-    raise ZeroDivisionError("Sentry test error")
-
-
 urlpatterns = [
     path("admin/", admin.site.urls),
     # OpenAPI/Swagger
@@ -28,5 +24,4 @@ urlpatterns = [
     path("api/support/", include("api.support.urls")),
     # Health
     path("health/", health),
-    path("sentry-debug/", sentry_test),
 ]

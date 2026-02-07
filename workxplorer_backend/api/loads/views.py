@@ -204,11 +204,13 @@ class MyCargosBoardView(generics.ListAPIView):
 
     def get_queryset(self):
         user = self.request.user
+        today = timezone.localdate()
 
         qs = (
             Cargo.objects.filter(
                 Q(customer=user) | Q(created_by=user),
                 status=CargoStatus.POSTED,
+                load_date__gte=today,
             )
             .annotate(
                 offers_active=Count("offers", filter=Q(offers__is_active=True)),

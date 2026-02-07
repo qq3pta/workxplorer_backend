@@ -173,18 +173,18 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
                 wt = Decimal(str(wt))
             attrs["weight_kg"] = wt * Decimal("1000")
 
-        # ld = self._val_or_instance(attrs, "load_date")
-        # today = timezone.localdate()
-        # if ld and ld < today:
-        # raise serializers.ValidationError(
-        # {"load_date": "Дата загрузки не может быть в прошлом."}
-        # )
+        ld = self._val_or_instance(attrs, "load_date")
+        today = timezone.localdate()
+        if ld and ld < today:
+            raise serializers.ValidationError(
+                {"load_date": "Дата загрузки не может быть в прошлом."}
+            )
 
-        # dd = self._val_or_instance(attrs, "delivery_date")
-        # if dd and ld and dd < ld:
-        # raise serializers.ValidationError(
-        # {"delivery_date": "Дата доставки не может быть раньше даты загрузки."}
-        # )
+        dd = self._val_or_instance(attrs, "delivery_date")
+        if dd and ld and dd < ld:
+            raise serializers.ValidationError(
+                {"delivery_date": "Дата доставки не может быть раньше даты загрузки."}
+            )
 
         wk = attrs.get("weight_kg")
         if wk is not None and Decimal(str(wk)) <= 0:

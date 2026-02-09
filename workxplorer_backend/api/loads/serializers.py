@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from decimal import ROUND_HALF_UP, Decimal
+from django.contrib.gis.geos import Point
 from typing import Any
 
 from django.utils import timezone
@@ -48,6 +49,11 @@ class RouteKmMixin(serializers.Serializer):
 class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
     price_uzs = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
     weight_tons = serializers.FloatField(required=False, write_only=True, min_value=0.001)
+    # --- КООРДИНАТЫ ---
+    origin_lat = serializers.FloatField(required=False, write_only=True)
+    origin_lng = serializers.FloatField(required=False, write_only=True)
+    dest_lat = serializers.FloatField(required=False, write_only=True)
+    dest_lng = serializers.FloatField(required=False, write_only=True)
     payment_method = serializers.ChoiceField(
         choices=PaymentMethod.choices,
         default=PaymentMethod.CASH,
@@ -78,6 +84,10 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
             "contact_pref",
             "payment_method",
             "is_hidden",
+            "origin_lat",
+            "origin_lng",
+            "dest_lat",
+            "dest_lng",
         )
         read_only_fields = ("route_km", "price_uzs", "uuid")
 
@@ -227,8 +237,22 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
                 wt = Decimal(str(wt))
             validated_data["weight_kg"] = wt * Decimal("1000")
 
-        origin_point = self._geocode_origin(validated_data)
-        dest_point = self._geocode_dest(validated_data)
+        origin_lat = validated_data.pop("origin_lat", None)
+        origin_lng = validated_data.pop("origin_lng", None)
+        dest_lat = validated_data.pop("dest_lat", None)
+        dest_lng = validated_data.pop("dest_lng", None)
+
+        # origin
+        if origin_lat is not None and origin_lng is not None:
+            origin_point = Point(float(origin_lng), float(origin_lat), srid=4326)
+        else:
+            origin_point = self._geocode_origin(validated_data)
+
+        # destination
+        if dest_lat is not None and dest_lng is not None:
+            dest_point = Point(float(dest_lng), float(dest_lat), srid=4326)
+        else:
+            dest_point = self._geocode_dest(validated_data)
 
         if not origin_point or not dest_point:
             raise serializers.ValidationError("Не удалось определить координаты маршрута.")
@@ -248,18 +272,32 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
     def update(self, instance, validated_data):
         wt = validated_data.pop("weight_tons", None)
         if wt is not None:
-            if isinstance(wt, float) or isinstance(wt, int):  # FIXED UP038
+            if isinstance(wt, (float, int)):
                 wt = Decimal(f"{wt:.6f}")
             else:
                 wt = Decimal(str(wt))
             validated_data["weight_kg"] = wt * Decimal("1000")
 
+        # --- координаты из карты ---
+        origin_lat = validated_data.pop("origin_lat", None)
+        origin_lng = validated_data.pop("origin_lng", None)
+        dest_lat = validated_data.pop("dest_lat", None)
+        dest_lng = validated_data.pop("dest_lng", None)
+
         need_origin, need_dest = self._need_regeocode(validated_data)
 
-        if need_origin:
+        # origin
+        if origin_lat is not None and origin_lng is not None:
+            instance.origin_point = Point(float(origin_lng), float(origin_lat), srid=4326)
+            need_origin = False
+        elif need_origin:
             instance.origin_point = self._geocode_origin(validated_data)
 
-        if need_dest:
+        # destination
+        if dest_lat is not None and dest_lng is not None:
+            instance.dest_point = Point(float(dest_lng), float(dest_lat), srid=4326)
+            need_dest = False
+        elif need_dest:
             instance.dest_point = self._geocode_dest(validated_data)
 
         for field, value in validated_data.items():

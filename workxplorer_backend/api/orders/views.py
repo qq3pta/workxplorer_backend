@@ -4,7 +4,10 @@ from decimal import Decimal
 from django.db.models import Q, F
 from common.utils import convert_to_uzs
 from django.contrib.auth import get_user_model
+from django.contrib.gis.geos import Point
 from django.db import models
+from django.utils import timezone
+from datetime import timedelta
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 from rest_framework import status as http_status
 from rest_framework import viewsets
@@ -21,7 +24,7 @@ from asgiref.sync import async_to_sync
 from common.ws_utils import to_ws_safe
 
 
-from .models import Order, OrderStatusHistory
+from .models import Order, OrderStatusHistory, DriverLocation
 from api.offers.models import Offer
 from .permissions import IsOrderParticipant
 from .serializers import (
@@ -821,6 +824,121 @@ class OrdersViewSet(viewsets.ModelViewSet):
             },
             status=http_status.HTTP_200_OK,
         )
+
+    # ================= GPS TRACKING =================
+    @action(detail=True, methods=["post"], url_path="gps")
+    def update_gps(self, request, pk=None):
+        order = self.get_object()
+        user = request.user
+
+        # Только перевозчик может отправлять GPS
+        if user.id != order.carrier_id:
+            return Response({"detail": "Только перевозчик может отправлять GPS"}, status=403)
+
+        lat = request.data.get("lat")
+        lng = request.data.get("lng")
+
+        if lat is None or lng is None:
+            return Response({"detail": "lat/lng обязательны"}, status=400)
+
+        try:
+            lat = float(lat)
+            lng = float(lng)
+        except ValueError:
+            return Response({"detail": "Некорректные координаты"}, status=400)
+
+        if not (-90 <= lat <= 90 and -180 <= lng <= 180):
+            return Response({"detail": "Координаты вне диапазона"}, status=400)
+
+        point = Point(lng, lat, srid=4326)
+
+        gps, _ = DriverLocation.objects.get_or_create(order=order)
+        gps.point = point
+        gps.save()
+
+        # realtime в websocket (как у тебя в driver_status)
+        channel_layer = get_channel_layer()
+
+        participants = {
+            order.customer_id,
+            order.carrier_id,
+            order.logistic_id,
+        }
+
+        payload = {
+            "event": "gps_updated",
+            "order_id": order.id,
+            "lat": lat,
+            "lng": lng,
+            "recorded_at": gps.recorded_at.isoformat(),
+        }
+
+        for user_id in filter(None, participants):
+            async_to_sync(channel_layer.group_send)(
+                f"user_{user_id}",
+                to_ws_safe(
+                    {
+                        "type": "notify",
+                        "data": payload,
+                    }
+                ),
+            )
+
+        return Response(payload)
+
+    # ================= TRACKING =================
+    @action(detail=True, methods=["get"], url_path="tracking")
+    def tracking(self, request, pk=None):
+        order = self.get_object()
+        gps = getattr(order, "gps", None)
+
+        data = {
+            "order_id": order.id,
+            "status": order.status,
+            "driver_status": order.driver_status,
+            "driver": None,
+            "origin": None,
+            "destination": None,
+            "gps": None,
+            "online": False,
+        }
+
+        # --- водитель ---
+        if order.carrier:
+            data["driver"] = {
+                "id": order.carrier.id,
+                "name": order.carrier.get_full_name() or order.carrier.username,
+                "last_seen": getattr(order.carrier, "last_seen", None),
+            }
+
+        # --- точки ---
+        if order.cargo and order.cargo.origin_point:
+            data["origin"] = {
+                "lat": order.cargo.origin_point.y,
+                "lng": order.cargo.origin_point.x,
+            }
+
+        if order.cargo and order.cargo.dest_point:
+            data["destination"] = {
+                "lat": order.cargo.dest_point.y,
+                "lng": order.cargo.dest_point.x,
+            }
+
+        # --- GPS ---
+        if gps and gps.point:
+            data["gps"] = {
+                "lat": gps.point.y,
+                "lng": gps.point.x,
+                "city": gps.city,
+                "country": gps.country,
+                "recorded_at": gps.recorded_at,
+            }
+
+            # online/offline (15 мин)
+            if gps.recorded_at and timezone.now() - gps.recorded_at < timedelta(minutes=15):
+                data["online"] = True
+
+        return Response(data)
 
 
 class SharedOrderView(RetrieveAPIView):

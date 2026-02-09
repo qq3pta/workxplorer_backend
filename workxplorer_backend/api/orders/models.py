@@ -2,6 +2,7 @@ import os
 import uuid
 
 from django.conf import settings
+from django.contrib.gis.db import models as gis_models
 from django.core.exceptions import ValidationError
 from django.core.validators import FileExtensionValidator, MinValueValidator
 from django.db import models, transaction
@@ -418,3 +419,18 @@ class OrderStatusHistory(models.Model):
 
     def __str__(self):
         return f"Order#{self.order_id}: {self.old_status} → {self.new_status}"
+
+
+class DriverLocation(models.Model):
+    order = models.OneToOneField(Order, on_delete=models.CASCADE, related_name="gps")
+
+    point = gis_models.PointField(geography=True, srid=4326)
+    city = models.CharField(max_length=120, blank=True)
+    country = models.CharField(max_length=120, blank=True)
+
+    recorded_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["recorded_at"]),
+        ]

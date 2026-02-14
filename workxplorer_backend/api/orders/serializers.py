@@ -467,3 +467,7 @@ class InvitePreviewSerializer(serializers.Serializer):
     )
     driver_currency = serializers.CharField(allow_null=True)
     driver_payment_method = serializers.CharField(allow_null=True)
+
+
+class PrivacyToggleSerializer(serializers.Serializer):
+    hide = serializers.BooleanField(required=True)

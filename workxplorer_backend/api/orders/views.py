@@ -35,6 +35,7 @@ from .serializers import (
     OrderListSerializer,
     OrderStatusHistorySerializer,
     InvitePreviewSerializer,
+    PrivacyToggleSerializer,
 )
 
 User = get_user_model()

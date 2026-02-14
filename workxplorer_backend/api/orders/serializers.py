@@ -261,7 +261,6 @@ class OrderListSerializer(serializers.ModelSerializer):
                 "phone": None if hide_for_carrier else getattr(u, "phone", None),
                 "email": None if hide_for_carrier else getattr(u, "email", None),
                 "role": getattr(u, "role", None),
-
                 "hidden": hidden,
                 "hidden_by": hidden_by,
             }

@@ -953,21 +953,21 @@ class OrdersViewSet(viewsets.ModelViewSet):
         order = self.get_object()
         user = request.user
 
-        # ---------- toggle ----------
+        # ---------- toggle helper ----------
         def _toggle(value: bool) -> bool:
             return not bool(value)
 
         update_fields = []
 
         # =========================
-        # CUSTOMER → roles.customer.hidden (self hide)
+        # CUSTOMER → roles.customer.hidden
         # =========================
         if user.id == order.customer_id:
             order.customer_hide_contacts = _toggle(order.customer_hide_contacts)
             update_fields.append("customer_hide_contacts")
 
         # =========================
-        # LOGISTIC → roles.customer.hidden_by (hide customer)
+        # LOGISTIC → roles.customer.hidden_by
         # =========================
         elif user.id == order.logistic_id:
             order.logistic_hide_contacts = _toggle(order.logistic_hide_contacts)
@@ -1003,19 +1003,12 @@ class OrdersViewSet(viewsets.ModelViewSet):
                 ),
             )
 
-        return Response(
-            {
-                "roles": {
-                    "customer": {
-                        "hidden": order.customer_hide_contacts,
-                        "hidden_by": order.logistic_hide_contacts,
-                    }
-                },
-                "effective_hidden_for_carrier": (
-                    order.customer_hide_contacts or order.logistic_hide_contacts
-                ),
-            }
-        )
+        # ---------- RESPONSE строго по ТЗ ----------
+        if user.id == order.customer_id:
+            return Response({"roles": {"customer": {"hidden": order.customer_hide_contacts}}})
+
+        elif user.id == order.logistic_id:
+            return Response({"roles": {"customer": {"hidden_by": order.logistic_hide_contacts}}})
 
 
 class SharedOrderView(RetrieveAPIView):

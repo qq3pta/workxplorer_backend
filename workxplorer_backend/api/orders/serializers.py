@@ -237,23 +237,40 @@ class OrderListSerializer(serializers.ModelSerializer):
             hidden = False
             hidden_by = None
 
+            # ---------- кто смотрит ----------
+            is_customer = request_user and request_user.id == obj.customer_id
+            is_carrier = request_user and request_user.id == obj.carrier_id
+            is_logistic = request_user and request_user.id == obj.logistic_id
+
             # =========================
             # СКРЫТИЕ ЗАКАЗЧИКА
             # =========================
             if u.id == obj.customer_id:
+                # ---------------------------------
+                # 1. CUSTOMER self-hide
+                # скрывает ТОЛЬКО от перевозчика
+                # ---------------------------------
                 if obj.customer_hide_contacts:
-                    hidden = True
+                    if is_carrier:
+                        hidden = True
+                    else:
+                        hidden = False  # логист и сам заказчик видят
 
+                # ---------------------------------
+                # 2. LOGISTIC hide
+                # ---------------------------------
                 if obj.logistic_hide_contacts:
-                    hidden = True
-                    hidden_by = "logistic"
+                    if is_carrier:
+                        hidden = True
+                    elif is_logistic:
+                        hidden = True
+                        hidden_by = "logistic"
+                    else:
+                        hidden = False  # заказчик не знает
 
             # =========================
-            # КТО ЧТО ВИДИТ
+            # ЗАЩИТА
             # =========================
-            is_customer = request_user and request_user.id == obj.customer_id
-            is_carrier = request_user and request_user.id == obj.carrier_id
-            is_logistic = request_user and request_user.id == obj.logistic_id
 
             # заказчик НЕ должен знать, что его скрыл логист
             if is_customer and hidden_by == "logistic":
@@ -282,6 +299,31 @@ class OrderListSerializer(serializers.ModelSerializer):
                 data["hidden_by"] = hidden_by
 
             return data
+
+        # CUSTOMER
+        customer = user_info(obj.customer)
+
+        # LOGISTIC (если не равен заказчику)
+        logistic_user = None
+        if obj.logistic_id and obj.logistic_id != obj.customer_id:
+            logistic_user = obj.logistic
+        elif (
+            obj.created_by_id
+            and obj.created_by_id != obj.customer_id
+            and getattr(obj.created_by, "role", "") == "LOGISTIC"
+        ):
+            logistic_user = obj.created_by
+
+        logistic = user_info(logistic_user)
+
+        # CARRIER
+        carrier = user_info(obj.carrier)
+
+        return {
+            "customer": customer,
+            "logistic": logistic,
+            "carrier": carrier,
+        }
 
         # CUSTOMER всегда выводим как есть
         customer = user_info(obj.customer)

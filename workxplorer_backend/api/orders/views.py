@@ -953,30 +953,24 @@ class OrdersViewSet(viewsets.ModelViewSet):
         order = self.get_object()
         user = request.user
 
-        # ---------- safe bool ----------
-        def _to_bool(v):
-            if isinstance(v, bool):
-                return v
-            if isinstance(v, str):
-                return v.lower() in ("1", "true", "yes", "on")
-            return bool(v)
-
-        hide = _to_bool(request.data.get("hide", True))
+        # ---------- toggle ----------
+        def _toggle(value: bool) -> bool:
+            return not bool(value)
 
         update_fields = []
 
         # =========================
-        # CUSTOMER скрывает СЕБЯ
+        # CUSTOMER → roles.customer.hidden (self hide)
         # =========================
         if user.id == order.customer_id:
-            order.customer_hide_contacts = hide
+            order.customer_hide_contacts = _toggle(order.customer_hide_contacts)
             update_fields.append("customer_hide_contacts")
 
         # =========================
-        # LOGISTIC скрывает CUSTOMER
+        # LOGISTIC → roles.customer.hidden_by (hide customer)
         # =========================
         elif user.id == order.logistic_id:
-            order.logistic_hide_contacts = hide
+            order.logistic_hide_contacts = _toggle(order.logistic_hide_contacts)
             update_fields.append("logistic_hide_contacts")
 
         else:
@@ -986,6 +980,10 @@ class OrdersViewSet(viewsets.ModelViewSet):
         order.save(update_fields=update_fields)
 
         # ---------- websocket sync ----------
+        from channels.layers import get_channel_layer
+        from asgiref.sync import async_to_sync
+        from common.ws_utils import to_ws_safe
+
         channel_layer = get_channel_layer()
         order.refresh_from_db()
 
@@ -1007,8 +1005,12 @@ class OrdersViewSet(viewsets.ModelViewSet):
 
         return Response(
             {
-                "customer_hidden": order.customer_hide_contacts,
-                "logistic_hidden": order.logistic_hide_contacts,
+                "roles": {
+                    "customer": {
+                        "hidden": order.customer_hide_contacts,
+                        "hidden_by": order.logistic_hide_contacts,
+                    }
+                },
                 "effective_hidden_for_carrier": (
                     order.customer_hide_contacts or order.logistic_hide_contacts
                 ),

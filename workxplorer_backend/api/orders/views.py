@@ -8,7 +8,7 @@ from django.contrib.gis.geos import Point
 from django.db import models
 from django.utils import timezone
 from datetime import timedelta
-from drf_spectacular.utils import extend_schema, OpenApiParameter
+from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
 from rest_framework import status as http_status
 from rest_framework import viewsets
 from rest_framework.decorators import action
@@ -940,6 +940,13 @@ class OrdersViewSet(viewsets.ModelViewSet):
 
         return Response(data)
 
+    @extend_schema(
+        request=PrivacyToggleSerializer,
+        examples=[
+            OpenApiExample("Hide", value={"hide": True}),
+            OpenApiExample("Show", value={"hide": False}),
+        ],
+    )
     @action(detail=True, methods=["post"], url_path="privacy-toggle")
     def privacy_toggle(self, request, pk=None):
         order = self.get_object()

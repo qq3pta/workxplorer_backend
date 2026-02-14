@@ -941,21 +941,23 @@ class OrdersViewSet(viewsets.ModelViewSet):
         return Response(data)
 
     @action(detail=True, methods=["post"], url_path="privacy-toggle")
-    def toggle_privacy(self, request, pk=None):
+    def privacy_toggle(self, request, pk=None):
         order = self.get_object()
         user = request.user
 
-        if user == order.customer:
+        # --- CUSTOMER скрывает СЕБЯ ---
+        if user.id == order.customer_id:
             order.customer_hide_contacts = not order.customer_hide_contacts
             order.save(update_fields=["customer_hide_contacts"])
             return Response({"hidden": order.customer_hide_contacts})
 
-        if user == order.logistic:
-            order.logistic_hide_contacts = not order.logistic_hide_contacts
-            order.save(update_fields=["logistic_hide_contacts"])
-            return Response({"hidden": order.logistic_hide_contacts})
+        # --- LOGISTIC скрывает CUSTOMER ---
+        if user.id == order.logistic_id:
+            order.customer_hide_contacts = not order.customer_hide_contacts
+            order.save(update_fields=["customer_hide_contacts"])
+            return Response({"hidden": order.customer_hide_contacts, "hidden_by": "logistic"})
 
-        return Response({"detail": "Нет доступа"}, status=403)
+        return Response({"detail": "You cannot change privacy"}, status=403)
 
 
 class SharedOrderView(RetrieveAPIView):

@@ -86,6 +86,9 @@ class Order(models.Model):
         verbose_name=_("Перевозчик/Водитель принял условия заказа"),
     )
 
+    customer_hide_contacts = models.BooleanField(default=False)
+    logistic_hide_contacts = models.BooleanField(default=False)
+
     status = models.CharField(
         max_length=20,
         choices=OrderStatus.choices,

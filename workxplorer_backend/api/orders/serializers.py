@@ -227,16 +227,33 @@ class OrderListSerializer(serializers.ModelSerializer):
         return self._get_user_full_name(obj.logistic)
 
     def get_roles(self, obj):
+        request = self.context.get("request")  # ← ВОТ ЭТО НУЖНО
+        request_user = request.user if request else None
+
         def user_info(u):
             if not u:
                 return None
+
+            hide = False
+
+            # скрываем ТОЛЬКО если смотрит перевозчик
+            if request_user and request_user.id == obj.carrier_id:
+
+                if u.id == obj.customer_id:
+                    hide = obj.customer_hide_contacts
+
+                elif u.id == obj.logistic_id:
+                    hide = obj.logistic_hide_contacts
+
             return {
                 "id": u.id,
-                "name": self._get_user_full_name(u),
+                "name": None if hide else self._get_user_full_name(u),
                 "company": self._get_user_company(u),
                 "login": u.username,
-                "phone": getattr(u, "phone", None),
+                "phone": None if hide else getattr(u, "phone", None),
+                "email": None if hide else getattr(u, "email", None),
                 "role": getattr(u, "role", None),
+                "hidden": hide,
             }
 
         # CUSTOMER всегда выводим как есть

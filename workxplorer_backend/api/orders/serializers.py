@@ -234,9 +234,6 @@ class OrderListSerializer(serializers.ModelSerializer):
             if not u:
                 return None
 
-            request = self.context.get("request")
-            request_user = request.user if request else None
-
             hidden = False
             hidden_by = None
 
@@ -258,11 +255,14 @@ class OrderListSerializer(serializers.ModelSerializer):
             is_carrier = request_user and request_user.id == obj.carrier_id
             is_logistic = request_user and request_user.id == obj.logistic_id
 
+            # заказчик НЕ должен знать, что его скрыл логист
             if is_customer and hidden_by == "logistic":
                 hidden = False
                 hidden_by = None
-                if not hidden:
-                    hidden_by = None
+
+            # защита от залипания hidden_by
+            if not hidden:
+                hidden_by = None
 
             hide_contacts = is_carrier and hidden and not is_logistic
 
@@ -277,6 +277,7 @@ class OrderListSerializer(serializers.ModelSerializer):
                 "hidden": hidden if not is_customer else False,
             }
 
+            # hidden_by показываем только логисту
             if hidden_by and is_logistic:
                 data["hidden_by"] = hidden_by
 

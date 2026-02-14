@@ -234,35 +234,50 @@ class OrderListSerializer(serializers.ModelSerializer):
             if not u:
                 return None
 
+            request = self.context.get("request")
+            request_user = request.user if request else None
+
             hidden = False
             hidden_by = None
 
-            # --- скрывается ТОЛЬКО CUSTOMER ---
-            if u.id == obj.customer_id and obj.customer_hide_contacts:
-                hidden = True
+            # =========================
+            # СКРЫТИЕ ЗАКАЗЧИКА
+            # =========================
+            if u.id == obj.customer_id:
+                if obj.customer_hide_contacts:
+                    hidden = True
 
-                # hidden_by только если скрывал LOGISTIC
                 if obj.logistic_hide_contacts:
+                    hidden = True
                     hidden_by = "logistic"
 
-            # --- скрываем контакты только для carrier ---
-            hide_for_carrier = False
-            if request_user and request_user.id == obj.carrier_id:
-                hide_for_carrier = hidden
+            # =========================
+            # КТО ЧТО ВИДИТ
+            # =========================
+            is_customer = request_user and request_user.id == obj.customer_id
+            is_carrier = request_user and request_user.id == obj.carrier_id
+            is_logistic = request_user and request_user.id == obj.logistic_id
+
+            if is_customer and hidden_by == "logistic":
+                hidden = False
+                hidden_by = None
+                if not hidden:
+                    hidden_by = None
+
+            hide_contacts = is_carrier and hidden and not is_logistic
 
             data = {
                 "id": u.id,
-                "name": None if hide_for_carrier else self._get_user_full_name(u),
+                "name": None if hide_contacts else self._get_user_full_name(u),
                 "company": self._get_user_company(u),
                 "login": u.username,
-                "phone": None if hide_for_carrier else getattr(u, "phone", None),
-                "email": None if hide_for_carrier else getattr(u, "email", None),
+                "phone": None if hide_contacts else getattr(u, "phone", None),
+                "email": None if hide_contacts else getattr(u, "email", None),
                 "role": getattr(u, "role", None),
-                "hidden": hidden,
+                "hidden": hidden if not is_customer else False,
             }
 
-            # добавляем hidden_by ТОЛЬКО если logistic
-            if hidden_by:
+            if hidden_by and is_logistic:
                 data["hidden_by"] = hidden_by
 
             return data

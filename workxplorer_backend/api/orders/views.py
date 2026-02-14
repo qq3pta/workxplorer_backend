@@ -955,30 +955,27 @@ class OrdersViewSet(viewsets.ModelViewSet):
 
         hide = _to_bool(request.data.get("hide", True))
 
-        updated = False
+        update_fields = []
 
         # =========================
         # CUSTOMER скрывает СЕБЯ
         # =========================
         if user.id == order.customer_id:
             order.customer_hide_contacts = hide
-            updated = True
+            update_fields.append("customer_hide_contacts")
 
         # =========================
         # LOGISTIC скрывает CUSTOMER
         # =========================
         elif user.id == order.logistic_id:
             order.logistic_hide_contacts = hide
-            updated = True
+            update_fields.append("logistic_hide_contacts")
 
         else:
             return Response({"detail": "No permission"}, status=403)
 
-        if not updated:
-            return Response({"detail": "Nothing changed"}, status=400)
-
         # ---------- save ----------
-        order.save(update_fields=["customer_hide_contacts", "logistic_hide_contacts"])
+        order.save(update_fields=update_fields)
 
         # ---------- websocket sync ----------
         channel_layer = get_channel_layer()
@@ -1004,8 +1001,9 @@ class OrdersViewSet(viewsets.ModelViewSet):
             {
                 "customer_hidden": order.customer_hide_contacts,
                 "logistic_hidden": order.logistic_hide_contacts,
-                "effective_hidden_for_carrier": order.customer_hide_contacts
-                or order.logistic_hide_contacts,
+                "effective_hidden_for_carrier": (
+                    order.customer_hide_contacts or order.logistic_hide_contacts
+                ),
             }
         )
 

@@ -945,25 +945,69 @@ class OrdersViewSet(viewsets.ModelViewSet):
         order = self.get_object()
         user = request.user
 
+        # ---------- safe bool ----------
+        def _to_bool(v):
+            if isinstance(v, bool):
+                return v
+            if isinstance(v, str):
+                return v.lower() in ("1", "true", "yes", "on")
+            return bool(v)
+
+        hide = _to_bool(request.data.get("hide", True))
+
+        updated = False
+
         # =========================
         # CUSTOMER скрывает СЕБЯ
         # =========================
         if user.id == order.customer_id:
-            order.customer_hide_contacts = not order.customer_hide_contacts
-            order.save(update_fields=["customer_hide_contacts"])
-            return Response({"hidden": order.customer_hide_contacts})
+            order.customer_hide_contacts = hide
+            updated = True
 
         # =========================
-        # LOGISTIC скрывает CUSTOMER (другая функция)
+        # LOGISTIC скрывает CUSTOMER
         # =========================
-        if user.id == order.logistic_id:
-            order.logistic_hide_contacts = not order.logistic_hide_contacts
-            order.save(update_fields=["logistic_hide_contacts"])
-            return Response(
-                {"hidden": order.logistic_hide_contacts, "mode": "logistic_hide_customer"}
+        elif user.id == order.logistic_id:
+            order.logistic_hide_contacts = hide
+            updated = True
+
+        else:
+            return Response({"detail": "No permission"}, status=403)
+
+        if not updated:
+            return Response({"detail": "Nothing changed"}, status=400)
+
+        # ---------- save ----------
+        order.save(update_fields=["customer_hide_contacts", "logistic_hide_contacts"])
+
+        # ---------- websocket sync ----------
+        channel_layer = get_channel_layer()
+        order.refresh_from_db()
+
+        payload = OrderListSerializer(order, context={"request": request}).data
+
+        for user_id in filter(None, {order.customer_id, order.carrier_id, order.logistic_id}):
+            async_to_sync(channel_layer.group_send)(
+                f"user_{user_id}",
+                to_ws_safe(
+                    {
+                        "type": "notify",
+                        "data": {
+                            "event": "order_privacy_changed",
+                            "order": payload,
+                        },
+                    }
+                ),
             )
 
-        return Response({"detail": "You cannot change privacy"}, status=403)
+        return Response(
+            {
+                "customer_hidden": order.customer_hide_contacts,
+                "logistic_hidden": order.logistic_hide_contacts,
+                "effective_hidden_for_carrier": order.customer_hide_contacts
+                or order.logistic_hide_contacts,
+            }
+        )
 
 
 class SharedOrderView(RetrieveAPIView):

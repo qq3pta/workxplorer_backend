@@ -4,20 +4,19 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('orders', '0019_driverlocation'),
+        ("orders", "0019_driverlocation"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='order',
-            name='customer_hide_contacts',
+            model_name="order",
+            name="customer_hide_contacts",
             field=models.BooleanField(default=False),
         ),
         migrations.AddField(
-            model_name='order',
-            name='logistic_hide_contacts',
+            model_name="order",
+            name="logistic_hide_contacts",
             field=models.BooleanField(default=False),
         ),
     ]

@@ -238,7 +238,6 @@ class OrderListSerializer(serializers.ModelSerializer):
 
             # скрываем ТОЛЬКО если смотрит перевозчик
             if request_user and request_user.id == obj.carrier_id:
-
                 if u.id == obj.customer_id:
                     hide = obj.customer_hide_contacts
 

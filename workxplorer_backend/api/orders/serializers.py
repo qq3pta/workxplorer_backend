@@ -290,7 +290,7 @@ class OrderListSerializer(serializers.ModelSerializer):
                 "phone": None if hide_contacts else getattr(u, "phone", None),
                 "email": None if hide_contacts else getattr(u, "email", None),
                 "role": getattr(u, "role", None),
-                "hidden": hidden if not is_customer else False,
+                "hidden": hidden,
             }
 
             # hidden_by показываем только логисту

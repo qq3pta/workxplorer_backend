@@ -227,9 +227,6 @@ class OrderListSerializer(serializers.ModelSerializer):
         return self._get_user_full_name(obj.logistic)
 
     def get_roles(self, obj):
-        request = self.context.get("request")
-        request_user = request.user if request else None
-
         def user_info(u):
             if not u:
                 return None

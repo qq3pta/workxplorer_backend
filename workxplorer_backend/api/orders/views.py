@@ -945,17 +945,26 @@ class OrdersViewSet(viewsets.ModelViewSet):
         order = self.get_object()
         user = request.user
 
-        # --- CUSTOMER скрывает СЕБЯ ---
+        # --- CUSTOMER скрывает себя ---
         if user.id == order.customer_id:
             order.customer_hide_contacts = not order.customer_hide_contacts
-            order.save(update_fields=["customer_hide_contacts"])
+            order.logistic_hide_contacts = False
+            order.save(update_fields=["customer_hide_contacts", "logistic_hide_contacts"])
+
             return Response({"hidden": order.customer_hide_contacts})
 
         # --- LOGISTIC скрывает CUSTOMER ---
         if user.id == order.logistic_id:
             order.customer_hide_contacts = not order.customer_hide_contacts
-            order.save(update_fields=["customer_hide_contacts"])
-            return Response({"hidden": order.customer_hide_contacts, "hidden_by": "logistic"})
+            order.logistic_hide_contacts = order.customer_hide_contacts
+            order.save(update_fields=["customer_hide_contacts", "logistic_hide_contacts"])
+
+            return Response(
+                {
+                    "hidden": order.customer_hide_contacts,
+                    "hidden_by": "logistic" if order.customer_hide_contacts else None,
+                }
+            )
 
         return Response({"detail": "You cannot change privacy"}, status=403)
 

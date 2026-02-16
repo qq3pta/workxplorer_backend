@@ -134,18 +134,14 @@ class RatingUserListSerializer(serializers.ModelSerializer):
         Pie chart распределения заказов пользователя по статусам,
         включая cancelled, pending, delivered и т.д.
         """
-        # Получаем все заказы, где пользователь участвует
         orders_qs = (
             obj.orders_as_customer.all() | obj.orders_as_carrier.all() | obj.logistic_orders.all()
         )
 
-        # Статусы, которые хотим показать в пайчарте
         statuses = ["no_driver", "pending", "in_process", "delivered", "canceled"]
 
-        # Инициализация результата
         result = {status: 0 for status in statuses}
 
-        # Считаем по каждому статусу
         for status in statuses:
             result[status] = orders_qs.filter(status=status).count()
 

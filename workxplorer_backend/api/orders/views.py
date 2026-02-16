@@ -165,13 +165,11 @@ class OrdersViewSet(viewsets.ModelViewSet):
         min_price = p.get("min_price")
         max_price = p.get("max_price")
 
-        # если фронт передал валюту — фильтруем по ней (как раньше)
         if currency:
             qs = qs.filter(offer__price_currency=currency)
 
         def _to_uzs(value: str) -> Decimal:
             val = Decimal(value)
-            # если указали валюту, конвертируем min/max в UZS
             return convert_to_uzs(val, currency) if currency else val
 
         try:
@@ -318,7 +316,6 @@ class OrdersViewSet(viewsets.ModelViewSet):
         tags=["orders"],
         summary="Подтверждение условий заказа Перевозчиком/Водителем",
         description="Перевозчик, принявший инвайт, подтверждает условия и переводит заказ в рабочий статус.",
-        # Предполагается, что OrderDetailSerializer существует
         responses={200: OrderDetailSerializer},
     )
     @action(detail=True, methods=["post"], url_path="confirm-terms")
@@ -438,14 +435,12 @@ class OrdersViewSet(viewsets.ModelViewSet):
 
         order.driver_price = driver_price
 
-        # сохраняем в реальные поля модели
         order.driver_currency = driver_currency
         order.driver_payment_method = driver_payment_method
 
         order.invited_carrier = carrier
         order.invite_token = uuid.uuid4()
 
-        # унифицировано с accept_invite
         order.carrier_accepted_terms = False
         order.status = Order.OrderStatus.NO_DRIVER
 
@@ -523,10 +518,8 @@ class OrdersViewSet(viewsets.ModelViewSet):
         if driver_payment_method is not None:
             order.driver_payment_method = driver_payment_method
 
-        # генерируем токен
         token = uuid.uuid4()
 
-        # сохраняем токен в заказе (опционально)
         order.invite_token = token
         update_fields = ["invite_token"]
 
@@ -652,11 +645,9 @@ class OrdersViewSet(viewsets.ModelViewSet):
         except Order.DoesNotExist:
             return Response({"detail": "Инвайт не найден или уже недействителен"}, status=404)
 
-        # только перевозчик может отказаться
         if user.role != "CARRIER":
             return Response({"detail": "Только перевозчик может отказаться от инвайта"}, status=403)
 
-        # защита: отказ только если инвайт предназначен ему
         if order.invited_carrier_id and order.invited_carrier_id != user.id:
             return Response({"detail": "Этот инвайт предназначен другому перевозчику"}, status=403)
 
@@ -832,7 +823,6 @@ class OrdersViewSet(viewsets.ModelViewSet):
         order = self.get_object()
         user = request.user
 
-        # Только перевозчик может отправлять GPS
         if user.id != order.carrier_id:
             return Response({"detail": "Только перевозчик может отправлять GPS"}, status=403)
 
@@ -857,7 +847,6 @@ class OrdersViewSet(viewsets.ModelViewSet):
         gps.point = point
         gps.save()
 
-        # realtime в websocket (как у тебя в driver_status)
         channel_layer = get_channel_layer()
 
         participants = {
@@ -925,7 +914,6 @@ class OrdersViewSet(viewsets.ModelViewSet):
                 "lng": order.cargo.dest_point.x,
             }
 
-        # --- GPS ---
         if gps and gps.point:
             data["gps"] = {
                 "lat": gps.point.y,
@@ -935,7 +923,6 @@ class OrdersViewSet(viewsets.ModelViewSet):
                 "recorded_at": gps.recorded_at,
             }
 
-            # online/offline (15 мин)
             if gps.recorded_at and timezone.now() - gps.recorded_at < timedelta(minutes=15):
                 data["online"] = True
 
@@ -953,22 +940,15 @@ class OrdersViewSet(viewsets.ModelViewSet):
         order = self.get_object()
         user = request.user
 
-        # ---------- toggle helper ----------
         def _toggle(value: bool) -> bool:
             return not bool(value)
 
         update_fields = []
 
-        # =========================
-        # CUSTOMER → roles.customer.hidden
-        # =========================
         if user.id == order.customer_id:
             order.customer_hide_contacts = _toggle(order.customer_hide_contacts)
             update_fields.append("customer_hide_contacts")
 
-        # =========================
-        # LOGISTIC → roles.customer.hidden_by
-        # =========================
         elif user.id == order.logistic_id:
             order.logistic_hide_contacts = _toggle(order.logistic_hide_contacts)
             update_fields.append("logistic_hide_contacts")
@@ -976,10 +956,8 @@ class OrdersViewSet(viewsets.ModelViewSet):
         else:
             return Response({"detail": "No permission"}, status=403)
 
-        # ---------- save ----------
         order.save(update_fields=update_fields)
 
-        # ---------- websocket sync ----------
         from channels.layers import get_channel_layer
         from asgiref.sync import async_to_sync
         from common.ws_utils import to_ws_safe
@@ -1003,7 +981,6 @@ class OrdersViewSet(viewsets.ModelViewSet):
                 ),
             )
 
-        # ---------- RESPONSE строго по ТЗ ----------
         if user.id == order.customer_id:
             return Response({"roles": {"customer": {"hidden": order.customer_hide_contacts}}})
 

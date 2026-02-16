@@ -207,7 +207,6 @@ class Offer(models.Model):
         print("carrier.id =", getattr(carrier, "id", None))
         print("logistic.id =", getattr(logistic_user, "id", None))
 
-        # 1) Оффер от перевозчика заказчику
         if self.initiator == self.Initiator.CARRIER:
             if carrier:
                 notify(
@@ -235,7 +234,6 @@ class Offer(models.Model):
 
             return
 
-        # 2) Оффер от логиста заказчику
         if self.initiator == self.Initiator.LOGISTIC:
             if logistic_user:
                 notify(
@@ -296,7 +294,6 @@ class Offer(models.Model):
         carrier = self.carrier
         logistic_user = self.intermediary or self.logistic
 
-        # уведомление инициатору
         notify(
             user=by_user,
             type="offer_my_response_sent",
@@ -479,7 +476,7 @@ class Offer(models.Model):
             other = logistic_user
 
         if not other:
-            return  # ✔ никого уведомлять не нужно
+            return
 
         notify(
             user=other,
@@ -547,7 +544,6 @@ class Offer(models.Model):
         message: str | None = None,
         by_user=None,
     ) -> None:
-        # ✅ OLD STATE
         old_state = {
             "price_value": self.price_value,
             "price_currency": self.price_currency,
@@ -605,7 +601,6 @@ class Offer(models.Model):
             ]
         )
 
-        # ✅ LOG COUNTER
         self._log_status_change(
             user=by_user,
             action="counter",
@@ -633,11 +628,9 @@ class Offer(models.Model):
 
         # ЛОГИСТ
         if role == "LOGISTIC":
-            # 🔑 КЕЙС 3: логист → заказчик (без перевозчика)
             if not carrier:
                 return Offer.DealType.CUSTOMER_LOGISTIC
 
-            # логист + перевозчик
             return Offer.DealType.LOGISTIC_CARRIER
 
         raise ValidationError("Невозможно определить тип сделки")
@@ -710,7 +703,6 @@ class Offer(models.Model):
             "accepted_by_logistic": self.accepted_by_logistic,
         }
 
-        # ✅ 2. БИЗНЕС-ЛОГИКА
         if user.id in (cargo.customer_id, cargo.created_by_id):
             self.accepted_by_customer = True
         elif user.role == "CARRIER" and user.id == self.carrier_id:
@@ -718,7 +710,6 @@ class Offer(models.Model):
         else:
             raise PermissionDenied("Недопустимый участник для данного кейса")
 
-        # ✅ 3. ATOMIC + SAVE + LOG + NOTIFY
         with transaction.atomic():
             self.save(update_fields=["accepted_by_customer", "accepted_by_carrier", "updated_at"])
 
@@ -730,9 +721,7 @@ class Offer(models.Model):
 
             self.send_accept_notifications(user)
 
-            # ✅ 4. СОЗДАНИЕ AGREEMENT ТОЛЬКО ПРИ HANDSHAKE
             if self.accepted_by_customer and self.accepted_by_carrier:
-                # 🔥 ФИКС ФИНАЛЬНОГО СТАТУСА
                 self.response_status = "accepted"
                 self.is_active = True
 
@@ -743,14 +732,12 @@ class Offer(models.Model):
                 Agreement.get_or_create_from_offer(self)
 
     def _accept_case_logistic_carrier(self, user):
-        # ✅ 1. OLD STATE ДО ИЗМЕНЕНИЙ
         old_state = {
             "accepted_by_customer": self.accepted_by_customer,
             "accepted_by_carrier": self.accepted_by_carrier,
             "accepted_by_logistic": self.accepted_by_logistic,
         }
 
-        # ✅ 2. БИЗНЕС-ЛОГИКА
         if user.role == "LOGISTIC":
             if user.id in (self.logistic_id, self.intermediary_id):
                 self.accepted_by_logistic = True
@@ -765,7 +752,6 @@ class Offer(models.Model):
         else:
             raise PermissionDenied("Недопустимый участник для данного кейса")
 
-        # ✅ 3. SAVE + LOG + NOTIFY + AGREEMENT
         with transaction.atomic():
             self.save(
                 update_fields=[
@@ -791,7 +777,6 @@ class Offer(models.Model):
     def _accept_case_customer_logistic(self, user):
         cargo = self.cargo
 
-        # ✅ 1. Фиксируем OLD STATE ДО изменений
         old_state = {
             "accepted_by_customer": self.accepted_by_customer,
             "accepted_by_carrier": self.accepted_by_carrier,
@@ -813,7 +798,7 @@ class Offer(models.Model):
         )
 
         # ==========================================================
-        # 🟢 КЕЙС 1: заказчик по ID (включая логиста-заказчика)
+        # КЕЙС 1: заказчик по ID (включая логиста-заказчика)
         # ==========================================================
         if user.id in (cargo.customer_id, cargo.created_by_id):
             print("✔ CUSTOMER SIDE ACCEPT (by id)")
@@ -837,7 +822,6 @@ class Offer(models.Model):
                     ]
                 )
 
-                # ✅ ЛОГ accept (ЭТОГО РАНЬШЕ НЕ ХВАТАЛО)
                 self._log_status_change(
                     user=user,
                     action="accept",
@@ -858,14 +842,14 @@ class Offer(models.Model):
             return
 
         # ==========================================================
-        # 🟢 КЕЙС 2: обычный CUSTOMER
+        # КЕЙС 2: обычный CUSTOMER
         # ==========================================================
         if user.role == "CUSTOMER":
             print("✔ CUSTOMER ACCEPT")
             self.accepted_by_customer = True
 
         # ==========================================================
-        # 🟢 КЕЙС 3: LOGISTIC-участник
+        # КЕЙС 3: LOGISTIC-участник
         # ==========================================================
         elif user.role == "LOGISTIC" and user.id in (
             self.logistic_id,
@@ -887,7 +871,7 @@ class Offer(models.Model):
         )
 
         # ==========================================================
-        # 🟢 ОБЩИЙ SAVE + LOG + NOTIFY
+        # ОБЩИЙ SAVE + LOG + NOTIFY
         # ==========================================================
         with transaction.atomic():
             print("→ SAVE OFFER")
@@ -899,7 +883,6 @@ class Offer(models.Model):
                 ]
             )
 
-            # ✅ ЛОГ accept
             self._log_status_change(
                 user=user,
                 action="accept",
@@ -918,14 +901,12 @@ class Offer(models.Model):
                 print("⏳ HANDSHAKE FALSE")
 
     def _accept_case_logistic_logistic(self, user):
-        # ✅ 1. OLD STATE ДО ИЗМЕНЕНИЙ
         old_state = {
             "accepted_by_customer": self.accepted_by_customer,
             "accepted_by_carrier": self.accepted_by_carrier,
             "accepted_by_logistic": self.accepted_by_logistic,
         }
 
-        # ✅ 2. БИЗНЕС-ЛОГИКА
         if user.role == "LOGISTIC":
             if user.id in (self.logistic_id, self.intermediary_id):
                 self.accepted_by_logistic = True
@@ -937,7 +918,6 @@ class Offer(models.Model):
         else:
             raise PermissionDenied("Недопустимый участник для данного кейса")
 
-        # ✅ 3. SAVE + LOG + NOTIFY + AGREEMENT
         with transaction.atomic():
             self.save(
                 update_fields=[
@@ -947,7 +927,6 @@ class Offer(models.Model):
                 ]
             )
 
-            # ✅ ОБЯЗАТЕЛЬНОЕ ЛОГИРОВАНИЕ ACCEPT
             self._log_status_change(
                 user=user,
                 action="accept",
@@ -956,7 +935,6 @@ class Offer(models.Model):
 
             self.send_accept_notifications(user)
 
-            # ✅ создаём Agreement при handshake
             if self.accepted_by_logistic:
                 from api.agreements.models import Agreement
 
@@ -972,7 +950,6 @@ class Offer(models.Model):
         if not self.is_active:
             return "rejected"
 
-        # 🔥 counter-статус — это состояние оффера, не пользователя
         if self.is_counter:
             return self.response_status or "counter"
 

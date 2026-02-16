@@ -20,7 +20,6 @@ class IsOrderParticipant(BasePermission):
         role = getattr(u, "role", None)
         action = getattr(view, "action", None)
 
-        # Перевозчику можно принять инвайт
         if action == "accept_invite" and role == "CARRIER":
             return True
 
@@ -30,7 +29,6 @@ class IsOrderParticipant(BasePermission):
 
         # LOGISTIC
         if role == "LOGISTIC":
-            # 👉 Разрешаем invite-by-id даже если груз скрыт
             if action == "invite_by_id":
                 return obj.created_by_id == u.id
 

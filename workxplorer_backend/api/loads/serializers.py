@@ -22,7 +22,6 @@ class RouteKmMixin(serializers.Serializer):
     route_km = serializers.SerializerMethodField()
 
     def get_route_km(self, obj: Cargo) -> float | None:
-        # 1) annotate (если есть в queryset)
         val = getattr(obj, "route_km", None)
         if val is not None:
             try:
@@ -30,7 +29,6 @@ class RouteKmMixin(serializers.Serializer):
             except Exception:
                 pass
 
-        # 2) cached field (реальное поле модели)
         cached = getattr(obj, "route_km_cached", None)
         if cached is not None:
             try:
@@ -38,7 +36,6 @@ class RouteKmMixin(serializers.Serializer):
             except Exception:
                 return None
 
-        # 3) fallback на path_km (если есть)
         pk = getattr(obj, "path_km", None)
         try:
             return round(float(pk), 1) if pk is not None else None

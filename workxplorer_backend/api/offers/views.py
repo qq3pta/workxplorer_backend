@@ -85,7 +85,6 @@ def _apply_common_filters(qs, params):
     currency = p.get("price_currency")
 
     if currency:
-        # фильтр по валюте самого оффера
         qs = qs.filter(price_currency=currency)
 
         try:
@@ -134,7 +133,6 @@ def _apply_common_filters(qs, params):
     if p.get("created_to"):
         qs = qs.filter(created_at__lte=p["created_to"])
 
-    # 👇 ЭТО НОВОЕ — точная дата load_date (как в loads)
     if p.get("load_date"):
         qs = qs.filter(cargo__load_date=p["load_date"])
 
@@ -298,7 +296,6 @@ class OfferViewSet(ModelViewSet):
     queryset = (
         Offer.objects.select_related("cargo", "carrier")
         .annotate(
-            # ✅ НУЖНО ДЛЯ has_offers
             offers_active=Count("cargo__offers", filter=Q(cargo__offers__is_active=True)),
             carrier_rating=Avg("carrier__ratings_received__score"),
             path_m_anno=Distance(
@@ -401,7 +398,6 @@ class OfferViewSet(ModelViewSet):
             qs = qs.filter(
                 id__in=[o.id for o in qs if o.get_response_status_for(u) == response_status]
             )
-        # ----------------------------------------------------------------
 
         page = self.paginate_queryset(qs)
         ser = OfferShortSerializer(page or qs, many=True, context={"request": request})
@@ -437,7 +433,6 @@ class OfferViewSet(ModelViewSet):
         qs = self.get_queryset()
 
         if getattr(u, "is_carrier", False) or getattr(u, "role", None) == "CARRIER":
-            # Показываем все активные инвайты для перевозчика
             qs = qs.filter(
                 carrier=u,
                 is_active=True,
@@ -511,7 +506,6 @@ class OfferViewSet(ModelViewSet):
         except PermissionDenied as e:
             return Response({"detail": str(e)}, status=status.HTTP_403_FORBIDDEN)
 
-        # Обновляем offer, чтобы увидеть созданный Order
         offer.refresh_from_db()
 
         channel_layer = get_channel_layer()
@@ -570,12 +564,10 @@ class OfferViewSet(ModelViewSet):
         """
         logistic_user = offer.intermediary or offer.logistic
 
-        # Если принял перевозчик — водитель известен
         if accepted_by.role == "CARRIER":
             carrier = accepted_by
             status = Order.OrderStatus.PENDING
         elif accepted_by.role == "LOGISTIC":
-            # Логист принял → проверяем, назначен ли перевозчик в оффере
             carrier = offer.carrier
             status = Order.OrderStatus.PENDING if carrier else Order.OrderStatus.NO_DRIVER
         else:
@@ -668,7 +660,6 @@ class OfferViewSet(ModelViewSet):
                 by_user=request.user,
             )
 
-        # 🔥 ВАЖНО
         offer.refresh_from_db()
 
         channel_layer = get_channel_layer()

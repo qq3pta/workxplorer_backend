@@ -351,7 +351,6 @@ class CargoVisibilityView(generics.GenericAPIView):
         cargo = get_object_or_404(Cargo, uuid=uuid)
         user = request.user
 
-        # доступ — только автор
         if user.role == "customer" and cargo.customer_id != user.id:
             return Response({"detail": "Нет доступа"}, status=403)
 

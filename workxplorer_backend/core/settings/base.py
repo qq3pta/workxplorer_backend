@@ -29,7 +29,6 @@ if SENTRY_DSN:
         dsn=SENTRY_DSN,
         integrations=[DjangoIntegration()],
         send_default_pii=True,
-        # Sampling (prod меньше, dev всё)
         traces_sample_rate=0.2 if not DEBUG else 1.0,
         profiles_sample_rate=0.2 if not DEBUG else 1.0,
         environment="production" if not DEBUG else "development",

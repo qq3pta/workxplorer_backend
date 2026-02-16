@@ -232,7 +232,7 @@ class Agreement(models.Model):
         offer = self.offer
         cargo = offer.cargo
 
-        # Проверка участия (симметрично accept_by)
+        # Проверка участия
         if by_user.id in (cargo.customer_id, cargo.created_by_id):
             pass  # заказчик
         elif by_user.id == offer.carrier_id:

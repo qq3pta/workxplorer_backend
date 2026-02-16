@@ -10,7 +10,7 @@ class CargoConsumer(AsyncJsonWebsocketConsumer):
             await self.close()
             return
 
-        # ← пользователь стал ONLINE
+        # пользователь стал ONLINE
         await touch_last_seen(self.user.id)
 
         await self.accept()

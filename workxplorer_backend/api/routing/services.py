@@ -65,7 +65,6 @@ def _route_ors(p1: Point, p2: Point) -> tuple[float, float, dict, str]:
     base = ORS_BASE.rstrip("/")
     url_post = f"{base}/v2/directions/driving-car"
 
-    # 1) GET (минимальный, разрешён твоим токеном): ?api_key=&start=lon,lat&end=lon,lat
     try:
         params = {
             "api_key": ORS_API_KEY,
@@ -85,7 +84,6 @@ def _route_ors(p1: Point, p2: Point) -> tuple[float, float, dict, str]:
         if ROUTING_DEBUG:
             print(f"[routing] ORS GET failed: {repr(e)}")
 
-    # 2) POST Bearer (для ey...)
     try:
         headers = {"Content-Type": "application/json"}
         if ORS_API_KEY.startswith(("eyJ", "ey", "eyJ0")):
@@ -106,7 +104,6 @@ def _route_ors(p1: Point, p2: Point) -> tuple[float, float, dict, str]:
         if ROUTING_DEBUG:
             print(f"[routing] ORS POST-hdr failed: {repr(e)}")
 
-    # 3) POST ?api_key=...
     try:
         payload = {"coordinates": [[p1.x, p1.y], [p2.x, p2.y]], "instructions": False}
         r = requests.post(
@@ -141,7 +138,6 @@ def get_route(
 
     key = _cache_key(p1, p2)
 
-    # читаем кэш (мягко, если миграций ещё нет)
     try:
         rc = RouteCache.objects.filter(key=key).first()
     except (OperationalError, ProgrammingError) as e:
@@ -152,7 +148,6 @@ def get_route(
     if rc and rc.updated_at > now() - timedelta(hours=ttl_hours):
         return rc
 
-    # считаем через ORS
     try:
         km, minutes, raw, provider = _route_ors(p1, p2)
         if rc:

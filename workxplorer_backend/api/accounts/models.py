@@ -46,7 +46,6 @@ class User(AbstractUser):
         ]
 
     def save(self, *args, **kwargs):
-        # нормализация email
         if self.email:
             self.email = self.email.strip().lower()
 

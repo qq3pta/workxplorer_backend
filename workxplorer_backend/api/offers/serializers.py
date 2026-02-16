@@ -85,18 +85,15 @@ class OfferCreateSerializer(serializers.ModelSerializer):
             carrier_user = user
             initiator = Offer.Initiator.CARRIER
 
-            # если заявку создал логист - можно сохранить как logistic
             if cargo.created_by and getattr(cargo.created_by, "role", None) == "LOGISTIC":
                 logistic_user = cargo.created_by
 
         elif role == "LOGISTIC":
-            # логист создаёт оффер заказчику -> carrier тут НЕ должен ставиться
             logistic_user = user
             carrier_user = None
             initiator = Offer.Initiator.LOGISTIC
 
         else:
-            # если хочешь запретить CUSTOMER создавать оффер через этот endpoint
             raise serializers.ValidationError("Только CARRIER или LOGISTIC могут создавать оффер.")
 
         deal_type = Offer.resolve_deal_type(
@@ -151,13 +148,13 @@ class OfferCreateSerializer(serializers.ModelSerializer):
                 "type": "notify",
                 "data": {
                     "event": "offer_created",
-                    "offer": raw_payload,  # можно raw_payload
+                    "offer": raw_payload,
                 },
             }
 
             async_to_sync(channel_layer.group_send)(
                 f"user_{user_id}",
-                to_ws_safe(message),  # <-- важно: to_ws_safe на весь message
+                to_ws_safe(message),
             )
 
         return offer
@@ -225,7 +222,6 @@ class OfferInviteSerializer(serializers.Serializer):
         carrier = None
         logistic = None
 
-        # 🔥 КЛЮЧЕВОЙ МОМЕНТ
         if invited_user.role == "CARRIER":
             carrier = invited_user
         elif invited_user.role == "LOGISTIC":

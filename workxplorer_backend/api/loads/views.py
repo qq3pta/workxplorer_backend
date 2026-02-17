@@ -471,36 +471,50 @@ class CargoInviteOpenView(generics.GenericAPIView):
             .first()
         )
 
-        carrier = request.user
+        user = request.user
         invited_by = invite.created_by
 
-        offer = Offer.objects.filter(
-            cargo_id=cargo.id,
-            carrier_id=carrier.id,
-            is_active=True,
-        ).first()
+        # ---------- РОЛИ ----------
+        carrier = user if user.role == "carrier" else None
+        logistic = user if user.role == "logistic" else None
 
-        if not offer:
-            offer = Offer.objects.create(
-                cargo=cargo,
-                carrier=carrier,
-                initiator=Offer.Initiator.CUSTOMER,
-                deal_type=Offer.resolve_deal_type(
-                    initiator_user=invite.created_by or cargo.customer,
+        offer = None
+
+        # ---------- CARRIER открывает invite ----------
+        if carrier:
+            offer = Offer.objects.filter(
+                cargo_id=cargo.id,
+                carrier_id=carrier.id,
+                is_active=True,
+            ).first()
+
+            if not offer:
+                offer = Offer.objects.create(
+                    cargo=cargo,
                     carrier=carrier,
-                ),
-                price_value=cargo.price_value or 0,
-                price_currency=cargo.price_currency,
-                payment_method=Offer.PaymentMethod.CASH,
-                message="",
-            )
+                    initiator=Offer.Initiator.CUSTOMER,
+                    deal_type=Offer.resolve_deal_type(
+                        initiator_user=invite.created_by or cargo.customer,
+                        carrier=carrier,
+                    ),
+                    price_value=cargo.price_value or 0,
+                    price_currency=cargo.price_currency,
+                    payment_method=Offer.PaymentMethod.CASH,
+                    message="",
+                )
+
+        # ---------- LOGISTIC открывает invite ----------
+        if logistic and offer and not offer.logistic_id:
+            offer.logistic = logistic
+            offer.save(update_fields=["logistic"])
 
         return Response(
             {
                 "cargo_id": cargo.id,
-                "carrier_id": carrier.id,
+                "carrier_id": carrier.id if carrier else None,
+                "logistic_id": logistic.id if logistic else None,
                 "invited_by_id": invited_by.id if invited_by else None,
-                "offer_id": offer.id,
+                "offer_id": offer.id if offer else None,
                 "expires_at": invite.expires_at,
                 "cargo": CargoListSerializer(cargo, context={"request": request}).data,
             }

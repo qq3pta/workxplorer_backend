@@ -227,6 +227,9 @@ class OrderListSerializer(serializers.ModelSerializer):
         return self._get_user_full_name(obj.logistic)
 
     def get_roles(self, obj):
+        request = self.context.get("request")
+        request_user = request.user if request else None
+
         def user_info(u):
             if not u:
                 return None
@@ -234,22 +237,29 @@ class OrderListSerializer(serializers.ModelSerializer):
             hidden = False
             hidden_by = False
 
+            is_carrier = request_user and request_user.id == obj.carrier_id
+            is_logistic = request_user and request_user.id == obj.logistic_id
+
             # =========================
             # CUSTOMER privacy flags
             # =========================
             if u.id == obj.customer_id:
-                hidden = bool(obj.customer_hide_contacts)
-                hidden_by = bool(obj.logistic_hide_contacts)
+                # CUSTOMER self-hide → скрыто ТОЛЬКО для перевозчика
+                if obj.customer_hide_contacts and is_carrier:
+                    hidden = True
 
-            hide_contacts = hidden
+                # LOGISTIC hide → скрыто для перевозчика И логиста
+                if obj.logistic_hide_contacts and (is_carrier or is_logistic):
+                    hidden = True
+                    hidden_by = True
 
             data = {
                 "id": u.id,
-                "name": None if hide_contacts else self._get_user_full_name(u),
+                "name": None if hidden else self._get_user_full_name(u),
                 "company": self._get_user_company(u),
                 "login": u.username,
-                "phone": None if hide_contacts else getattr(u, "phone", None),
-                "email": None if hide_contacts else getattr(u, "email", None),
+                "phone": None if hidden else getattr(u, "phone", None),
+                "email": None if hidden else getattr(u, "email", None),
                 "role": getattr(u, "role", None),
                 "hidden": hidden,
                 "hidden_by": hidden_by,
@@ -257,16 +267,11 @@ class OrderListSerializer(serializers.ModelSerializer):
 
             return data
 
-        # =========================
         # CUSTOMER
-        # =========================
         customer = user_info(obj.customer)
 
-        # =========================
-        # LOGISTIC (если не равен заказчику)
-        # =========================
+        # LOGISTIC
         logistic_user = None
-
         if obj.logistic_id and obj.logistic_id != obj.customer_id:
             logistic_user = obj.logistic
         elif (
@@ -278,9 +283,7 @@ class OrderListSerializer(serializers.ModelSerializer):
 
         logistic = user_info(logistic_user)
 
-        # =========================
         # CARRIER
-        # =========================
         carrier = user_info(obj.carrier)
 
         return {

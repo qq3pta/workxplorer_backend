@@ -410,7 +410,7 @@ class CargoInviteGenerateView(generics.GenericAPIView):
         """
         cargo = get_object_or_404(Cargo, uuid=uuid)
 
-        if cargo.customer_id != request.user.id and request.user.role != "logistic":
+        if cargo.customer_id != request.user.id and request.user.role != "LOGISTIC":
             return Response({"detail": "Нет доступа"}, status=403)
 
         token = LoadInvite.generate_token()
@@ -453,9 +453,11 @@ class CargoInviteOpenView(generics.GenericAPIView):
     def get(self, request, token: str):
         invite = get_object_or_404(LoadInvite, token=token)
 
+        # ---- expired ----
         if invite.expires_at < timezone.now():
             return Response({"detail": "Ссылка истекла"}, status=400)
 
+        # ---- груз ----
         cargo = (
             Cargo.objects.filter(id=invite.load_id)
             .annotate(path_m=Distance(F("origin_point"), F("dest_point")))
@@ -469,12 +471,15 @@ class CargoInviteOpenView(generics.GenericAPIView):
             .first()
         )
 
+        if not cargo:
+            return Response({"detail": "Груз не найден"}, status=404)
+
         user = request.user
         invited_by = invite.created_by
 
         # ---------- роли ----------
-        carrier = user if user.role == "carrier" else None
-        logistic = user if user.role == "logistic" else None
+        carrier = user if user.role == "CARRIER" else None
+        logistic = user if user.role == "LOGISTIC" else None
 
         offer = None
 
@@ -486,21 +491,6 @@ class CargoInviteOpenView(generics.GenericAPIView):
                 is_active=True,
             ).first()
 
-            if not offer:
-                offer = Offer.objects.create(
-                    cargo=cargo,
-                    carrier=carrier,
-                    initiator=Offer.Initiator.CUSTOMER,
-                    deal_type=Offer.resolve_deal_type(
-                        initiator_user=invite.created_by or cargo.customer,
-                        carrier=carrier,
-                    ),
-                    price_value=cargo.price_value or 0,
-                    price_currency=cargo.price_currency,
-                    payment_method=Offer.PaymentMethod.CASH,
-                    message="",
-                )
-
         # ---------- LOGISTIC ----------
         elif logistic:
             offer = Offer.objects.filter(
@@ -508,21 +498,6 @@ class CargoInviteOpenView(generics.GenericAPIView):
                 logistic_id=logistic.id,
                 is_active=True,
             ).first()
-
-            if not offer:
-                offer = Offer.objects.create(
-                    cargo=cargo,
-                    logistic=logistic,
-                    initiator=Offer.Initiator.CUSTOMER,
-                    deal_type=Offer.resolve_deal_type(
-                        initiator_user=invite.created_by or cargo.customer,
-                        logistic=logistic,
-                    ),
-                    price_value=cargo.price_value or 0,
-                    price_currency=cargo.price_currency,
-                    payment_method=Offer.PaymentMethod.CASH,
-                    message="",
-                )
 
         return Response(
             {

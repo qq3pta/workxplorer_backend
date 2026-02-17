@@ -420,6 +420,10 @@ class OrdersViewSet(viewsets.ModelViewSet):
         offer.driver_currency = driver_currency
         offer.driver_payment_method = driver_payment_method
 
+        if user.role == "LOGISTIC":
+            order.logistic = user
+            offer.logistic = user
+
         offer.save(
             update_fields=[
                 "driver_price",
@@ -430,6 +434,7 @@ class OrdersViewSet(viewsets.ModelViewSet):
                 "accepted_by_carrier",
                 "accepted_by_logistic",
                 "response_status",
+                "logistic",
             ]
         )
 
@@ -437,6 +442,10 @@ class OrdersViewSet(viewsets.ModelViewSet):
 
         order.driver_currency = driver_currency
         order.driver_payment_method = driver_payment_method
+
+        if user.role == "LOGISTIC":
+            order.logistic = user
+            offer.logistic = user
 
         order.invited_carrier = carrier
         order.invite_token = uuid.uuid4()
@@ -453,6 +462,7 @@ class OrdersViewSet(viewsets.ModelViewSet):
                 "invite_token",
                 "carrier_accepted_terms",
                 "status",
+                "logistic",
             ]
         )
 
@@ -532,6 +542,10 @@ class OrdersViewSet(viewsets.ModelViewSet):
         if driver_payment_method is not None:
             update_fields.append("driver_payment_method")
 
+        if getattr(user, "role", None) == "LOGISTIC":
+            order.logistic = user
+            update_fields.append("logistic")
+
         order.save(update_fields=update_fields)
 
         channel_layer = get_channel_layer()
@@ -586,12 +600,15 @@ class OrdersViewSet(viewsets.ModelViewSet):
         order.invited_carrier = None
         order.invite_token = None
         order.carrier_accepted_terms = False
+        if not order.logistic and getattr(order.created_by, "role", None) == "LOGISTIC":
+            order.logistic = order.created_by
         order.save(
             update_fields=[
                 "carrier",
                 "invited_carrier",
                 "invite_token",
                 "carrier_accepted_terms",
+                "logistic",
             ]
         )
 

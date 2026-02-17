@@ -458,9 +458,7 @@ class CargoInviteOpenView(generics.GenericAPIView):
 
         cargo = (
             Cargo.objects.filter(id=invite.load_id)
-            .annotate(
-                path_m=Distance(F("origin_point"), F("dest_point")),
-            )
+            .annotate(path_m=Distance(F("origin_point"), F("dest_point")))
             .annotate(
                 path_km=F("path_m") / 1000.0,
                 route_km=Coalesce(F("route_km_cached"), F("path_km")),
@@ -474,13 +472,13 @@ class CargoInviteOpenView(generics.GenericAPIView):
         user = request.user
         invited_by = invite.created_by
 
-        # ---------- РОЛИ ----------
+        # ---------- роли ----------
         carrier = user if user.role == "carrier" else None
         logistic = user if user.role == "logistic" else None
 
         offer = None
 
-        # ---------- CARRIER открывает invite ----------
+        # ---------- CARRIER ----------
         if carrier:
             offer = Offer.objects.filter(
                 cargo_id=cargo.id,
@@ -503,10 +501,28 @@ class CargoInviteOpenView(generics.GenericAPIView):
                     message="",
                 )
 
-        # ---------- LOGISTIC открывает invite ----------
-        if logistic and offer and not offer.logistic_id:
-            offer.logistic = logistic
-            offer.save(update_fields=["logistic"])
+        # ---------- LOGISTIC ----------
+        elif logistic:
+            offer = Offer.objects.filter(
+                cargo_id=cargo.id,
+                logistic_id=logistic.id,
+                is_active=True,
+            ).first()
+
+            if not offer:
+                offer = Offer.objects.create(
+                    cargo=cargo,
+                    logistic=logistic,
+                    initiator=Offer.Initiator.CUSTOMER,
+                    deal_type=Offer.resolve_deal_type(
+                        initiator_user=invite.created_by or cargo.customer,
+                        logistic=logistic,
+                    ),
+                    price_value=cargo.price_value or 0,
+                    price_currency=cargo.price_currency,
+                    payment_method=Offer.PaymentMethod.CASH,
+                    message="",
+                )
 
         return Response(
             {

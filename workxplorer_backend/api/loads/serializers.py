@@ -52,6 +52,12 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
         allow_null=True,
         help_text="Цена перевозки (необязательное поле)",
     )
+    price_currency = serializers.ChoiceField(
+        choices=Currency.choices,
+        required=False,
+        default=Currency.UZS,
+        help_text="Валюта (необязательное поле, по умолчанию UZS)",
+    )
     axles = serializers.IntegerField(
         required=False,
         allow_null=True,

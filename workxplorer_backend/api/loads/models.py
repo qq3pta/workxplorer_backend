@@ -90,7 +90,12 @@ class Cargo(models.Model):
 
     # --- ЦЕНА ---
     price_value = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
-    price_currency = models.CharField(max_length=3, choices=Currency.choices, default=Currency.UZS)
+    price_currency = models.CharField(
+        max_length=3,
+        choices=Currency.choices,
+        null=True,
+        blank=True,
+    )
     price_uzs = models.DecimalField(
         max_digits=14, decimal_places=2, null=True, blank=True, verbose_name="Цена в сумах"
     )

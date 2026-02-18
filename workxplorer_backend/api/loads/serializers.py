@@ -45,6 +45,20 @@ class RouteKmMixin(serializers.Serializer):
 
 class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
     price_uzs = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
+    price_value = serializers.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        required=False,
+        allow_null=True,
+        help_text="Цена перевозки (необязательное поле)",
+    )
+    axles = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+        min_value=3,
+        max_value=10,
+        help_text="Количество осей (3–10, необязательное поле)",
+    )
     weight_tons = serializers.FloatField(required=False, write_only=True, min_value=0.001)
     # --- КООРДИНАТЫ ---
     origin_lat = serializers.FloatField(required=False, write_only=True)
@@ -198,7 +212,7 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
             raise serializers.ValidationError({"weight_kg": "Вес должен быть больше нуля."})
 
         price = attrs.get("price_value")
-        if price is not None and price < 0:
+        if price is not None and price != "" and price < 0:
             raise serializers.ValidationError({"price_value": "Цена не может быть отрицательной."})
 
         ax = attrs.get("axles")

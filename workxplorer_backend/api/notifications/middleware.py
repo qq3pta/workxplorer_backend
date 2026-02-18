@@ -2,9 +2,11 @@ from urllib.parse import parse_qs
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
+from django.utils import timezone
 from rest_framework_simplejwt.exceptions import TokenError
-from rest_framework_simplejwt.tokens import AccessToken
+from rest_framework_simplejwt.tokens import AccessToken, UntypedToken
 import logging
+import jwt
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -21,6 +23,29 @@ class JwtAuthMiddleware:
             token = self._get_token_from_scope(scope)
             if not token:
                 return await self.inner(scope, receive, send)
+
+            # ===== JWT DEBUG =====
+            print("\n=== WS JWT DEBUG ===")
+            print("TOKEN:", token[:30])
+
+            try:
+                payload = jwt.decode(token, options={"verify_signature": False})
+                exp = payload.get("exp")
+                now = int(timezone.now().timestamp())
+                print("exp:", exp)
+                print("now:", now)
+                print("diff:", exp - now if exp else None)
+            except Exception as e:
+                print("decode error:", e)
+
+            try:
+                UntypedToken(token)
+                print("JWT OK (not expired & not blacklisted)")
+            except Exception as e:
+                print("JWT INVALID:", e)
+
+            print("=== END JWT DEBUG ===\n")
+            # ===== END DEBUG =====
 
             access = AccessToken(token)
 

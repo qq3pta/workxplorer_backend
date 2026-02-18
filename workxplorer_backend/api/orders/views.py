@@ -861,9 +861,27 @@ class OrdersViewSet(viewsets.ModelViewSet):
         point = Point(lng, lat, srid=4326)
 
         gps, _ = DriverLocation.objects.get_or_create(order=order)
-        gps.point = point
-        gps.save()
+        now = timezone.now()
 
+        # ================= THROTTLE 20–25 MIN =================
+        if gps.recorded_at and now - gps.recorded_at < timedelta(minutes=22):
+            # обновляем только last_seen водителя
+            if hasattr(user, "last_seen"):
+                user.last_seen = now
+                user.save(update_fields=["last_seen"])
+            return Response({"ignored": True})
+
+        # ================= SAVE GPS =================
+        gps.point = point
+        gps.recorded_at = now
+        gps.save(update_fields=["point", "recorded_at"])
+
+        # обновляем last_seen водителя
+        if hasattr(user, "last_seen"):
+            user.last_seen = now
+            user.save(update_fields=["last_seen"])
+
+        # ================= WS =================
         channel_layer = get_channel_layer()
 
         participants = {
@@ -892,58 +910,6 @@ class OrdersViewSet(viewsets.ModelViewSet):
             )
 
         return Response(payload)
-
-    # ================= TRACKING =================
-    @action(detail=True, methods=["get"], url_path="tracking")
-    def tracking(self, request, pk=None):
-        order = self.get_object()
-        gps = getattr(order, "gps", None)
-
-        data = {
-            "order_id": order.id,
-            "status": order.status,
-            "driver_status": order.driver_status,
-            "driver": None,
-            "origin": None,
-            "destination": None,
-            "gps": None,
-            "online": False,
-        }
-
-        # --- водитель ---
-        if order.carrier:
-            data["driver"] = {
-                "id": order.carrier.id,
-                "name": order.carrier.get_full_name() or order.carrier.username,
-                "last_seen": getattr(order.carrier, "last_seen", None),
-            }
-
-        # --- точки ---
-        if order.cargo and order.cargo.origin_point:
-            data["origin"] = {
-                "lat": order.cargo.origin_point.y,
-                "lng": order.cargo.origin_point.x,
-            }
-
-        if order.cargo and order.cargo.dest_point:
-            data["destination"] = {
-                "lat": order.cargo.dest_point.y,
-                "lng": order.cargo.dest_point.x,
-            }
-
-        if gps and gps.point:
-            data["gps"] = {
-                "lat": gps.point.y,
-                "lng": gps.point.x,
-                "city": gps.city,
-                "country": gps.country,
-                "recorded_at": gps.recorded_at,
-            }
-
-            if gps.recorded_at and timezone.now() - gps.recorded_at < timedelta(minutes=15):
-                data["online"] = True
-
-        return Response(data)
 
     @extend_schema(
         request=PrivacyToggleSerializer,

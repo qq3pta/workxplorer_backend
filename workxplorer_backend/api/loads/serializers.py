@@ -14,7 +14,7 @@ from api.geo.management.commands.import_cities import COUNTRY_NORMALIZATION
 from api.geo.models import GeoPlace
 from api.geo.services import GeocodingError, geocode_city
 
-from .choices import ModerationStatus
+from .choices import ModerationStatus, Currency
 from .models import Cargo, PaymentMethod
 
 

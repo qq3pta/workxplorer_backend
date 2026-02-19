@@ -8,13 +8,10 @@ from django.db.models import (
     FloatField,
     Func,
     Q,
-    Prefetch,
 )
 from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from django.utils.decorators import method_decorator
-from django.views.decorators.cache import cache_page
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import generics, status
 from rest_framework import serializers as drf_serializers

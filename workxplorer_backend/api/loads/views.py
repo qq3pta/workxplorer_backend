@@ -8,10 +8,13 @@ from django.db.models import (
     FloatField,
     Func,
     Q,
+    Prefetch,
 )
 from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import cache_page
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import generics, status
 from rest_framework import serializers as drf_serializers
@@ -32,6 +35,7 @@ from ..accounts.permissions import (
 from .choices import ModerationStatus
 from .models import Cargo, CargoStatus
 from .serializers import CargoListSerializer, CargoPublishSerializer
+from .pagination import OptimizedLoadsPagination, LoadsBoardPagination
 
 INVITE_BASE_URL = "https://logistic-omega-eight.vercel.app/dashboard/desk/invite"
 
@@ -175,6 +179,7 @@ class CargoRefreshView(generics.GenericAPIView):
 class MyCargosView(generics.ListAPIView):
     permission_classes = [IsAuthenticatedAndVerified, IsCustomerOrLogistic]
     serializer_class = CargoListSerializer
+    pagination_class = OptimizedLoadsPagination
 
     def get_queryset(self):
         user = self.request.user
@@ -186,13 +191,56 @@ class MyCargosView(generics.ListAPIView):
         else:
             return Cargo.objects.none()
 
-        qs = qs.annotate(
-            offers_active=Count("offers", filter=Q(offers__is_active=True)),
-            path_m=Distance(F("origin_point"), F("dest_point")),
-        ).annotate(
-            path_km=F("path_m") / 1000.0,
-            route_km=Coalesce(F("route_km_cached"), F("path_km")),
-            price_uzs_anno=F("price_uzs"),
+        # Оптимизация: ограничиваем выборку полей
+        qs = (
+            qs.select_related("customer", "created_by")
+            .only(
+                "id",
+                "uuid",
+                "product",
+                "description",
+                "origin_country",
+                "origin_city",
+                "origin_address",
+                "destination_country",
+                "destination_city",
+                "destination_address",
+                "load_date",
+                "delivery_date",
+                "transport_type",
+                "weight_kg",
+                "axles",
+                "volume_m3",
+                "price_value",
+                "price_currency",
+                "price_uzs",
+                "contact_pref",
+                "moderation_status",
+                "status",
+                "created_at",
+                "refreshed_at",
+                "is_hidden",
+                "payment_method",
+                "route_km_cached",
+                "origin_point",
+                "dest_point",
+                "customer__username",
+                "customer__email",
+                "customer__phone",
+                "customer__company_name",
+                "customer__name",
+                "created_by__username",
+                "created_by__name",
+            )
+            .annotate(
+                offers_active=Count("offers", filter=Q(offers__is_active=True)),
+                path_m=Distance(F("origin_point"), F("dest_point")),
+            )
+            .annotate(
+                path_km=F("path_m") / 1000.0,
+                route_km=Coalesce(F("route_km_cached"), F("path_km")),
+                price_uzs_anno=F("price_uzs"),
+            )
         )
 
         return apply_loads_filters(qs, self.request.query_params)
@@ -201,17 +249,58 @@ class MyCargosView(generics.ListAPIView):
 class MyCargosBoardView(generics.ListAPIView):
     permission_classes = [IsAuthenticatedAndVerified, IsCustomerOrLogistic]
     serializer_class = CargoListSerializer
+    pagination_class = LoadsBoardPagination
 
     def get_queryset(self):
         user = self.request.user
         today = timezone.localdate()
 
+        # Оптимизация: используем индексы и ограничиваем поля
         qs = (
             Cargo.objects.filter(
                 Q(customer=user) | Q(created_by=user),
                 status=CargoStatus.POSTED,
                 is_hidden=False,
                 load_date__gte=today,
+            )
+            .select_related("customer", "created_by")
+            .only(
+                "id",
+                "uuid",
+                "product",
+                "description",
+                "origin_country",
+                "origin_city",
+                "origin_address",
+                "destination_country",
+                "destination_city",
+                "destination_address",
+                "load_date",
+                "delivery_date",
+                "transport_type",
+                "weight_kg",
+                "axles",
+                "volume_m3",
+                "price_value",
+                "price_currency",
+                "price_uzs",
+                "contact_pref",
+                "moderation_status",
+                "status",
+                "created_at",
+                "refreshed_at",
+                "is_hidden",
+                "payment_method",
+                "route_km_cached",
+                "origin_point",
+                "dest_point",
+                "customer__username",
+                "customer__email",
+                "customer__phone",
+                "customer__company_name",
+                "customer__name",
+                "created_by__username",
+                "created_by__name",
             )
             .annotate(
                 offers_active=Count("offers", filter=Q(offers__is_active=True)),
@@ -230,10 +319,12 @@ class MyCargosBoardView(generics.ListAPIView):
 class PublicLoadsView(generics.ListAPIView):
     permission_classes = [IsAuthenticatedAndVerified, IsCustomerOrCarrierOrLogistic]
     serializer_class = CargoListSerializer
+    pagination_class = OptimizedLoadsPagination
 
     def get_queryset(self):
         today = timezone.localdate()
 
+        # Оптимизация: используем композитный индекс и ограничиваем поля
         qs = (
             Cargo.objects.filter(
                 moderation_status=ModerationStatus.APPROVED,
@@ -244,6 +335,45 @@ class PublicLoadsView(generics.ListAPIView):
             .exclude(
                 origin_point__isnull=True,
                 dest_point__isnull=True,
+            )
+            .select_related("customer", "created_by")
+            .only(
+                "id",
+                "uuid",
+                "product",
+                "description",
+                "origin_country",
+                "origin_city",
+                "origin_address",
+                "destination_country",
+                "destination_city",
+                "destination_address",
+                "load_date",
+                "delivery_date",
+                "transport_type",
+                "weight_kg",
+                "axles",
+                "volume_m3",
+                "price_value",
+                "price_currency",
+                "price_uzs",
+                "contact_pref",
+                "moderation_status",
+                "status",
+                "created_at",
+                "refreshed_at",
+                "is_hidden",
+                "payment_method",
+                "route_km_cached",
+                "origin_point",
+                "dest_point",
+                "customer__username",
+                "customer__email",
+                "customer__phone",
+                "customer__company_name",
+                "customer__name",
+                "created_by__username",
+                "created_by__name",
             )
             .annotate(
                 offers_active=Count("offers", filter=Q(offers__is_active=True)),
@@ -256,7 +386,6 @@ class PublicLoadsView(generics.ListAPIView):
                 price_uzs_anno=F("price_uzs"),
                 company_rating=Avg("customer__ratings_received__score"),
             )
-            .select_related("customer")
         )
 
         return apply_loads_filters(qs, self.request.query_params)

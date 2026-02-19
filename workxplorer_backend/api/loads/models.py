@@ -150,16 +150,27 @@ class Cargo(models.Model):
     class Meta:
         ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=["moderation_status", "transport_type", "load_date"]),
-            models.Index(fields=["origin_city", "destination_city"]),
-            models.Index(fields=["origin_city_latin"]),
-            models.Index(fields=["destination_city_latin"]),
-            models.Index(fields=["status"]),
-            models.Index(fields=["refreshed_at"]),
-            models.Index(fields=["price_value"]),
-            models.Index(fields=["price_currency"]),
+            # Композитные индексы для популярных запросов
+            models.Index(
+                fields=["moderation_status", "is_hidden", "status", "load_date"],
+                name="cargo_main_filter",
+            ),
+            models.Index(
+                fields=["status", "load_date", "transport_type"], name="cargo_status_load"
+            ),
+            models.Index(fields=["customer", "status", "created_at"], name="cargo_customer_idx"),
+            models.Index(
+                fields=["created_by", "status", "created_at"], name="cargo_created_by_idx"
+            ),
+            # Индексы для поиска по городам
+            models.Index(fields=["origin_city_latin", "destination_city_latin"]),
+            # Индексы для сортировки и фильтрации
+            models.Index(fields=["-refreshed_at", "-created_at"], name="cargo_refresh_sort"),
+            models.Index(fields=["price_uzs", "load_date"], name="cargo_price_idx"),
+            models.Index(fields=["weight_kg"], name="cargo_weight_idx"),
             models.Index(fields=["axles"]),
             models.Index(fields=["volume_m3"]),
+            models.Index(fields=["transport_type", "load_date"], name="cargo_transport_idx"),
         ]
 
     def __str__(self):
@@ -173,7 +184,8 @@ class Cargo(models.Model):
 
         if not is_new:
             try:
-                old = Cargo.objects.get(pk=self.pk)
+                # Оптимизация: выбираем только нужные поля вместо всего объекта
+                old = Cargo.objects.only("moderation_status", "status").get(pk=self.pk)
                 old_moderation = old.moderation_status
                 old_status = old.status
             except Cargo.DoesNotExist:

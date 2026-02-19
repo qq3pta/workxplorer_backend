@@ -160,6 +160,7 @@ class OrderListSerializer(serializers.ModelSerializer):
     def get_rated(self, obj):
         """
         rated: кто → кому → score + rating_id
+        Оптимизирована для prefetch_related
         """
         result = {
             "by_customer": {},
@@ -167,6 +168,7 @@ class OrderListSerializer(serializers.ModelSerializer):
             "by_logistic": {},
         }
 
+        # Используем prefetch_related для избежания N+1
         ratings = getattr(obj, "ratings", None)
         if not ratings:
             return result
@@ -177,7 +179,10 @@ class OrderListSerializer(serializers.ModelSerializer):
             "LOGISTIC": "by_logistic",
         }
 
-        for r in ratings.all():
+        # Кэшируем ratings.all() чтобы избежать повторных запросов
+        ratings_list = list(ratings.all()) if hasattr(ratings, "all") else []
+
+        for r in ratings_list:
             if not r.rated_by or not r.rated_user:
                 continue
 
@@ -298,6 +303,9 @@ class OrderListSerializer(serializers.ModelSerializer):
 
     @extend_schema_field(serializers.IntegerField())
     def get_documents_count(self, obj):
+        # Используем аннотацию из queryset, если доступна
+        if hasattr(obj, "documents_count"):
+            return obj.documents_count
         return obj.documents.count()
 
 

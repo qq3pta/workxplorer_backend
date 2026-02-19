@@ -4,6 +4,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from django.contrib.gis.geos import Point
 from typing import Any
 
+from django.core.cache import cache
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
@@ -128,18 +129,29 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
         return changed_origin, changed_dest
 
     def _smart_find_place(self, country: str, city: str) -> GeoPlace | None:
+        """Оптимизированный поиск места с кэшированием"""
         country = COUNTRY_NORMALIZATION.get(country, country).strip()
         city_norm = city.strip().lower()
         city_trans = unidecode(city_norm).lower()
 
+        # Кэширование результатов геокодирования на 24 часа
+        cache_key = f"geoplace:{country}:{city_trans}"
+        cached_place = cache.get(cache_key)
+        if cached_place is not None:
+            return cached_place if cached_place != "NOT_FOUND" else None
+
         qs = GeoPlace.objects.filter(country__iexact=country)
 
-        return (
+        place = (
             qs.filter(name__iexact=city).first()
             or qs.filter(name_latin__iexact=city_trans).first()
             or qs.filter(name__icontains=city_norm).first()
             or qs.filter(name_latin__icontains=city_trans).first()
         )
+
+        # Кэшируем результат (включая None)
+        cache.set(cache_key, place if place else "NOT_FOUND", 86400)  # 24 часа
+        return place
 
     def _geocode_origin(self, attrs):
         country = (attrs.get("origin_country") or "").strip()
@@ -336,6 +348,8 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
 
 
 class CargoListSerializer(RouteKmMixin, serializers.ModelSerializer):
+    """Оптимизированный сериализатор списка грузов с кэшированием вычислений"""
+
     id = serializers.IntegerField(read_only=True)
     price_uzs = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
     uuid = serializers.UUIDField(read_only=True)
@@ -358,6 +372,11 @@ class CargoListSerializer(RouteKmMixin, serializers.ModelSerializer):
     weight_t = serializers.SerializerMethodField()
     price_per_km = serializers.SerializerMethodField()
     is_hidden = serializers.BooleanField(read_only=True)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Кэш для вычислений внутри одного запроса
+        self._computation_cache = {}
 
     class Meta:
         model = Cargo
@@ -438,8 +457,15 @@ class CargoListSerializer(RouteKmMixin, serializers.ModelSerializer):
 
     @extend_schema_field(float)
     def get_weight_t(self, obj):
+        """Оптимизированное вычисление веса в тоннах"""
+        cache_key = f"weight_t_{obj.id}"
+        if cache_key in self._computation_cache:
+            return self._computation_cache[cache_key]
+
         try:
-            return round(float(obj.weight_kg) / 1000, 3)
+            result = round(float(obj.weight_kg) / 1000, 3)
+            self._computation_cache[cache_key] = result
+            return result
         except Exception:
             return None
 
@@ -447,19 +473,28 @@ class CargoListSerializer(RouteKmMixin, serializers.ModelSerializer):
         return obj.created_by if obj.created_by else obj.customer
 
     def get_user_name(self, obj):
+        """Оптимизированное получение имени пользователя"""
+        cache_key = f"user_name_{obj.id}"
+        if cache_key in self._computation_cache:
+            return self._computation_cache[cache_key]
+
         author = self._get_author(obj)
 
         full = getattr(author, "get_full_name", None)
         if callable(full):
             name = full()
             if name:
+                self._computation_cache[cache_key] = name
                 return name
 
         name = getattr(author, "name", None)
         if name:
+            self._computation_cache[cache_key] = name
             return name
 
-        return getattr(author, "username", "")
+        result = getattr(author, "username", "")
+        self._computation_cache[cache_key] = result
+        return result
 
     def get_user_id(self, obj):
         author = self._get_author(obj)
@@ -467,6 +502,11 @@ class CargoListSerializer(RouteKmMixin, serializers.ModelSerializer):
 
     @extend_schema_field(Decimal)
     def get_price_per_km(self, obj):
+        """Оптимизированный расчет цены за км"""
+        cache_key = f"price_per_km_{obj.id}"
+        if cache_key in self._computation_cache:
+            return self._computation_cache[cache_key]
+
         price = obj.price_value
 
         dist = (
@@ -486,9 +526,11 @@ class CargoListSerializer(RouteKmMixin, serializers.ModelSerializer):
             return None
 
         try:
-            return (Decimal(str(price)) / Decimal(str(dist))).quantize(
+            result = (Decimal(str(price)) / Decimal(str(dist))).quantize(
                 Decimal("0.01"), rounding=ROUND_HALF_UP
             )
+            self._computation_cache[cache_key] = result
+            return result
         except Exception:
             return None
 

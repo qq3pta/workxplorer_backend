@@ -125,6 +125,10 @@ if getenv("DATABASE_URL"):
         )
     }
     DATABASES["default"]["ENGINE"] = "django.contrib.gis.db.backends.postgis"
+    DATABASES["default"]["CONN_MAX_AGE"] = 600
+    DATABASES["default"]["OPTIONS"] = {
+        "connect_timeout": 10,
+    }
 else:
     DATABASES = {
         "default": {
@@ -134,6 +138,10 @@ else:
             "PASSWORD": getenv("DB_PASSWORD", "postgres"),
             "HOST": getenv("DB_HOST", "localhost"),
             "PORT": getenv("DB_PORT", "5432"),
+            "CONN_MAX_AGE": 600,
+            "OPTIONS": {
+                "connect_timeout": 10,
+            },
         }
     }
 
@@ -167,7 +175,8 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # DRF / Schema
 REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
-    "PAGE_SIZE": 10,
+    "PAGE_SIZE": 20,
+    "MAX_PAGE_SIZE": 100,
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",
@@ -181,6 +190,7 @@ REST_FRAMEWORK = {
         "user": "5000/day",
         "anon": "1000/day",
     },
+    "DEFAULT_RENDERER_CLASSES": ("rest_framework.renderers.JSONRenderer",),
 }
 
 SPECTACULAR_SETTINGS = {

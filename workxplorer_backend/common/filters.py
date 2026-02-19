@@ -8,6 +8,10 @@ from common.utils import convert_to_uzs
 
 
 def apply_loads_filters(qs, p):
+    """
+    Оптимизированная функция фильтрации грузов.
+    Использует индексы и минимизирует количество запросов.
+    """
     # ======================
     # HAS OFFERS
     # ======================
@@ -20,16 +24,24 @@ def apply_loads_filters(qs, p):
             qs = qs.filter(offers_active=0)
 
     # ======================
-    # UUID / ГОРОДА / ДАТЫ
+    # UUID / ГОРОДА / ДАТЫ (оптимизировано с индексами)
     # ======================
     if p.get("uuid"):
+        # UUID - уникальный индекс, очень быстро
         qs = qs.filter(uuid=p["uuid"])
 
+    # Используем latin версии для поиска (индексированы)
     if p.get("origin_city") and not p.get("origin_radius_km"):
-        qs = qs.filter(origin_city__iexact=p["origin_city"])
+        origin_city = p["origin_city"].strip().lower()
+        qs = qs.filter(
+            Q(origin_city__iexact=origin_city) | Q(origin_city_latin__iexact=origin_city)
+        )
 
     if p.get("destination_city") and not p.get("dest_radius_km"):
-        qs = qs.filter(destination_city__iexact=p["destination_city"])
+        dest_city = p["destination_city"].strip().lower()
+        qs = qs.filter(
+            Q(destination_city__iexact=dest_city) | Q(destination_city_latin__iexact=dest_city)
+        )
 
     if p.get("load_date"):
         qs = qs.filter(load_date=p["load_date"])
@@ -101,14 +113,16 @@ def apply_loads_filters(qs, p):
         )
 
     # ======================
-    # COMPANY / TEXT SEARCH
+    # COMPANY / TEXT SEARCH (оптимизировано)
     # ======================
     q = p.get("company") or p.get("q")
     if q:
+        # Преобразуем в нижний регистр для более быстрого поиска
+        q_lower = q.lower()
         qs = qs.filter(
-            Q(customer__company_name__icontains=q)
-            | Q(customer__username__icontains=q)
-            | Q(customer__email__icontains=q)
+            Q(customer__company_name__icontains=q_lower)
+            | Q(customer__username__icontains=q_lower)
+            | Q(customer__email__icontains=q_lower)
         )
 
     # ======================
@@ -146,7 +160,7 @@ def apply_loads_filters(qs, p):
             pass
 
     # ======================
-    # SORTING
+    # SORTING (оптимизировано с индексами)
     # ======================
     allowed = {
         "path_km",
@@ -167,6 +181,8 @@ def apply_loads_filters(qs, p):
         "-volume_m3",
         "age_minutes_anno",
         "-age_minutes_anno",
+        "weight_kg",
+        "-weight_kg",
     }
 
     order_alias = {
@@ -179,6 +195,7 @@ def apply_loads_filters(qs, p):
     if order in allowed:
         qs = qs.order_by(order)
     else:
+        # Используем индексированную сортировку по умолчанию
         qs = qs.order_by("-refreshed_at", "-created_at")
 
     return qs

@@ -112,13 +112,26 @@ def _apply_orders_filters(qs, p):
 
 
 class OrdersViewSet(viewsets.ModelViewSet):
-    queryset = Order.objects.all().select_related(
-        "cargo",
-        "customer",
-        "carrier",
-        "logistic",
-        "created_by",
-        "offer",
+    queryset = (
+        Order.objects.all()
+        .select_related(
+            "cargo",
+            "customer",
+            "carrier",
+            "logistic",
+            "created_by",
+            "offer",
+            "offer__carrier",
+            "offer__logistic",
+        )
+        .prefetch_related(
+            "documents",
+            "ratings",
+            "ratings__rated_by",
+            "ratings__rated_user",
+            "payments",
+        )
+        .annotate(documents_count=models.Count("documents", distinct=True))
     )
     permission_classes = [IsAuthenticated, IsOrderParticipant]
     parser_classes = (JSONParser, MultiPartParser, FormParser)
@@ -237,7 +250,6 @@ class OrdersViewSet(viewsets.ModelViewSet):
         ser.save()
 
         channel_layer = get_channel_layer()
-        order.refresh_from_db()
 
         participants = {
             order.customer_id,
@@ -245,14 +257,15 @@ class OrdersViewSet(viewsets.ModelViewSet):
             order.logistic_id,
         }
 
+        # Отправляем легковесное уведомление вместо полного сериализатора
         for user_id in filter(None, participants):
-            payload = OrderListSerializer(order, context={"request": request}).data
-
             message = {
                 "type": "notify",
                 "data": {
                     "event": "driver_status_changed",
-                    "order": payload,
+                    "order_id": order.id,
+                    "driver_status": new_status,
+                    "old_status": old_status,
                 },
             }
 
@@ -292,16 +305,16 @@ class OrdersViewSet(viewsets.ModelViewSet):
         ser.save(order=order, uploaded_by=request.user)
 
         channel_layer = get_channel_layer()
-        order.refresh_from_db()
 
-        payload = OrderListSerializer(order, context={"request": request}).data
-
+        # Отправляем легковесное уведомление
         for user_id in filter(None, {order.customer_id, order.carrier_id, order.logistic_id}):
             message = {
                 "type": "notify",
                 "data": {
                     "event": "order_documents_added",
-                    "order": payload,
+                    "order_id": order.id,
+                    "document_id": ser.data["id"],
+                    "category": ser.data["category"],
                 },
             }
 
@@ -343,16 +356,15 @@ class OrdersViewSet(viewsets.ModelViewSet):
         order.save(update_fields=["carrier_accepted_terms", "status"])
 
         channel_layer = get_channel_layer()
-        order.refresh_from_db()
 
-        payload = OrderListSerializer(order, context={"request": request}).data
-
+        # Отправляем легковесное уведомление
         for user_id in filter(None, {order.customer_id, order.carrier_id, order.logistic_id}):
             message = {
                 "type": "notify",
                 "data": {
                     "event": "order_confirmed",
-                    "order": payload,
+                    "order_id": order.id,
+                    "status": order.status,
                 },
             }
 
@@ -467,9 +479,6 @@ class OrdersViewSet(viewsets.ModelViewSet):
         )
 
         channel_layer = get_channel_layer()
-        order.refresh_from_db()
-
-        payload = OrderListSerializer(order, context={"request": request}).data
 
         participants = {
             order.customer_id,
@@ -477,12 +486,15 @@ class OrdersViewSet(viewsets.ModelViewSet):
             order.logistic_id,
         }
 
+        # Отправляем легковесное уведомление
         for user_id in filter(None, participants):
             message = {
                 "type": "notify",
                 "data": {
                     "event": "order_invited_carrier",
-                    "order": payload,
+                    "order_id": order.id,
+                    "carrier_id": carrier.id,
+                    "invite_token": str(order.invite_token),
                 },
             }
 
@@ -549,16 +561,15 @@ class OrdersViewSet(viewsets.ModelViewSet):
         order.save(update_fields=update_fields)
 
         channel_layer = get_channel_layer()
-        order.refresh_from_db()
 
-        payload = OrderListSerializer(order, context={"request": request}).data
-
+        # Отправляем легковесное уведомление
         for user_id in filter(None, {order.customer_id, order.logistic_id}):
             message = {
                 "type": "notify",
                 "data": {
                     "event": "invite_generated",
-                    "order": payload,
+                    "order_id": order.id,
+                    "invite_token": str(token),
                 },
             }
 
@@ -613,16 +624,15 @@ class OrdersViewSet(viewsets.ModelViewSet):
         )
 
         channel_layer = get_channel_layer()
-        order.refresh_from_db()
 
-        payload = OrderListSerializer(order, context={"request": request}).data
-
+        # Отправляем легковесное уведомление
         for user_id in filter(None, {order.customer_id, user.id, order.logistic_id}):
             message = {
                 "type": "notify",
                 "data": {
                     "event": "order_invite_accepted",
-                    "order": payload,
+                    "order_id": order.id,
+                    "carrier_id": user.id,
                 },
             }
 
@@ -684,16 +694,15 @@ class OrdersViewSet(viewsets.ModelViewSet):
         )
 
         channel_layer = get_channel_layer()
-        order.refresh_from_db()
 
-        payload = OrderListSerializer(order, context={"request": request}).data
-
+        # Отправляем легковесное уведомление
         for user_id in filter(None, {order.customer_id, user.id, order.logistic_id}):
             message = {
                 "type": "notify",
                 "data": {
                     "event": "order_invite_declined",
-                    "order": payload,
+                    "order_id": order.id,
+                    "carrier_id": user.id,
                 },
             }
 
@@ -798,20 +807,21 @@ class OrdersViewSet(viewsets.ModelViewSet):
         order.save(update_fields=["status"])
 
         channel_layer = get_channel_layer()
-        order.refresh_from_db()
 
-        payload = OrderListSerializer(order, context={"request": request}).data
-
+        # Отправляем легковесное уведомление
         for user_id in filter(None, {order.customer_id, order.carrier_id, order.logistic_id}):
             async_to_sync(channel_layer.group_send)(
                 f"user_{user_id}",
-                {
-                    "type": "notify",
-                    "data": {
-                        "event": "order_canceled",
-                        "order": payload,
-                    },
-                },
+                to_ws_safe(
+                    {
+                        "type": "notify",
+                        "data": {
+                            "event": "order_canceled",
+                            "order_id": order.id,
+                            "new_status": order.status,
+                        },
+                    }
+                ),
             )
 
         if hasattr(user, "profile"):
@@ -941,15 +951,9 @@ class OrdersViewSet(viewsets.ModelViewSet):
 
         order.save(update_fields=update_fields)
 
-        from channels.layers import get_channel_layer
-        from asgiref.sync import async_to_sync
-        from common.ws_utils import to_ws_safe
-
         channel_layer = get_channel_layer()
-        order.refresh_from_db()
 
-        payload = OrderListSerializer(order, context={"request": request}).data
-
+        # Отправляем легковесное уведомление
         for user_id in filter(None, {order.customer_id, order.carrier_id, order.logistic_id}):
             async_to_sync(channel_layer.group_send)(
                 f"user_{user_id}",
@@ -958,7 +962,9 @@ class OrdersViewSet(viewsets.ModelViewSet):
                         "type": "notify",
                         "data": {
                             "event": "order_privacy_changed",
-                            "order": payload,
+                            "order_id": order.id,
+                            "customer_hide": order.customer_hide_contacts,
+                            "logistic_hide": order.logistic_hide_contacts,
                         },
                     }
                 ),

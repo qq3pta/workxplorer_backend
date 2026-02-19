@@ -225,9 +225,7 @@ class MyCargosView(generics.ListAPIView):
                 "customer__email",
                 "customer__phone",
                 "customer__company_name",
-                "customer__name",
                 "created_by__username",
-                "created_by__name",
             )
             .annotate(
                 offers_active=Count("offers", filter=Q(offers__is_active=True)),
@@ -295,9 +293,7 @@ class MyCargosBoardView(generics.ListAPIView):
                 "customer__email",
                 "customer__phone",
                 "customer__company_name",
-                "customer__name",
                 "created_by__username",
-                "created_by__name",
             )
             .annotate(
                 offers_active=Count("offers", filter=Q(offers__is_active=True)),
@@ -368,9 +364,7 @@ class PublicLoadsView(generics.ListAPIView):
                 "customer__email",
                 "customer__phone",
                 "customer__company_name",
-                "customer__name",
                 "created_by__username",
-                "created_by__name",
             )
             .annotate(
                 offers_active=Count("offers", filter=Q(offers__is_active=True)),

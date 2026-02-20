@@ -51,7 +51,6 @@ Django/DRF backend для онлайн-платформы грузоперево
 
 ### Дополнительно
 - **Sentry** (мониторинг ошибок)
-- **Anthropic Claude** (AI интеграция)
 - **Gunicorn** / **Whitenoise** (статика)
 - **Docker Compose** (оркестрация)
 

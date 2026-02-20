@@ -183,9 +183,9 @@ class CargoAdmin(admin.ModelAdmin):
             except Exception:
                 fail += 1
         if ok:
-            messages.success(request, f"✅ Пересчитано маршрутов: {ok}")
+            messages.success(request, f"Пересчитано маршрутов: {ok}")
         if fail:
-            messages.warning(request, f"⚠️ Ошибок: {fail}")
+            messages.warning(request, f"Ошибок: {fail}")
 
     recalculate_route_km.short_description = "Пересчитать маршрут (обновить кэш)"
 
@@ -199,8 +199,8 @@ class CargoAdmin(admin.ModelAdmin):
             except Exception:
                 fail += 1
         if ok:
-            messages.success(request, f"💰 Цены пересчитаны: {ok}")
+            messages.success(request, f"Цены пересчитаны: {ok}")
         if fail:
-            messages.warning(request, f"⚠️ Ошибок: {fail}")
+            messages.warning(request, f"Ошибок: {fail}")
 
     recalculate_price_uzs.short_description = "Пересчитать цену (UZS)"

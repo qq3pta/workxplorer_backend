@@ -1,7 +1,3 @@
-"""
-Утилиты для оптимизации запросов к базе данных
-"""
-
 from django.db import connection
 from django.db.models import Prefetch
 from contextlib import contextmanager

@@ -77,12 +77,6 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
     dest_lat = serializers.FloatField(required=False, allow_null=True, write_only=True)
     dest_lng = serializers.FloatField(required=False, allow_null=True, write_only=True)
 
-    # -------- output coords (GET) --------
-    _origin_lat = serializers.SerializerMethodField()
-    _origin_lng = serializers.SerializerMethodField()
-    _dest_lat = serializers.SerializerMethodField()
-    _dest_lng = serializers.SerializerMethodField()
-
     payment_method = serializers.ChoiceField(
         choices=PaymentMethod.choices,
         default=PaymentMethod.CASH,
@@ -118,34 +112,15 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
             "origin_lng",
             "dest_lat",
             "dest_lng",
-            # output:
-            "_origin_lat",
-            "_origin_lng",
-            "_dest_lat",
-            "_dest_lng",
         )
         read_only_fields = ("route_km", "price_uzs", "uuid")
 
-    # ----- output coords -----
-    def get__origin_lat(self, obj):
-        return obj.origin_point.y if obj.origin_point else None
-
-    def get__origin_lng(self, obj):
-        return obj.origin_point.x if obj.origin_point else None
-
-    def get__dest_lat(self, obj):
-        return obj.dest_point.y if obj.dest_point else None
-
-    def get__dest_lng(self, obj):
-        return obj.dest_point.x if obj.dest_point else None
-
     def to_representation(self, instance):
         data = super().to_representation(instance)
-        # выдаём координаты под теми же ключами, что фронт отправляет
-        data["origin_lat"] = data.pop("_origin_lat", None)
-        data["origin_lng"] = data.pop("_origin_lng", None)
-        data["dest_lat"] = data.pop("_dest_lat", None)
-        data["dest_lng"] = data.pop("_dest_lng", None)
+        data["origin_lat"] = instance.origin_point.y if instance.origin_point else None
+        data["origin_lng"] = instance.origin_point.x if instance.origin_point else None
+        data["dest_lat"] = instance.dest_point.y if instance.dest_point else None
+        data["dest_lng"] = instance.dest_point.x if instance.dest_point else None
         return data
 
     def _val_or_instance(self, attrs: dict[str, Any], name: str):

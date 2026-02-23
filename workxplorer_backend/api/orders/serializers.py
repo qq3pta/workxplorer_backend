@@ -110,6 +110,31 @@ class OrderListSerializer(serializers.ModelSerializer):
     documents_count = serializers.SerializerMethodField()
     rated = serializers.SerializerMethodField()
 
+    origin_lat = serializers.SerializerMethodField()
+    origin_lng = serializers.SerializerMethodField()
+    dest_lat = serializers.SerializerMethodField()
+    dest_lng = serializers.SerializerMethodField()
+
+    @extend_schema_field(serializers.FloatField(allow_null=True))
+    def get_origin_lat(self, obj):
+        p = getattr(getattr(obj, "cargo", None), "origin_point", None)
+        return p.y if p else None
+
+    @extend_schema_field(serializers.FloatField(allow_null=True))
+    def get_origin_lng(self, obj):
+        p = getattr(getattr(obj, "cargo", None), "origin_point", None)
+        return p.x if p else None
+
+    @extend_schema_field(serializers.FloatField(allow_null=True))
+    def get_dest_lat(self, obj):
+        p = getattr(getattr(obj, "cargo", None), "dest_point", None)
+        return p.y if p else None
+
+    @extend_schema_field(serializers.FloatField(allow_null=True))
+    def get_dest_lng(self, obj):
+        p = getattr(getattr(obj, "cargo", None), "dest_point", None)
+        return p.x if p else None
+
     class Meta:
         model = Order
         fields = (
@@ -137,9 +162,13 @@ class OrderListSerializer(serializers.ModelSerializer):
             "price_per_km",
             "origin_city",
             "origin_address",
+            "origin_lat",
+            "origin_lng",
             "load_date",
             "destination_city",
             "destination_address",
+            "dest_lat",
+            "dest_lng",
             "delivery_date",
             "documents_count",
             "rated",

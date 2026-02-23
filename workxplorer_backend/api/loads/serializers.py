@@ -72,10 +72,10 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
     weight_tons = serializers.FloatField(required=False, write_only=True, min_value=0.001)
 
     # -------- input coords (POST/PUT) --------
-    origin_lat = serializers.FloatField(required=False, allow_null=True, write_only=True)
-    origin_lng = serializers.FloatField(required=False, allow_null=True, write_only=True)
-    dest_lat = serializers.FloatField(required=False, allow_null=True, write_only=True)
-    dest_lng = serializers.FloatField(required=False, allow_null=True, write_only=True)
+    origin_lat = serializers.FloatField(required=False, allow_null=True)
+    origin_lng = serializers.FloatField(required=False, allow_null=True)
+    dest_lat = serializers.FloatField(required=False, allow_null=True)
+    dest_lng = serializers.FloatField(required=False, allow_null=True)
 
     payment_method = serializers.ChoiceField(
         choices=PaymentMethod.choices,

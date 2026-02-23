@@ -81,6 +81,7 @@ class OrderListSerializer(serializers.ModelSerializer):
 
     status = serializers.ChoiceField(choices=_order_status_choices())
     driver_status = serializers.ChoiceField(choices=_driver_status_choices(), read_only=True)
+    driver_location = serializers.SerializerMethodField()
     currency = serializers.ChoiceField(choices=_currency_choices())
     currency_display = serializers.CharField(source="get_currency_display", read_only=True)
 
@@ -135,6 +136,19 @@ class OrderListSerializer(serializers.ModelSerializer):
         p = getattr(getattr(obj, "cargo", None), "dest_point", None)
         return p.x if p else None
 
+    @extend_schema_field(serializers.JSONField(allow_null=True))
+    def get_driver_location(self, obj):
+        gps = getattr(obj, "gps", None)  # related_name="gps"
+
+        if not gps or not gps.point:
+            return None
+
+        return {
+            "lat": gps.point.y,
+            "lng": gps.point.x,
+            "recorded_at": gps.recorded_at.isoformat() if gps.recorded_at else None,
+        }
+
     class Meta:
         model = Order
         fields = (
@@ -174,6 +188,7 @@ class OrderListSerializer(serializers.ModelSerializer):
             "rated",
             "created_at",
             "share_token",
+            "driver_location",
         )
         read_only_fields = (
             "id",
@@ -469,3 +484,8 @@ class InvitePreviewSerializer(serializers.Serializer):
 
 class PrivacyToggleSerializer(serializers.Serializer):
     hide = serializers.BooleanField(required=True)
+
+
+class GPSUpdateSerializer(serializers.Serializer):
+    lat = serializers.FloatField(required=True, min_value=-90, max_value=90)
+    lng = serializers.FloatField(required=True, min_value=-180, max_value=180)

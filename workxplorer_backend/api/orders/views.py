@@ -123,6 +123,7 @@ class OrdersViewSet(viewsets.ModelViewSet):
             "offer",
             "offer__carrier",
             "offer__logistic",
+            "gps",
         )
         .prefetch_related(
             "documents",
@@ -903,9 +904,11 @@ class OrdersViewSet(viewsets.ModelViewSet):
         payload = {
             "event": "gps_updated",
             "order_id": order.id,
-            "lat": lat,
-            "lng": lng,
-            "recorded_at": gps.recorded_at.isoformat(),
+            "driver_location": {
+                "lat": lat,
+                "lng": lng,
+                "recorded_at": gps.recorded_at.isoformat(),
+            },
         }
 
         for user_id in filter(None, participants):

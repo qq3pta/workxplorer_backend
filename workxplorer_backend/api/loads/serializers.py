@@ -117,6 +117,19 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
             return getattr(self.instance, name, None)
         return None
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+
+        op = getattr(instance, "origin_point", None)
+        dp = getattr(instance, "dest_point", None)
+
+        data["origin_lat"] = float(op.y) if op else None
+        data["origin_lng"] = float(op.x) if op else None
+        data["dest_lat"] = float(dp.y) if dp else None
+        data["dest_lng"] = float(dp.x) if dp else None
+
+        return data
+
     def _need_regeocode(self, attrs: dict[str, Any]):
         changed_origin = any(
             k in attrs for k in ("origin_city", "origin_country", "origin_address")

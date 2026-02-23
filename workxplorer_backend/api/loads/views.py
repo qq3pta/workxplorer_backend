@@ -92,6 +92,10 @@ class PublishCargoView(generics.CreateAPIView):
                 "uuid": cargo.uuid,
                 "route_km": data.get("route_km"),
                 "price_uzs": data.get("price_uzs"),
+                "origin_lat": data.get("origin_lat"),
+                "origin_lng": data.get("origin_lng"),
+                "dest_lat": data.get("dest_lat"),
+                "dest_lng": data.get("dest_lng"),
             },
             status=status.HTTP_201_CREATED,
         )

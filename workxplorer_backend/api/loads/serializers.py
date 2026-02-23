@@ -46,6 +46,7 @@ class RouteKmMixin(serializers.Serializer):
 
 class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
     price_uzs = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
+
     price_value = serializers.DecimalField(
         max_digits=14,
         decimal_places=2,
@@ -67,12 +68,21 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
         max_value=10,
         help_text="Количество осей (3–10, необязательное поле)",
     )
+
     weight_tons = serializers.FloatField(required=False, write_only=True, min_value=0.001)
-    # --- КООРДИНАТЫ ---
-    origin_lat = serializers.FloatField(required=False, write_only=True)
-    origin_lng = serializers.FloatField(required=False, write_only=True)
-    dest_lat = serializers.FloatField(required=False, write_only=True)
-    dest_lng = serializers.FloatField(required=False, write_only=True)
+
+    # -------- input coords (POST/PUT) --------
+    origin_lat = serializers.FloatField(required=False, allow_null=True, write_only=True)
+    origin_lng = serializers.FloatField(required=False, allow_null=True, write_only=True)
+    dest_lat = serializers.FloatField(required=False, allow_null=True, write_only=True)
+    dest_lng = serializers.FloatField(required=False, allow_null=True, write_only=True)
+
+    # -------- output coords (GET) --------
+    _origin_lat = serializers.SerializerMethodField()
+    _origin_lng = serializers.SerializerMethodField()
+    _dest_lat = serializers.SerializerMethodField()
+    _dest_lng = serializers.SerializerMethodField()
+
     payment_method = serializers.ChoiceField(
         choices=PaymentMethod.choices,
         default=PaymentMethod.CASH,
@@ -103,12 +113,40 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
             "contact_pref",
             "payment_method",
             "is_hidden",
+            # input:
             "origin_lat",
             "origin_lng",
             "dest_lat",
             "dest_lng",
+            # output:
+            "_origin_lat",
+            "_origin_lng",
+            "_dest_lat",
+            "_dest_lng",
         )
         read_only_fields = ("route_km", "price_uzs", "uuid")
+
+    # ----- output coords -----
+    def get__origin_lat(self, obj):
+        return obj.origin_point.y if obj.origin_point else None
+
+    def get__origin_lng(self, obj):
+        return obj.origin_point.x if obj.origin_point else None
+
+    def get__dest_lat(self, obj):
+        return obj.dest_point.y if obj.dest_point else None
+
+    def get__dest_lng(self, obj):
+        return obj.dest_point.x if obj.dest_point else None
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # выдаём координаты под теми же ключами, что фронт отправляет
+        data["origin_lat"] = data.pop("_origin_lat", None)
+        data["origin_lng"] = data.pop("_origin_lng", None)
+        data["dest_lat"] = data.pop("_dest_lat", None)
+        data["dest_lng"] = data.pop("_dest_lng", None)
+        return data
 
     def _val_or_instance(self, attrs: dict[str, Any], name: str):
         if name in attrs:
@@ -116,19 +154,6 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
         if self.instance:
             return getattr(self.instance, name, None)
         return None
-
-    def to_representation(self, instance):
-        data = super().to_representation(instance)
-
-        op = getattr(instance, "origin_point", None)
-        dp = getattr(instance, "dest_point", None)
-
-        data["origin_lat"] = float(op.y) if op else None
-        data["origin_lng"] = float(op.x) if op else None
-        data["dest_lat"] = float(dp.y) if dp else None
-        data["dest_lng"] = float(dp.x) if dp else None
-
-        return data
 
     def _need_regeocode(self, attrs: dict[str, Any]):
         changed_origin = any(
@@ -147,7 +172,6 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
         city_norm = city.strip().lower()
         city_trans = unidecode(city_norm).lower()
 
-        # Кэширование результатов геокодирования на 24 часа
         cache_key = f"geoplace:{country}:{city_trans}"
         cached_place = cache.get(cache_key)
         if cached_place is not None:
@@ -162,7 +186,6 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
             or qs.filter(name_latin__icontains=city_trans).first()
         )
 
-        # Кэшируем результат (включая None)
         cache.set(cache_key, place if place else "NOT_FOUND", 86400)  # 24 часа
         return place
 
@@ -220,7 +243,7 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
 
         wt = attrs.get("weight_tons")
         if wt is not None:
-            if isinstance(wt, float) or isinstance(wt, int):  # FIXED UP038
+            if isinstance(wt, float) or isinstance(wt, int):
                 wt = Decimal(f"{wt:.6f}")
             else:
                 wt = Decimal(str(wt))
@@ -274,7 +297,7 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
 
         wt = validated_data.pop("weight_tons", None)
         if wt is not None:
-            if isinstance(wt, float | int):
+            if isinstance(wt, (float, int)):
                 wt = Decimal(f"{wt:.6f}")
             else:
                 wt = Decimal(str(wt))
@@ -285,13 +308,11 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
         dest_lat = validated_data.pop("dest_lat", None)
         dest_lng = validated_data.pop("dest_lng", None)
 
-        # origin
         if origin_lat is not None and origin_lng is not None:
             origin_point = Point(float(origin_lng), float(origin_lat), srid=4326)
         else:
             origin_point = self._geocode_origin(validated_data)
 
-        # destination
         if dest_lat is not None and dest_lng is not None:
             dest_point = Point(float(dest_lng), float(dest_lat), srid=4326)
         else:
@@ -315,13 +336,12 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
     def update(self, instance, validated_data):
         wt = validated_data.pop("weight_tons", None)
         if wt is not None:
-            if isinstance(wt, float | int):
+            if isinstance(wt, (float, int)):
                 wt = Decimal(f"{wt:.6f}")
             else:
                 wt = Decimal(str(wt))
             validated_data["weight_kg"] = wt * Decimal("1000")
 
-        # --- координаты из карты ---
         origin_lat = validated_data.pop("origin_lat", None)
         origin_lng = validated_data.pop("origin_lng", None)
         dest_lat = validated_data.pop("dest_lat", None)
@@ -329,14 +349,12 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
 
         need_origin, need_dest = self._need_regeocode(validated_data)
 
-        # origin
         if origin_lat is not None and origin_lng is not None:
             instance.origin_point = Point(float(origin_lng), float(origin_lat), srid=4326)
             need_origin = False
         elif need_origin:
             instance.origin_point = self._geocode_origin(validated_data)
 
-        # destination
         if dest_lat is not None and dest_lng is not None:
             instance.dest_point = Point(float(dest_lng), float(dest_lat), srid=4326)
             need_dest = False
@@ -384,7 +402,23 @@ class CargoListSerializer(RouteKmMixin, serializers.ModelSerializer):
 
     weight_t = serializers.SerializerMethodField()
     price_per_km = serializers.SerializerMethodField()
+    origin_lat = serializers.SerializerMethodField()
+    origin_lng = serializers.SerializerMethodField()
+    dest_lat = serializers.SerializerMethodField()
+    dest_lng = serializers.SerializerMethodField()
     is_hidden = serializers.BooleanField(read_only=True)
+
+    def get_origin_lat(self, obj):
+        return obj.origin_point.y if obj.origin_point else None
+
+    def get_origin_lng(self, obj):
+        return obj.origin_point.x if obj.origin_point else None
+
+    def get_dest_lat(self, obj):
+        return obj.dest_point.y if obj.dest_point else None
+
+    def get_dest_lng(self, obj):
+        return obj.dest_point.x if obj.dest_point else None
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -436,6 +470,10 @@ class CargoListSerializer(RouteKmMixin, serializers.ModelSerializer):
             "is_hidden",
             "user_name",
             "user_id",
+            "origin_lat",
+            "origin_lng",
+            "dest_lat",
+            "dest_lng",
         )
         read_only_fields = fields
 

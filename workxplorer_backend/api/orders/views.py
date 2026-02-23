@@ -36,6 +36,7 @@ from .serializers import (
     OrderStatusHistorySerializer,
     InvitePreviewSerializer,
     PrivacyToggleSerializer,
+    GPSUpdateSerializer,
 )
 
 User = get_user_model()
@@ -846,6 +847,10 @@ class OrdersViewSet(viewsets.ModelViewSet):
         )
 
     # ================= GPS TRACKING =================
+    @extend_schema(
+        request=GPSUpdateSerializer,
+        responses={200: GPSUpdateSerializer},
+    )
     @action(detail=True, methods=["post"], url_path="gps")
     def update_gps(self, request, pk=None):
         order = self.get_object()

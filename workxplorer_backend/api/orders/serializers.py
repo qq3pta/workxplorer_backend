@@ -489,3 +489,4 @@ class PrivacyToggleSerializer(serializers.Serializer):
 class GPSUpdateSerializer(serializers.Serializer):
     lat = serializers.FloatField(required=True, min_value=-90, max_value=90)
     lng = serializers.FloatField(required=True, min_value=-180, max_value=180)
+    recorded_at = serializers.DateTimeField(allow_null=True)

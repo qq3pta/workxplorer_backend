@@ -336,7 +336,7 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
     def update(self, instance, validated_data):
         wt = validated_data.pop("weight_tons", None)
         if wt is not None:
-            if isinstance(wt, (float, int)):
+            if isinstance(wt, float | int):
                 wt = Decimal(f"{wt:.6f}")
             else:
                 wt = Decimal(str(wt))

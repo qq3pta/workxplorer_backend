@@ -138,15 +138,15 @@ class OrderListSerializer(serializers.ModelSerializer):
 
     @extend_schema_field(serializers.JSONField(allow_null=True))
     def get_driver_location(self, obj):
-        gps = getattr(obj, "gps", None)  # related_name="gps"
+        driver = obj.carrier
 
-        if not gps or not gps.point:
+        if not driver or not hasattr(driver, "gps") or not driver.gps.point:
             return None
 
         return {
-            "lat": gps.point.y,
-            "lng": gps.point.x,
-            "recorded_at": gps.recorded_at.isoformat() if gps.recorded_at else None,
+            "lat": driver.gps.point.y,
+            "lng": driver.gps.point.x,
+            "recorded_at": driver.gps.recorded_at.isoformat() if driver.gps.recorded_at else None,
         }
 
     class Meta:
@@ -489,4 +489,3 @@ class PrivacyToggleSerializer(serializers.Serializer):
 class GPSUpdateSerializer(serializers.Serializer):
     lat = serializers.FloatField(required=True, min_value=-90, max_value=90)
     lng = serializers.FloatField(required=True, min_value=-180, max_value=180)
-    recorded_at = serializers.DateTimeField(allow_null=True)

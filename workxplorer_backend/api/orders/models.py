@@ -425,15 +425,19 @@ class OrderStatusHistory(models.Model):
 
 
 class DriverLocation(models.Model):
-    order = models.OneToOneField(Order, on_delete=models.CASCADE, related_name="gps")
-
-    point = gis_models.PointField(geography=True, srid=4326)
-    city = models.CharField(max_length=120, blank=True)
-    country = models.CharField(max_length=120, blank=True)
-
-    recorded_at = models.DateTimeField(auto_now=True)
+    driver = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="gps",
+        null=True,
+        blank=True,
+    )
+    point = gis_models.PointField(srid=4326, null=True, blank=True)
+    recorded_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         indexes = [
             models.Index(fields=["recorded_at"]),
+            models.Index(fields=["driver"]),
         ]

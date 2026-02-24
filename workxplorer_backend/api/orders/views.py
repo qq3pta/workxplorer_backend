@@ -124,7 +124,7 @@ class OrdersViewSet(viewsets.ModelViewSet):
             "offer",
             "offer__carrier",
             "offer__logistic",
-            "gps",
+            "carrier__gps",
         )
         .prefetch_related(
             "documents",
@@ -851,83 +851,66 @@ class OrdersViewSet(viewsets.ModelViewSet):
         request=GPSUpdateSerializer,
         responses={200: GPSUpdateSerializer},
     )
-    @action(detail=True, methods=["post"], url_path="gps")
-    def update_gps(self, request, pk=None):
-        order = self.get_object()
+    @action(detail=False, methods=["post"], url_path="gps")
+    def update_gps(self, request):
         user = request.user
 
-        if user.id != order.carrier_id:
-            return Response({"detail": "Только перевозчик может отправлять GPS"}, status=403)
+        ser = GPSUpdateSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
 
-        lat = request.data.get("lat")
-        lng = request.data.get("lng")
-
-        if lat is None or lng is None:
-            return Response({"detail": "lat/lng обязательны"}, status=400)
-
-        try:
-            lat = float(lat)
-            lng = float(lng)
-        except ValueError:
-            return Response({"detail": "Некорректные координаты"}, status=400)
-
-        if not (-90 <= lat <= 90 and -180 <= lng <= 180):
-            return Response({"detail": "Координаты вне диапазона"}, status=400)
+        lat = ser.validated_data["lat"]
+        lng = ser.validated_data["lng"]
 
         point = Point(lng, lat, srid=4326)
-
-        gps, _ = DriverLocation.objects.get_or_create(order=order)
         now = timezone.now()
 
-        # ================= THROTTLE 20–25 MIN =================
-        if gps.recorded_at and now - gps.recorded_at < timedelta(minutes=22):
-            # обновляем только last_seen водителя
-            if hasattr(user, "last_seen"):
-                user.last_seen = now
-                user.save(update_fields=["last_seen"])
+        gps, _ = DriverLocation.objects.get_or_create(driver=user)
+
+        # throttle 5–10 сек
+        if gps.recorded_at and now - gps.recorded_at < timedelta(seconds=10):
             return Response({"ignored": True})
 
-        # ================= SAVE GPS =================
         gps.point = point
         gps.recorded_at = now
         gps.save(update_fields=["point", "recorded_at"])
 
-        # обновляем last_seen водителя
-        if hasattr(user, "last_seen"):
-            user.last_seen = now
-            user.save(update_fields=["last_seen"])
+        # ===== Найти активный заказ водителя =====
+        order = (
+            Order.objects.filter(carrier_id=user.id)
+            .exclude(status__in=["finished", "canceled"])
+            .only("id", "customer_id", "carrier_id", "logistic_id")
+            .first()
+        )
 
-        # ================= WS =================
-        channel_layer = get_channel_layer()
+        # ===== WS =====
+        if order:
+            channel_layer = get_channel_layer()
 
-        participants = {
-            order.customer_id,
-            order.carrier_id,
-            order.logistic_id,
-        }
+            payload = {
+                "event": "gps_updated",
+                "order_id": order.id,
+                "driver_location": {
+                    "lat": lat,
+                    "lng": lng,
+                    "recorded_at": now.isoformat(),
+                },
+            }
 
-        payload = {
-            "event": "gps_updated",
-            "order_id": order.id,
-            "driver_location": {
-                "lat": lat,
-                "lng": lng,
-                "recorded_at": gps.recorded_at.isoformat(),
-            },
-        }
+            for user_id in filter(None, {order.customer_id, order.carrier_id, order.logistic_id}):
+                async_to_sync(channel_layer.group_send)(
+                    f"user_{user_id}",
+                    to_ws_safe({"type": "notify", "data": payload}),
+                )
 
-        for user_id in filter(None, participants):
-            async_to_sync(channel_layer.group_send)(
-                f"user_{user_id}",
-                to_ws_safe(
-                    {
-                        "type": "notify",
-                        "data": payload,
-                    }
-                ),
-            )
-
-        return Response(payload)
+        return Response(
+            {
+                "driver_location": {
+                    "lat": lat,
+                    "lng": lng,
+                    "recorded_at": now.isoformat(),
+                }
+            }
+        )
 
     @extend_schema(
         request=PrivacyToggleSerializer,

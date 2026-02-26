@@ -860,6 +860,7 @@ class OrdersViewSet(viewsets.ModelViewSet):
 
         lat = ser.validated_data["lat"]
         lng = ser.validated_data["lng"]
+        speed = ser.validated_data.get("speed")
 
         point = Point(lng, lat, srid=4326)
         now = timezone.now()
@@ -871,8 +872,9 @@ class OrdersViewSet(viewsets.ModelViewSet):
             return Response({"ignored": True})
 
         gps.point = point
+        gps.speed = speed
         gps.recorded_at = now
-        gps.save(update_fields=["point", "recorded_at"])
+        gps.save(update_fields=["point", "speed", "recorded_at"])
 
         # ===== Найти активный заказ водителя =====
         order = (
@@ -892,6 +894,7 @@ class OrdersViewSet(viewsets.ModelViewSet):
                 "driver_location": {
                     "lat": lat,
                     "lng": lng,
+                    "speed": speed,
                     "recorded_at": now.isoformat(),
                 },
             }
@@ -907,6 +910,7 @@ class OrdersViewSet(viewsets.ModelViewSet):
                 "driver_location": {
                     "lat": lat,
                     "lng": lng,
+                    "speed": speed,
                     "recorded_at": now.isoformat(),
                 }
             }

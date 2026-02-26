@@ -435,6 +435,7 @@ class DriverLocation(models.Model):
     point = gis_models.PointField(srid=4326, null=True, blank=True)
     recorded_at = models.DateTimeField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
+    speed = models.FloatField(null=True, blank=True)
 
     class Meta:
         indexes = [

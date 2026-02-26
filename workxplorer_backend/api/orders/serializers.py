@@ -146,6 +146,7 @@ class OrderListSerializer(serializers.ModelSerializer):
         return {
             "lat": driver.gps.point.y,
             "lng": driver.gps.point.x,
+            "speed": driver.gps.speed,
             "recorded_at": driver.gps.recorded_at.isoformat() if driver.gps.recorded_at else None,
         }
 
@@ -489,3 +490,4 @@ class PrivacyToggleSerializer(serializers.Serializer):
 class GPSUpdateSerializer(serializers.Serializer):
     lat = serializers.FloatField(required=True, min_value=-90, max_value=90)
     lng = serializers.FloatField(required=True, min_value=-180, max_value=180)
+    speed = serializers.FloatField(required=False, min_value=0)

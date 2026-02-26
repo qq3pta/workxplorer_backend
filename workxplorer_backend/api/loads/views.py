@@ -317,15 +317,12 @@ class PublicLoadsView(generics.ListAPIView):
     pagination_class = OptimizedLoadsPagination
 
     def get_queryset(self):
-        today = timezone.localdate()
-
         # Оптимизация: используем композитный индекс и ограничиваем поля
         qs = (
             Cargo.objects.filter(
                 moderation_status=ModerationStatus.APPROVED,
                 is_hidden=False,
                 status=CargoStatus.POSTED,
-                load_date__gte=today,
             )
             .exclude(
                 origin_point__isnull=True,

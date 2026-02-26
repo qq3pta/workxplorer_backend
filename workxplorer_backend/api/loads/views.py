@@ -258,7 +258,6 @@ class MyCargosBoardView(generics.ListAPIView):
             Cargo.objects.filter(
                 Q(customer=user) | Q(created_by=user),
                 status=CargoStatus.POSTED,
-                is_hidden=False,
             )
             .select_related("customer", "created_by")
             .only(

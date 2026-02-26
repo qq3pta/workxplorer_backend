@@ -252,7 +252,6 @@ class MyCargosBoardView(generics.ListAPIView):
 
     def get_queryset(self):
         user = self.request.user
-        today = timezone.localdate()
 
         # Оптимизация: используем индексы и ограничиваем поля
         qs = (
@@ -260,7 +259,6 @@ class MyCargosBoardView(generics.ListAPIView):
                 Q(customer=user) | Q(created_by=user),
                 status=CargoStatus.POSTED,
                 is_hidden=False,
-                load_date__gte=today,
             )
             .select_related("customer", "created_by")
             .only(

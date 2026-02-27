@@ -596,8 +596,8 @@ class CargoInviteOpenView(generics.GenericAPIView):
         invited_by = invite.created_by
 
         # ---------- роли ----------
-        carrier = user if user.role == "CARRIER" else None
-        logistic = user if user.role == "LOGISTIC" else None
+        carrier = user if user.role == "carrier" else None
+        logistic = user if user.role == "logistic" else None
 
         offer = None
 

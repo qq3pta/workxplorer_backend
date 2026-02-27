@@ -917,7 +917,7 @@ class OrdersViewSet(viewsets.ModelViewSet):
         )
 
     @extend_schema(
-        request=PrivacyToggleSerializer,
+    request=PrivacyToggleSerializer,
         examples=[
             OpenApiExample("Hide", value={"hide": True}),
             OpenApiExample("Show", value={"hide": False}),
@@ -928,17 +928,18 @@ class OrdersViewSet(viewsets.ModelViewSet):
         order = self.get_object()
         user = request.user
 
-        def _toggle(value: bool) -> bool:
-            return not bool(value)
+        serializer = PrivacyToggleSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        hide = serializer.validated_data["hide"]
 
         update_fields = []
 
         if user.id == order.customer_id:
-            order.customer_hide_contacts = _toggle(order.customer_hide_contacts)
+            order.customer_hide_contacts = hide
             update_fields.append("customer_hide_contacts")
 
         elif user.id == order.logistic_id:
-            order.logistic_hide_contacts = _toggle(order.logistic_hide_contacts)
+            order.logistic_hide_contacts = hide
             update_fields.append("logistic_hide_contacts")
 
         else:
@@ -948,28 +949,54 @@ class OrdersViewSet(viewsets.ModelViewSet):
 
         channel_layer = get_channel_layer()
 
-        # Отправляем легковесное уведомление
-        for user_id in filter(None, {order.customer_id, order.carrier_id, order.logistic_id}):
+        # Customer получает только hidden
+        if order.customer_id:
             async_to_sync(channel_layer.group_send)(
-                f"user_{user_id}",
-                to_ws_safe(
-                    {
-                        "type": "notify",
-                        "data": {
-                            "event": "order_privacy_changed",
-                            "order_id": order.id,
-                            "customer_hide": order.customer_hide_contacts,
-                            "logistic_hide": order.logistic_hide_contacts,
-                        },
-                    }
-                ),
+                f"user_{order.customer_id}",
+                to_ws_safe({
+                    "type": "notify",
+                    "data": {
+                        "event": "order_privacy_changed",
+                        "order_id": order.id,
+                        "roles": {"customer": {"hidden": order.customer_hide_contacts}},
+                    },
+                }),
+            )
+
+        # Logistic получает hidden_by
+        if order.logistic_id:
+            async_to_sync(channel_layer.group_send)(
+                f"user_{order.logistic_id}",
+                to_ws_safe({
+                    "type": "notify",
+                    "data": {
+                        "event": "order_privacy_changed",
+                        "order_id": order.id,
+                        "roles": {"customer": {"hidden_by": order.logistic_hide_contacts}},
+                    },
+                }),
+            )
+
+        # Carrier получает только итог: скрыты ли контакты customer
+        if order.carrier_id:
+            async_to_sync(channel_layer.group_send)(
+                f"user_{order.carrier_id}",
+                to_ws_safe({
+                    "type": "notify",
+                    "data": {
+                        "event": "order_privacy_changed",
+                        "order_id": order.id,
+                        "customer_contacts_hidden": bool(
+                            order.customer_hide_contacts or order.logistic_hide_contacts
+                        ),
+                    },
+                }),
             )
 
         if user.id == order.customer_id:
             return Response({"roles": {"customer": {"hidden": order.customer_hide_contacts}}})
 
-        elif user.id == order.logistic_id:
-            return Response({"roles": {"customer": {"hidden_by": order.logistic_hide_contacts}}})
+        return Response({"roles": {"customer": {"hidden_by": order.logistic_hide_contacts}}})
 
 
 class SharedOrderView(RetrieveAPIView):

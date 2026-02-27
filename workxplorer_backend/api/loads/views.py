@@ -10,6 +10,7 @@ from django.db.models import (
     Q,
 )
 from django.db.models.functions import Coalesce
+from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema, inline_serializer
@@ -595,27 +596,55 @@ class CargoInviteOpenView(generics.GenericAPIView):
         user = request.user
         invited_by = invite.created_by
 
-        # ---------- роли ----------
         carrier = user if user.role == "carrier" else None
         logistic = user if user.role == "logistic" else None
 
         offer = None
 
-        # ---------- CARRIER ----------
-        if carrier:
-            offer = Offer.objects.filter(
-                cargo_id=cargo.id,
-                carrier_id=carrier.id,
-                is_active=True,
-            ).first()
+        with transaction.atomic():
+            # ---------- CARRIER ----------
+            if carrier:
+                offer = Offer.objects.filter(
+                    cargo_id=cargo.id,
+                    carrier_id=carrier.id,
+                    is_active=True,
+                ).first()
 
-        # ---------- LOGISTIC ----------
-        elif logistic:
-            offer = Offer.objects.filter(
-                cargo_id=cargo.id,
-                logistic_id=logistic.id,
-                is_active=True,
-            ).first()
+                if not offer:
+                    offer = Offer.objects.create(
+                        cargo=cargo,
+                        carrier=carrier,
+                        initiator=Offer.Initiator.CUSTOMER,
+                        deal_type=Offer.resolve_deal_type(
+                            initiator_user=invited_by,
+                            carrier=carrier,
+                            logistic=None,
+                        ),
+                        accepted_by_customer=True,
+                        is_active=True,
+                    )
+
+            # ---------- LOGISTIC ----------
+            elif logistic:
+                offer = Offer.objects.filter(
+                    cargo_id=cargo.id,
+                    logistic_id=logistic.id,
+                    is_active=True,
+                ).first()
+
+                if not offer:
+                    offer = Offer.objects.create(
+                        cargo=cargo,
+                        logistic=logistic,
+                        initiator=Offer.Initiator.CUSTOMER,
+                        deal_type=Offer.resolve_deal_type(
+                            initiator_user=invited_by,
+                            carrier=None,
+                            logistic=logistic,
+                        ),
+                        accepted_by_customer=True,
+                        is_active=True,
+                    )
 
         return Response(
             {

@@ -916,59 +916,59 @@ class OrdersViewSet(viewsets.ModelViewSet):
             }
         )
 
-    @extend_schema(
-        request=PrivacyToggleSerializer,
-        examples=[
-            OpenApiExample("Hide", value={"hide": True}),
-            OpenApiExample("Show", value={"hide": False}),
-        ],
-    )
-    @action(detail=True, methods=["post"], url_path="privacy-toggle")
-    def privacy_toggle(self, request, pk=None):
-        order = self.get_object()
-        user = request.user
-
-        def _toggle(value: bool) -> bool:
-            return not bool(value)
-
-        update_fields = []
-
-        if user.id == order.customer_id:
-            order.customer_hide_contacts = _toggle(order.customer_hide_contacts)
-            update_fields.append("customer_hide_contacts")
-
-        elif user.id == order.logistic_id:
-            order.logistic_hide_contacts = _toggle(order.logistic_hide_contacts)
-            update_fields.append("logistic_hide_contacts")
-
-        else:
-            return Response({"detail": "No permission"}, status=403)
-
-        order.save(update_fields=update_fields)
-
-        channel_layer = get_channel_layer()
-
-        # Отправляем легковесное уведомление
-        for user_id in filter(None, {order.customer_id, order.carrier_id, order.logistic_id}):
-            async_to_sync(channel_layer.group_send)(
-                f"user_{user_id}",
-                to_ws_safe(
-                    {
-                        "type": "notify",
-                        "data": {
-                            "event": "order_privacy_changed",
-                            "order_id": order.id,
-                            "customer_hide": order.customer_hide_contacts,
-                            "logistic_hide": order.logistic_hide_contacts,
-                        },
-                    }
-                ),
-            )
-
-        if user.id == order.customer_id:
-            return Response({"roles": {"customer": {"hidden": order.customer_hide_contacts}}})
-
-        elif user.id == order.logistic_id:
+    @extend_schema( 
+        request=PrivacyToggleSerializer, 
+        examples=[ 
+            OpenApiExample("Hide", value={"hide": True}), 
+            OpenApiExample("Show", value={"hide": False}), 
+        ], 
+    ) 
+    @action(detail=True, methods=["post"], url_path="privacy-toggle") 
+    def privacy_toggle(self, request, pk=None): 
+        order = self.get_object() 
+        user = request.user 
+ 
+        def _toggle(value: bool) -> bool: 
+            return not bool(value) 
+ 
+        update_fields = [] 
+ 
+        if user.id == order.customer_id: 
+            order.customer_hide_contacts = _toggle(order.customer_hide_contacts) 
+            update_fields.append("customer_hide_contacts") 
+ 
+        elif user.id == order.logistic_id: 
+            order.logistic_hide_contacts = _toggle(order.logistic_hide_contacts) 
+            update_fields.append("logistic_hide_contacts") 
+ 
+        else: 
+            return Response({"detail": "No permission"}, status=403) 
+ 
+        order.save(update_fields=update_fields) 
+ 
+        channel_layer = get_channel_layer() 
+ 
+        # Отправляем легковесное уведомление 
+        for user_id in filter(None, {order.customer_id, order.carrier_id, order.logistic_id}): 
+            async_to_sync(channel_layer.group_send)( 
+                f"user_{user_id}", 
+                to_ws_safe( 
+                    { 
+                        "type": "notify", 
+                        "data": { 
+                            "event": "order_privacy_changed", 
+                            "order_id": order.id, 
+                            "customer_hide": order.customer_hide_contacts, 
+                            "logistic_hide": order.logistic_hide_contacts, 
+                        }, 
+                    } 
+                ), 
+            ) 
+ 
+        if user.id == order.customer_id: 
+            return Response({"roles": {"customer": {"hidden": order.customer_hide_contacts}}}) 
+ 
+        elif user.id == order.logistic_id: 
             return Response({"roles": {"customer": {"hidden_by": order.logistic_hide_contacts}}})
 
 

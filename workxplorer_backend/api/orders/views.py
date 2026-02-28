@@ -932,46 +932,39 @@ class OrdersViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         hide = serializer.validated_data["hide"]
 
-        update_fields = []
-
         if user.id == order.customer_id:
             order.customer_hide_contacts = bool(hide)
-            update_fields.append("customer_hide_contacts")
-            actor = "customer"
+            order.save(update_fields=["customer_hide_contacts"])
 
         elif user.id == order.logistic_id:
             order.logistic_hide_contacts = bool(hide)
-            update_fields.append("logistic_hide_contacts")
-            actor = "logistic"
+            order.save(update_fields=["logistic_hide_contacts"])
 
         else:
             return Response({"detail": "No permission"}, status=403)
 
-        order.save(update_fields=update_fields)
+        hidden = bool(order.customer_hide_contacts or order.logistic_hide_contacts)
+
+        hidden_by = bool(order.logistic_hide_contacts)
+
+        roles_update = {
+            "customer": {
+                "hidden": hidden,
+                "hidden_by": hidden_by,
+            }
+        }
 
         channel_layer = get_channel_layer()
 
-        if actor == "customer":
-            roles_update = {
-                "customer": {
-                    "hidden": bool(order.customer_hide_contacts),
-                    "hidden_by": False,  # чтобы фронт мог сбросить признак "скрыто логистом"
-                }
-            }
-        else:  # actor == "logistic"
-            roles_update = {
-                "customer": {
-                    "hidden": bool(
-                        order.logistic_hide_contacts
-                    ),  # у вас hidden=True когда логист скрыл
-                    "hidden_by": bool(order.logistic_hide_contacts),  # скрыто логистом
-                }
-            }
+        participants = {
+            order.customer_id,
+            order.logistic_id,
+            order.carrier_id,
+        }
 
-        # notify customer
-        if order.customer_id:
+        for user_id in filter(None, participants):
             async_to_sync(channel_layer.group_send)(
-                f"user_{order.customer_id}",
+                f"user_{user_id}",
                 to_ws_safe(
                     {
                         "type": "notify",
@@ -984,43 +977,6 @@ class OrdersViewSet(viewsets.ModelViewSet):
                 ),
             )
 
-        # notify logistic
-        if order.logistic_id:
-            async_to_sync(channel_layer.group_send)(
-                f"user_{order.logistic_id}",
-                to_ws_safe(
-                    {
-                        "type": "notify",
-                        "data": {
-                            "event": "order_privacy_changed",
-                            "order_id": order.id,
-                            "roles": roles_update,
-                        },
-                    }
-                ),
-            )
-
-        # carrier — как было (итог)
-        if order.carrier_id:
-            customer_contacts_hidden = bool(
-                order.customer_hide_contacts or order.logistic_hide_contacts
-            )
-
-            async_to_sync(channel_layer.group_send)(
-                f"user_{order.carrier_id}",
-                to_ws_safe(
-                    {
-                        "type": "notify",
-                        "data": {
-                            "event": "order_privacy_changed",
-                            "order_id": order.id,
-                            "customer_contacts_hidden": customer_contacts_hidden,
-                        },
-                    }
-                ),
-            )
-
-        # HTTP response — тоже делаем partial, как WS
         return Response({"roles": roles_update})
 
 

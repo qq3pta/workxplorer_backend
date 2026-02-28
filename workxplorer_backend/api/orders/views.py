@@ -963,6 +963,14 @@ class OrdersViewSet(viewsets.ModelViewSet):
         }
 
         for user_id in filter(None, participants):
+            if user_id == order.carrier_id:
+                hidden = order.customer_hide_contacts or order.logistic_hide_contacts
+                hidden_by = order.logistic_hide_contacts
+
+            else:
+                hidden = order.customer_hide_contacts
+                hidden_by = order.logistic_hide_contacts
+
             async_to_sync(channel_layer.group_send)(
                 f"user_{user_id}",
                 to_ws_safe(
@@ -971,13 +979,27 @@ class OrdersViewSet(viewsets.ModelViewSet):
                         "data": {
                             "event": "order_privacy_changed",
                             "order_id": order.id,
-                            "roles": roles_update,
+                            "roles": {
+                                "customer": {
+                                    "hidden": bool(hidden),
+                                    "hidden_by": bool(hidden_by),
+                                }
+                            },
                         },
                     }
                 ),
             )
 
-        return Response({"roles": roles_update})
+        return Response(
+            {
+                "roles": {
+                    "customer": {
+                        "hidden": order.customer_hide_contacts,
+                        "hidden_by": order.logistic_hide_contacts,
+                    }
+                }
+            }
+        )
 
 
 class SharedOrderView(RetrieveAPIView):

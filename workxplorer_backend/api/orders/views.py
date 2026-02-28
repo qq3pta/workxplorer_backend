@@ -943,7 +943,7 @@ class OrdersViewSet(viewsets.ModelViewSet):
         else:
             return Response({"detail": "No permission"}, status=403)
 
-        hidden = bool(order.customer_hide_contacts or order.logistic_hide_contacts)
+        hidden = bool(order.customer_hide_contacts)
 
         hidden_by = bool(order.logistic_hide_contacts)
 

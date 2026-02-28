@@ -943,17 +943,6 @@ class OrdersViewSet(viewsets.ModelViewSet):
         else:
             return Response({"detail": "No permission"}, status=403)
 
-        hidden = bool(order.customer_hide_contacts)
-
-        hidden_by = bool(order.logistic_hide_contacts)
-
-        roles_update = {
-            "customer": {
-                "hidden": hidden,
-                "hidden_by": hidden_by,
-            }
-        }
-
         channel_layer = get_channel_layer()
 
         participants = {

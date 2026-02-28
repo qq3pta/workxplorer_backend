@@ -961,13 +961,7 @@ class OrdersViewSet(viewsets.ModelViewSet):
         else:  # actor == "logistic"
             roles_update = {
                 "customer": {
-<<<<<<< HEAD
-                    "hidden": bool(
-                        order.logistic_hide_contacts
-                    ),  # у вас hidden=True когда логист скрыл
-=======
                     "hidden": bool(order.logistic_hide_contacts),     # у вас hidden=True когда логист скрыл
->>>>>>> 4c50d65 (fix: update privacy roles serialization and ws payload)
                     "hidden_by": bool(order.logistic_hide_contacts),  # скрыто логистом
                 }
             }

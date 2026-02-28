@@ -294,8 +294,12 @@ class OrderListSerializer(serializers.ModelSerializer):
             hidden = False
             hidden_by = False
 
-            if is_carrier or is_logistic:
+            if is_carrier:
                 hidden = customer_hidden or logistic_hidden
+                hidden_by = logistic_hidden
+
+            elif is_logistic:
+                hidden = customer_hidden
                 hidden_by = logistic_hidden
 
             elif is_customer:

@@ -951,13 +951,21 @@ class OrdersViewSet(viewsets.ModelViewSet):
 
         channel_layer = get_channel_layer()
 
-        if order.customer_id:
-            customer_roles = {"customer": {}}
-            if actor == "customer":
-                customer_roles["customer"]["hidden"] = order.customer_hide_contacts
-            else:
-                customer_roles["customer"]["hidden_by"] = order.logistic_hide_contacts
+        if actor == "customer":
+            roles_update = {
+                "customer": {
+                    "hidden": bool(order.customer_hide_contacts),
+                }
+            }
+        else:  # actor == "logistic"
+            roles_update = {
+                "logistic": {
+                    "hidden_by": bool(order.logistic_hide_contacts),
+                }
+            }
 
+        # notify customer
+        if order.customer_id:
             async_to_sync(channel_layer.group_send)(
                 f"user_{order.customer_id}",
                 to_ws_safe(
@@ -966,19 +974,14 @@ class OrdersViewSet(viewsets.ModelViewSet):
                         "data": {
                             "event": "order_privacy_changed",
                             "order_id": order.id,
-                            "roles": customer_roles,
+                            "roles": roles_update,
                         },
                     }
                 ),
             )
 
+        # notify logistic
         if order.logistic_id:
-            logistic_roles = {"customer": {}}
-            if actor == "customer":
-                logistic_roles["customer"]["hidden"] = order.customer_hide_contacts
-            else:
-                logistic_roles["customer"]["hidden_by"] = order.logistic_hide_contacts
-
             async_to_sync(channel_layer.group_send)(
                 f"user_{order.logistic_id}",
                 to_ws_safe(
@@ -987,12 +990,13 @@ class OrdersViewSet(viewsets.ModelViewSet):
                         "data": {
                             "event": "order_privacy_changed",
                             "order_id": order.id,
-                            "roles": logistic_roles,
+                            "roles": roles_update,
                         },
                     }
                 ),
             )
 
+        # carrier — как было (итог)
         if order.carrier_id:
             customer_contacts_hidden = bool(
                 order.customer_hide_contacts or order.logistic_hide_contacts
@@ -1012,13 +1016,8 @@ class OrdersViewSet(viewsets.ModelViewSet):
                 ),
             )
 
-        roles_payload = {
-            "customer": {
-                "hidden": bool(order.customer_hide_contacts),
-                "hidden_by": bool(order.logistic_hide_contacts),
-            }
-        }
-        return Response({"roles": roles_payload})
+        # HTTP response — тоже делаем partial, как WS
+        return Response({"roles": roles_update})
 
 
 class SharedOrderView(RetrieveAPIView):

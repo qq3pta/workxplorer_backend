@@ -955,12 +955,16 @@ class OrdersViewSet(viewsets.ModelViewSet):
             roles_update = {
                 "customer": {
                     "hidden": bool(order.customer_hide_contacts),
+                    "hidden_by": False,  # чтобы фронт мог сбросить признак "скрыто логистом"
                 }
             }
         else:  # actor == "logistic"
             roles_update = {
-                "logistic": {
-                    "hidden_by": bool(order.logistic_hide_contacts),
+                "customer": {
+                    "hidden": bool(
+                        order.logistic_hide_contacts
+                    ),  # у вас hidden=True когда логист скрыл
+                    "hidden_by": bool(order.logistic_hide_contacts),  # скрыто логистом
                 }
             }
 

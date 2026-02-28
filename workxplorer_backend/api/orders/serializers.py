@@ -286,35 +286,41 @@ class OrderListSerializer(serializers.ModelSerializer):
 
             hidden = False
             hidden_by = False
+            mask_contacts = False
 
             is_carrier = request_user and request_user.id == obj.carrier_id
             is_logistic = request_user and request_user.id == obj.logistic_id
+            is_customer = request_user and request_user.id == obj.customer_id
 
-            # =========================
-            # CUSTOMER privacy flags
-            # =========================
             if u.id == obj.customer_id:
-                # CUSTOMER self-hide → скрыто ТОЛЬКО для перевозчика
-                if obj.customer_hide_contacts and is_carrier:
-                    hidden = True
+                # --- CUSTOMER self-hide ---
+                if obj.customer_hide_contacts:
+                    hidden = True  # кнопка должна меняться
 
-                # LOGISTIC hide → скрыто для перевозчика И логиста
-                if obj.logistic_hide_contacts and (is_carrier or is_logistic):
+                    # контакты скрываются только для перевозчика
+                    if is_carrier:
+                        mask_contacts = True
+
+                # --- LOGISTIC hide ---
+                if obj.logistic_hide_contacts:
                     hidden = True
-                    hidden_by = True
+                    hidden_by = True  # скрыто логистом
+
+                    # контакты скрываются для перевозчика и логиста
+                    if is_carrier or is_logistic:
+                        mask_contacts = True
 
             data = {
                 "id": u.id,
-                "name": None if hidden else self._get_user_full_name(u),
+                "name": None if mask_contacts else self._get_user_full_name(u),
                 "company": self._get_user_company(u),
                 "login": u.username,
-                "phone": None if hidden else getattr(u, "phone", None),
-                "email": None if hidden else getattr(u, "email", None),
+                "phone": None if mask_contacts else getattr(u, "phone", None),
+                "email": None if mask_contacts else getattr(u, "email", None),
                 "role": getattr(u, "role", None),
                 "hidden": hidden,
                 "hidden_by": hidden_by,
             }
-
             return data
 
         # CUSTOMER

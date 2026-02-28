@@ -288,23 +288,21 @@ class OrderListSerializer(serializers.ModelSerializer):
             is_logistic = request_user and request_user.id == obj.logistic_id
             is_customer = request_user and request_user.id == obj.customer_id
 
-            if is_carrier:
-                hidden = obj.customer_hide_contacts or obj.logistic_hide_contacts
-                hidden_by = obj.logistic_hide_contacts
+            customer_hidden = bool(obj.customer_hide_contacts)
+            logistic_hidden = bool(obj.logistic_hide_contacts)
 
-            elif is_logistic:
-                hidden = obj.customer_hide_contacts
-                hidden_by = obj.logistic_hide_contacts
+            hidden = False
+            hidden_by = False
+
+            if is_carrier or is_logistic:
+                hidden = customer_hidden or logistic_hidden
+                hidden_by = logistic_hidden
 
             elif is_customer:
-                hidden = obj.customer_hide_contacts
-                hidden_by = obj.logistic_hide_contacts
+                hidden = customer_hidden
+                hidden_by = logistic_hidden
 
-            else:
-                hidden = False
-                hidden_by = False
-
-            mask_contacts = is_carrier and hidden
+            mask_contacts = bool(is_carrier and hidden)
 
             return {
                 "id": u.id,

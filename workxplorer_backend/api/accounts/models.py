@@ -135,7 +135,7 @@ class EmailOTP(models.Model):
         if old_qs.count() > 5:
             old_qs[5:].delete()
 
-        raw = f"{secrets.randbelow(10 ** 6):06d}"
+        raw = f"{secrets.randbelow(10**6):06d}"
 
         obj = EmailOTP.objects.create(
             user=user,
@@ -194,7 +194,7 @@ class PhoneOTP(models.Model):
         if old_qs.count() > 5:
             old_qs[5:].delete()
 
-        raw = f"{secrets.randbelow(10 ** 6):06d}"
+        raw = f"{secrets.randbelow(10**6):06d}"
 
         obj = PhoneOTP.objects.create(
             phone=phone,

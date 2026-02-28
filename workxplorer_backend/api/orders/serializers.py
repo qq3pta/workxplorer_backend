@@ -290,19 +290,10 @@ class OrderListSerializer(serializers.ModelSerializer):
 
             is_carrier = request_user and request_user.id == obj.carrier_id
             is_logistic = request_user and request_user.id == obj.logistic_id
-            is_customer = request_user and request_user.id == obj.customer_id
 
             if u.id == obj.customer_id:
-                # --- CUSTOMER self-hide ---
-                if obj.customer_hide_contacts:
-                    hidden = True  # кнопка должна меняться
-
-                    # контакты скрываются только для перевозчика
-                    if is_carrier:
-                        mask_contacts = True
-
-                # --- LOGISTIC hide ---
-                if obj.logistic_hide_contacts:
+                # CUSTOMER self-hide → скрыто ТОЛЬКО для перевозчика
+                if obj.customer_hide_contacts and is_carrier:
                     hidden = True
                     hidden_by = True  # скрыто логистом
 

@@ -299,8 +299,8 @@ class OrderListSerializer(serializers.ModelSerializer):
                 hidden_by = logistic_hidden
 
             elif is_logistic:
-                hidden = customer_hidden
                 hidden_by = logistic_hidden
+                hidden = hidden_by
 
             elif is_customer:
                 hidden = customer_hidden

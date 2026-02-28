@@ -935,12 +935,14 @@ class OrdersViewSet(viewsets.ModelViewSet):
         update_fields = []
 
         if user.id == order.customer_id:
-            order.customer_hide_contacts = hide
+            order.customer_hide_contacts = bool(hide)
             update_fields.append("customer_hide_contacts")
+            actor = "customer"
 
         elif user.id == order.logistic_id:
-            order.logistic_hide_contacts = hide
+            order.logistic_hide_contacts = bool(hide)
             update_fields.append("logistic_hide_contacts")
+            actor = "logistic"
 
         else:
             return Response({"detail": "No permission"}, status=403)
@@ -949,8 +951,13 @@ class OrdersViewSet(viewsets.ModelViewSet):
 
         channel_layer = get_channel_layer()
 
-        # Customer получает только hidden
         if order.customer_id:
+            customer_roles = {"customer": {}}
+            if actor == "customer":
+                customer_roles["customer"]["hidden"] = order.customer_hide_contacts
+            else:
+                customer_roles["customer"]["hidden_by"] = order.logistic_hide_contacts
+
             async_to_sync(channel_layer.group_send)(
                 f"user_{order.customer_id}",
                 to_ws_safe(
@@ -959,14 +966,19 @@ class OrdersViewSet(viewsets.ModelViewSet):
                         "data": {
                             "event": "order_privacy_changed",
                             "order_id": order.id,
-                            "roles": {"customer": {"hidden": order.customer_hide_contacts}},
+                            "roles": customer_roles,
                         },
                     }
                 ),
             )
 
-        # Logistic получает hidden_by
         if order.logistic_id:
+            logistic_roles = {"customer": {}}
+            if actor == "customer":
+                logistic_roles["customer"]["hidden"] = order.customer_hide_contacts
+            else:
+                logistic_roles["customer"]["hidden_by"] = order.logistic_hide_contacts
+
             async_to_sync(channel_layer.group_send)(
                 f"user_{order.logistic_id}",
                 to_ws_safe(
@@ -975,14 +987,17 @@ class OrdersViewSet(viewsets.ModelViewSet):
                         "data": {
                             "event": "order_privacy_changed",
                             "order_id": order.id,
-                            "roles": {"customer": {"hidden_by": order.logistic_hide_contacts}},
+                            "roles": logistic_roles,
                         },
                     }
                 ),
             )
 
-        # Carrier получает только итог: скрыты ли контакты customer
         if order.carrier_id:
+            customer_contacts_hidden = bool(
+                order.customer_hide_contacts or order.logistic_hide_contacts
+            )
+
             async_to_sync(channel_layer.group_send)(
                 f"user_{order.carrier_id}",
                 to_ws_safe(
@@ -991,18 +1006,19 @@ class OrdersViewSet(viewsets.ModelViewSet):
                         "data": {
                             "event": "order_privacy_changed",
                             "order_id": order.id,
-                            "customer_contacts_hidden": bool(
-                                order.customer_hide_contacts or order.logistic_hide_contacts
-                            ),
+                            "customer_contacts_hidden": customer_contacts_hidden,
                         },
                     }
                 ),
             )
 
-        if user.id == order.customer_id:
-            return Response({"roles": {"customer": {"hidden": order.customer_hide_contacts}}})
-
-        return Response({"roles": {"customer": {"hidden_by": order.logistic_hide_contacts}}})
+        roles_payload = {
+            "customer": {
+                "hidden": bool(order.customer_hide_contacts),
+                "hidden_by": bool(order.logistic_hide_contacts),
+            }
+        }
+        return Response({"roles": roles_payload})
 
 
 class SharedOrderView(RetrieveAPIView):

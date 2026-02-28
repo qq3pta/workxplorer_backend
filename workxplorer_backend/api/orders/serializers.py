@@ -484,7 +484,7 @@ class InvitePreviewSerializer(serializers.Serializer):
 
 
 class PrivacyToggleSerializer(serializers.Serializer):
-    hide = serializers.BooleanField(required=True)
+    hide = serializers.BooleanField(required=True, allow_null=False)
 
 
 class GPSUpdateSerializer(serializers.Serializer):

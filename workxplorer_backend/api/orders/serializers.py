@@ -279,6 +279,7 @@ class OrderListSerializer(serializers.ModelSerializer):
     def get_roles(self, obj):
         request = self.context.get("request")
         request_user = request.user if request else None
+        request_user_id = getattr(request_user, "id", None)
 
         def empty_user_info():
             return {
@@ -293,47 +294,31 @@ class OrderListSerializer(serializers.ModelSerializer):
                 "hidden_by": False,
             }
 
-        def user_info(u):
+        def user_info(u, participant: str):
             if not u:
                 return empty_user_info()
 
-            is_carrier = request_user and request_user.id == obj.carrier_id
-            is_logistic = request_user and request_user.id == obj.logistic_id
-            is_customer = request_user and request_user.id == obj.customer_id
-
-            customer_hidden = bool(obj.customer_hide_contacts)
-            logistic_hidden = bool(obj.logistic_hide_contacts)
-
+            is_self = request_user_id == u.id
             hidden = False
-            hidden_by = False
 
-            if is_carrier:
-                hidden = customer_hidden or logistic_hidden
-                hidden_by = logistic_hidden
-
-            elif is_logistic:
-                hidden_by = logistic_hidden
-                hidden = hidden_by
-
-            elif is_customer:
-                hidden = customer_hidden
-                hidden_by = logistic_hidden
-
-            mask_contacts = bool(is_carrier and hidden)
+            if participant == "customer":
+                hidden = bool(obj.customer_hide_contacts) and not is_self
+            elif participant == "logistic":
+                hidden = bool(obj.logistic_hide_contacts) and not is_self
 
             return {
                 "id": u.id,
-                "name": "" if mask_contacts else (self._get_user_full_name(u) or ""),
+                "name": self._get_user_full_name(u) or "",
                 "company": self._get_user_company(u),
                 "login": getattr(u, "username", "") or "",
-                "phone": "" if mask_contacts else (getattr(u, "phone", "") or ""),
-                "email": "" if mask_contacts else (getattr(u, "email", "") or ""),
+                "phone": getattr(u, "phone", "") or "",
+                "email": getattr(u, "email", "") or "",
                 "role": getattr(u, "role", "") or "",
                 "hidden": bool(hidden),
-                "hidden_by": bool(hidden_by),
+                "hidden_by": bool(hidden),
             }
 
-        customer = user_info(obj.customer)
+        customer = user_info(obj.customer, "customer")
 
         logistic_user = None
         if obj.logistic_id and obj.logistic_id != obj.customer_id:
@@ -345,8 +330,8 @@ class OrderListSerializer(serializers.ModelSerializer):
         ):
             logistic_user = obj.created_by
 
-        logistic = user_info(logistic_user)
-        carrier = user_info(obj.carrier)
+        logistic = user_info(logistic_user, "logistic")
+        carrier = user_info(obj.carrier, "carrier")
 
         return {
             "customer": customer,

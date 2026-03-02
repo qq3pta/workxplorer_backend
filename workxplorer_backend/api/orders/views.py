@@ -932,11 +932,17 @@ class OrdersViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         hide = serializer.validated_data["hide"]
 
+        is_logistic_actor = user.id == order.logistic_id or (
+            not order.logistic_id
+            and user.id == order.created_by_id
+            and getattr(user, "role", "") == "LOGISTIC"
+        )
+
         if user.id == order.customer_id:
             order.customer_hide_contacts = bool(hide)
             order.save(update_fields=["customer_hide_contacts"])
 
-        elif user.id == order.logistic_id:
+        elif is_logistic_actor:
             order.logistic_hide_contacts = bool(hide)
             order.save(update_fields=["logistic_hide_contacts"])
 
@@ -949,17 +955,21 @@ class OrdersViewSet(viewsets.ModelViewSet):
             order.customer_id,
             order.logistic_id,
             order.carrier_id,
+            order.created_by_id,
+        }
+
+        roles_payload = {
+            "customer": {
+                "hidden": bool(order.customer_hide_contacts),
+                "hidden_by": False,
+            },
+            "logistic": {
+                "hidden": bool(order.logistic_hide_contacts),
+                "hidden_by": False,
+            },
         }
 
         for user_id in filter(None, participants):
-            if user_id == order.carrier_id:
-                hidden = order.customer_hide_contacts or order.logistic_hide_contacts
-                hidden_by = order.logistic_hide_contacts
-
-            else:
-                hidden = order.customer_hide_contacts
-                hidden_by = order.logistic_hide_contacts
-
             async_to_sync(channel_layer.group_send)(
                 f"user_{user_id}",
                 to_ws_safe(
@@ -968,27 +978,13 @@ class OrdersViewSet(viewsets.ModelViewSet):
                         "data": {
                             "event": "order_privacy_changed",
                             "order_id": order.id,
-                            "roles": {
-                                "customer": {
-                                    "hidden": bool(hidden),
-                                    "hidden_by": bool(hidden_by),
-                                }
-                            },
+                            "roles": roles_payload,
                         },
                     }
                 ),
             )
 
-        return Response(
-            {
-                "roles": {
-                    "customer": {
-                        "hidden": order.customer_hide_contacts,
-                        "hidden_by": order.logistic_hide_contacts,
-                    }
-                }
-            }
-        )
+        return Response({"roles": roles_payload})
 
 
 class SharedOrderView(RetrieveAPIView):

@@ -146,19 +146,16 @@ class OrdersViewSet(viewsets.ModelViewSet):
         # ---------- Ролевая выборка ----------
         if not (user.is_staff or user.is_superuser):
             role = getattr(user, "role", None)
-            as_role = p.get("as_role")
 
             if role == "LOGISTIC":
-                if as_role == "customer":
-                    qs = qs.filter(customer=user)
-                else:
-                    qs = qs.filter(
-                        models.Q(logistic=user)
-                        | models.Q(created_by=user)
-                        | models.Q(cargo__created_by=user)
-                        | models.Q(offer__logistic=user)
-                        | models.Q(offer__intermediary=user)
-                    ).distinct()
+                qs = qs.filter(
+                    Q(logistic=user)
+                    | Q(created_by=user)
+                    | Q(cargo__created_by=user)
+                    | Q(invited_carrier__isnull=False, created_by=user)
+                    | Q(offer__logistic=user)
+                    | Q(offer__intermediary=user)
+                ).distinct()
 
             elif role == "CUSTOMER":
                 qs = qs.filter(customer=user)

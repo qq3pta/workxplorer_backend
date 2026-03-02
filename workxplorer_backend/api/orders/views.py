@@ -182,13 +182,12 @@ class OrdersViewSet(viewsets.ModelViewSet):
             else:
                 qs = qs.none()
 
-        return qs
-
+        # ---------- STATUS ----------
         status_param = p.get("status")
         if status_param:
             qs = qs.filter(status=status_param)
 
-        # ---------- Аннотация цены в UZS ----------
+        # ---------- ЦЕНА ----------
         qs = qs.annotate(price_uzs_anno=F("offer__price_value"))
 
         currency = p.get("price_currency")

@@ -143,22 +143,35 @@ class OrdersViewSet(viewsets.ModelViewSet):
         user = self.request.user
         p = self.request.query_params
 
-        # ---------- Ролевая выборка ----------
         if not (user.is_staff or user.is_superuser):
             role = getattr(user, "role", None)
-            as_role = p.get("as_role")
 
             if role == "LOGISTIC":
+                as_role = p.get("as_role")
+
                 if as_role == "customer":
                     qs = qs.filter(customer=user)
+
+                elif as_role == "logistic":
+                    qs = qs.filter(
+                        Q(logistic=user)
+                        | Q(created_by=user)
+                        | Q(cargo__created_by=user)
+                        | Q(offer__logistic=user)
+                        | Q(offer__intermediary=user)
+                    )
+
                 else:
                     qs = qs.filter(
-                        models.Q(logistic=user)
-                        | models.Q(created_by=user)
-                        | models.Q(cargo__created_by=user)
-                        | models.Q(offer__logistic=user)
-                        | models.Q(offer__intermediary=user)
-                    ).distinct()
+                        Q(logistic=user)
+                        | Q(created_by=user)
+                        | Q(cargo__created_by=user)
+                        | Q(offer__logistic=user)
+                        | Q(offer__intermediary=user)
+                        | Q(customer=user)
+                    )
+
+                qs = qs.distinct()
 
             elif role == "CUSTOMER":
                 qs = qs.filter(customer=user)
@@ -169,11 +182,12 @@ class OrdersViewSet(viewsets.ModelViewSet):
             else:
                 qs = qs.none()
 
+        # ---------- STATUS ----------
         status_param = p.get("status")
         if status_param:
             qs = qs.filter(status=status_param)
 
-        # ---------- Аннотация цены в UZS ----------
+        # ---------- ЦЕНА ----------
         qs = qs.annotate(price_uzs_anno=F("offer__price_value"))
 
         currency = p.get("price_currency")
@@ -968,6 +982,9 @@ class OrdersViewSet(viewsets.ModelViewSet):
                 "hidden_by": False,
             },
         }
+
+        hidden = order.customer_hide_contacts or order.logistic_hide_contacts
+        hidden_by = order.logistic_hide_contacts
 
         for user_id in filter(None, participants):
             async_to_sync(channel_layer.group_send)(

@@ -93,3 +93,97 @@ workxplorer_backend/
 ├── docker-compose.yml      # PostgreSQL + Redis + Web (Daphne)
 ├── .pre-commit-config.yaml
 └── README.md
+```
+
+---
+
+## Быстрый старт
+
+### Через Docker Compose
+
+```bash
+cp back/example.env .env
+docker compose up --build
+```
+
+### Локально (Poetry)
+
+```bash
+poetry install
+cp back/example.env back/.env
+poetry run python back/manage.py migrate
+poetry run python back/manage.py runserver
+```
+
+---
+
+## .env — переменные окружения
+
+- `DJANGO_SECRET_KEY`, `DJANGO_DEBUG`
+- `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`
+- `ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS`, `CSRF_TRUSTED_ORIGINS`
+
+---
+
+## Миграции, статик, медиа
+
+```bash
+poetry run python back/manage.py migrate
+poetry run python back/manage.py collectstatic --noinput
+```
+
+---
+
+## Документация API
+
+- `/api/docs/`
+- `/api/schema/`
+
+---
+
+## Аутентификация и роли
+
+- JWT Bearer token
+- `/api/auth/login/`, `/api/auth/refresh/`, `/api/auth/me/`
+- `customer`, `carrier`, `logistic`, `admin`
+
+---
+
+## Модули и эндпоинты
+
+- `/api/auth/`, `/api/loads/`, `/api/search/`
+- `/api/offers/`, `/api/orders/`, `/api/geo/`
+- `/api/notifications/`, `/api/payments/`, `/api/support/`
+
+WebSocket:
+- `ws://<host>/ws/notifications/?token=<access_token>`
+- `ws://<host>/ws/loads?token=<access_token>`
+
+---
+
+## Примеры запросов
+
+```bash
+curl -X POST http://localhost:8000/api/auth/login/ \
+  -H "Content-Type: application/json" \
+  -d '{"email":"user@example.com","password":"secret"}'
+```
+
+---
+
+## CI/CD
+
+`check`, `ruff`, `pytest`
+
+---
+
+## Продакшен заметки
+
+- `core.settings.prod`
+- CORS/CSRF + HTTPS
+
+---
+
+## Лицензия
+
+<Лицензия проекта>

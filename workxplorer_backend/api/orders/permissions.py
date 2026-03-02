@@ -39,6 +39,7 @@ class IsOrderParticipant(BasePermission):
                 obj.logistic_id == u.id
                 or obj.created_by_id == u.id
                 or obj.cargo.created_by_id == u.id
+                or obj.customer_id == u.id
                 or (obj.created_by_id == u.id and obj.logistic_id is None)
                 or (obj.invited_carrier_id is not None and obj.created_by_id == u.id)
                 or (

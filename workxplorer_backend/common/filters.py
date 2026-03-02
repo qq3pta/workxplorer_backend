@@ -3,11 +3,12 @@ from decimal import Decimal
 from django.contrib.gis.db.models.functions import Distance
 from django.contrib.gis.geos import Point
 from django.db.models import Q, F
+from django.utils import timezone
 
 from common.utils import convert_to_uzs
 
 
-def apply_loads_filters(qs, p):
+def apply_loads_filters(qs, p, hide_expired=False):
     """
     Оптимизированная функция фильтрации грузов.
     Использует индексы и минимизирует количество запросов.
@@ -15,6 +16,10 @@ def apply_loads_filters(qs, p):
     # ======================
     # HAS OFFERS
     # ======================
+    if hide_expired:
+        today = timezone.localdate()
+        qs = qs.filter(load_date__gte=today)
+
     has_offers = p.get("has_offers")
     if has_offers is not None:
         has_offers = str(has_offers).lower()

@@ -145,19 +145,16 @@ class OrdersViewSet(viewsets.ModelViewSet):
 
         if not (user.is_staff or user.is_superuser):
             role = getattr(user, "role", None)
-            as_role = p.get("as_role")
 
             if role == "LOGISTIC":
-                if as_role == "customer":
-                    qs = qs.filter(customer=user)
-                else:
-                    qs = qs.filter(
-                        Q(logistic=user)
-                        | Q(created_by=user)
-                        | Q(cargo__created_by=user)
-                        | Q(offer__logistic=user)
-                        | Q(offer__intermediary=user)
-                    ).distinct()
+                qs = qs.filter(
+                    Q(logistic=user)
+                    | Q(created_by=user)
+                    | Q(cargo__created_by=user)
+                    | Q(offer__logistic=user)
+                    | Q(offer__intermediary=user)
+                    | Q(customer=user)
+                ).distinct()
 
             elif role == "CUSTOMER":
                 qs = qs.filter(customer=user)

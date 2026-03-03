@@ -84,7 +84,6 @@ workxplorer_backend/
 │   ├── media/              # Загружаемые пользователями файлы
 │   ├── static/             # Статические файлы
 │   ├── manage.py
-│   ├── example.env         # Пример переменных окружения
 │   └── schema.yaml         # OpenAPI спецификация
 ├── pyproject.toml          # Poetry конфигурация и зависимости
 ├── poetry.lock

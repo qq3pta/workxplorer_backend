@@ -147,8 +147,9 @@ class OrdersViewSet(viewsets.ModelViewSet):
             role = getattr(user, "role", None)
 
             if role == "LOGISTIC":
-                # Support both query params used by clients: `as_role` and `role`.
-                raw_role = (p.get("as_role") or p.get("role") or "").strip().lower()
+                # Support query param used by clients: `as_role`.
+                raw_role = (p.get("as_role") or "").strip().lower()
+
                 role_aliases = {
                     "customer": "customer",
                     "orders": "customer",

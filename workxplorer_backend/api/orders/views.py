@@ -262,7 +262,7 @@ class OrdersViewSet(viewsets.ModelViewSet):
                 status=http_status.HTTP_400_BAD_REQUEST,
             )
 
-        old_status = order.driver_status
+        old_driver_status = order.driver_status
         ser.save()
 
         channel_layer = get_channel_layer()
@@ -281,7 +281,11 @@ class OrdersViewSet(viewsets.ModelViewSet):
                     "event": "driver_status_changed",
                     "order_id": order.id,
                     "driver_status": new_status,
-                    "old_status": old_status,
+                    "old_driver_status": old_driver_status,
+                    "order_status": order.status,
+                    # compatibility: some clients read old_status/new_status as order status
+                    "old_status": order.status,
+                    "new_status": order.status,
                 },
             }
 
@@ -290,16 +294,24 @@ class OrdersViewSet(viewsets.ModelViewSet):
                 to_ws_safe(message),
             )
 
-        if new_status != old_status:
+        if new_status != old_driver_status:
             OrderStatusHistory.objects.create(
                 order=order,
-                old_status=old_status,
+                old_status=old_driver_status,
                 new_status=new_status,
                 user=user,
             )
 
         return Response(
-            {"order_id": order.id, "old_status": old_status, "new_status": new_status},
+            {
+                "order_id": order.id,
+                "driver_status": new_status,
+                "old_driver_status": old_driver_status,
+                "order_status": order.status,
+                # compatibility: some clients read old_status/new_status as order status
+                "old_status": order.status,
+                "new_status": order.status,
+            },
             status=http_status.HTTP_200_OK,
         )
 
@@ -946,17 +958,11 @@ class OrdersViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         hide = serializer.validated_data["hide"]
 
-        is_logistic_actor = user.id == order.logistic_id or (
-            not order.logistic_id
-            and user.id == order.created_by_id
-            and getattr(user, "role", "") == "LOGISTIC"
-        )
-
         if user.id == order.customer_id:
             order.customer_hide_contacts = bool(hide)
             order.save(update_fields=["customer_hide_contacts"])
 
-        elif is_logistic_actor:
+        elif user.id == order.logistic_id:
             order.logistic_hide_contacts = bool(hide)
             order.save(update_fields=["logistic_hide_contacts"])
 
@@ -969,18 +975,6 @@ class OrdersViewSet(viewsets.ModelViewSet):
             order.customer_id,
             order.logistic_id,
             order.carrier_id,
-            order.created_by_id,
-        }
-
-        roles_payload = {
-            "customer": {
-                "hidden": bool(order.customer_hide_contacts),
-                "hidden_by": False,
-            },
-            "logistic": {
-                "hidden": bool(order.logistic_hide_contacts),
-                "hidden_by": False,
-            },
         }
 
         hidden = order.customer_hide_contacts or order.logistic_hide_contacts
@@ -995,13 +989,27 @@ class OrdersViewSet(viewsets.ModelViewSet):
                         "data": {
                             "event": "order_privacy_changed",
                             "order_id": order.id,
-                            "roles": roles_payload,
+                            "roles": {
+                                "customer": {
+                                    "hidden": bool(hidden),
+                                    "hidden_by": bool(hidden_by),
+                                }
+                            },
                         },
                     }
                 ),
             )
 
-        return Response({"roles": roles_payload})
+        return Response(
+            {
+                "roles": {
+                    "customer": {
+                        "hidden": order.customer_hide_contacts,
+                        "hidden_by": order.logistic_hide_contacts,
+                    }
+                }
+            }
+        )
 
 
 class SharedOrderView(RetrieveAPIView):

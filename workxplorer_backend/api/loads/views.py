@@ -378,11 +378,7 @@ class PublicLoadsView(generics.ListAPIView):
             )
         )
 
-        return apply_loads_filters(
-            qs,
-            self.request.query_params,
-            hide_expired=True,
-        )
+        return apply_loads_filters(qs, self.request.query_params)
 
 
 @extend_schema(tags=["loads"])

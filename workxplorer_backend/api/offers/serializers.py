@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 from typing import Any
+import logging
 
 from django.contrib.auth import get_user_model
 from drf_spectacular.utils import extend_schema_field
@@ -16,6 +17,7 @@ from common.ws_utils import to_ws_safe
 from .models import Offer, OfferStatusLog
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
 
 
 class OfferCreateSerializer(serializers.ModelSerializer):
@@ -46,7 +48,7 @@ class OfferCreateSerializer(serializers.ModelSerializer):
         user = self.context["request"].user
         cargo: Cargo = attrs["cargo"]
 
-        if cargo.customer_id == user.id:
+        if cargo.customer_id == user.id or cargo.created_by_id == user.id:
             raise serializers.ValidationError(
                 {"cargo": "Нельзя сделать оффер на собственную заявку."}
             )
@@ -122,40 +124,37 @@ class OfferCreateSerializer(serializers.ModelSerializer):
         )
 
         print("[SERIALIZER CREATE OFFER] created offer.id =", offer.id)
-        offer.send_create_notifications()
+        try:
+            offer.send_create_notifications()
 
-        channel_layer = get_channel_layer()
+            channel_layer = get_channel_layer()
 
-        raw_payload = OfferShortSerializer(offer, context={"request": self.context["request"]}).data
+            raw_payload = OfferShortSerializer(
+                offer, context={"request": self.context["request"]}
+            ).data
 
-        # КОМУ ПОКАЗЫВАЕМ ОФФЕР
-        recipients = set()
+            recipients = set()
+            if offer.cargo.customer_id:
+                recipients.add(offer.cargo.customer_id)
+            if offer.carrier_id:
+                recipients.add(offer.carrier_id)
+            if offer.logistic_id:
+                recipients.add(offer.logistic_id)
 
-        # заказчик
-        if offer.cargo.customer_id:
-            recipients.add(offer.cargo.customer_id)
-
-        # перевозчик
-        if offer.carrier_id:
-            recipients.add(offer.carrier_id)
-
-        # логист
-        if offer.logistic_id:
-            recipients.add(offer.logistic_id)
-
-        for user_id in recipients:
-            message = {
-                "type": "notify",
-                "data": {
-                    "event": "offer_created",
-                    "offer": raw_payload,
-                },
-            }
-
-            async_to_sync(channel_layer.group_send)(
-                f"user_{user_id}",
-                to_ws_safe(message),
-            )
+            for user_id in recipients:
+                message = {
+                    "type": "notify",
+                    "data": {
+                        "event": "offer_created",
+                        "offer": raw_payload,
+                    },
+                }
+                async_to_sync(channel_layer.group_send)(
+                    f"user_{user_id}",
+                    to_ws_safe(message),
+                )
+        except Exception:
+            logger.exception("Offer %s created, but post-create notifications failed", offer.id)
 
         return offer
 

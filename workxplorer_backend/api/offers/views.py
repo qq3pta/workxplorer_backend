@@ -352,13 +352,26 @@ class OfferViewSet(ModelViewSet):
             return Offer.objects.none()
         return super().get_queryset()
 
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        with transaction.atomic():
+            self.perform_create(serializer)
+            data = serializer.data
+
+        headers = self.get_success_headers(data)
+        return Response(data, status=status.HTTP_201_CREATED, headers=headers)
+
     def list(self, request, *args, **kwargs):
         u = request.user
         scope = request.query_params.get("scope")
         qs = self.get_queryset()
 
         if scope == "mine":
-            qs = qs.filter(carrier=u)
+            qs = qs.filter(carrier=u).exclude(
+                Q(cargo__customer=u) | Q(cargo__created_by=u)
+            )
         elif scope == "incoming":
             if getattr(u, "is_carrier", False) or getattr(u, "role", None) == "CARRIER":
                 qs = qs.filter(carrier=u, initiator=Offer.Initiator.CUSTOMER)
@@ -369,7 +382,9 @@ class OfferViewSet(ModelViewSet):
                 return Response({"detail": "Forbidden"}, status=status.HTTP_403_FORBIDDEN)
         else:
             if getattr(u, "is_carrier", False) or getattr(u, "role", None) == "CARRIER":
-                qs = qs.filter(carrier=u)
+                qs = qs.filter(carrier=u).exclude(
+                    Q(cargo__customer=u) | Q(cargo__created_by=u)
+                )
             elif getattr(u, "is_customer", False) or getattr(u, "role", None) == "CUSTOMER":
                 qs = qs.filter(cargo__customer=u)
             elif getattr(u, "is_logistic", False):
@@ -411,7 +426,9 @@ class OfferViewSet(ModelViewSet):
     )
     @action(detail=False, methods=["get"])
     def my(self, request):
-        qs = self.get_queryset().filter(carrier=request.user)
+        qs = self.get_queryset().filter(carrier=request.user).exclude(
+            Q(cargo__customer=request.user) | Q(cargo__created_by=request.user)
+        )
         qs = _apply_common_filters(qs, request.query_params)
         page = self.paginate_queryset(qs)
         ser = self.get_serializer(page or qs, many=True)

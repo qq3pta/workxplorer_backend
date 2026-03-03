@@ -46,7 +46,10 @@ class OfferCreateSerializer(serializers.ModelSerializer):
         user = self.context["request"].user
         cargo: Cargo = attrs["cargo"]
 
-        if cargo.customer_id == user.id:
+        # Protect against self-offers for both owner roles:
+        # - customer who owns the cargo
+        # - logistic who created the cargo on customer's behalf
+        if cargo.customer_id == user.id or cargo.created_by_id == user.id:
             raise serializers.ValidationError(
                 {"cargo": "Нельзя сделать оффер на собственную заявку."}
             )
@@ -122,7 +125,11 @@ class OfferCreateSerializer(serializers.ModelSerializer):
         )
 
         print("[SERIALIZER CREATE OFFER] created offer.id =", offer.id)
-        offer.send_create_notifications()
+        # Side-effects must not break successful creation response.
+        try:
+            offer.send_create_notifications()
+        except Exception as exc:
+            print("[SERIALIZER CREATE OFFER] send_create_notifications error:", exc)
 
         channel_layer = get_channel_layer()
 
@@ -152,10 +159,13 @@ class OfferCreateSerializer(serializers.ModelSerializer):
                 },
             }
 
-            async_to_sync(channel_layer.group_send)(
-                f"user_{user_id}",
-                to_ws_safe(message),
-            )
+            try:
+                async_to_sync(channel_layer.group_send)(
+                    f"user_{user_id}",
+                    to_ws_safe(message),
+                )
+            except Exception as exc:
+                print("[SERIALIZER CREATE OFFER] WS send error:", exc)
 
         return offer
 

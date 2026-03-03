@@ -147,7 +147,16 @@ class OrdersViewSet(viewsets.ModelViewSet):
             role = getattr(user, "role", None)
 
             if role == "LOGISTIC":
-                as_role = p.get("as_role")
+                # Support both query params used by clients: `as_role` and `role`.
+                raw_role = (p.get("as_role") or p.get("role") or "").strip().lower()
+                role_aliases = {
+                    "customer": "customer",
+                    "orders": "customer",
+                    "logistic": "logistic",
+                    "vezu": "logistic",
+                    "carrier": "logistic",
+                }
+                as_role = role_aliases.get(raw_role, "")
 
                 if as_role == "customer":
                     qs = qs.filter(customer=user)

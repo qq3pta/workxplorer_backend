@@ -20,7 +20,10 @@ def apply_loads_filters(qs, p, hide_expired=False):
         today = timezone.localdate()
         qs = qs.filter(load_date__gte=today)
 
+    # Support both snake_case and camelCase from clients.
     has_offers = p.get("has_offers")
+    if has_offers is None:
+        has_offers = p.get("hasOffers")
     if has_offers is not None:
         has_offers = str(has_offers).lower()
         if has_offers in ("true", "1"):

@@ -103,7 +103,10 @@ def _apply_common_filters(qs, params):
     elif p.get("cargo_uuid"):
         qs = qs.filter(cargo__uuid=p["cargo_uuid"])
 
+    # Support both snake_case and camelCase from clients.
     has_offers = p.get("has_offers")
+    if has_offers is None:
+        has_offers = p.get("hasOffers")
     if has_offers is not None:
         has_offers = str(has_offers).lower()
         if has_offers in ("true", "1"):

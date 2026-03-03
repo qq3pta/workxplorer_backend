@@ -289,8 +289,13 @@ class OrdersViewSet(viewsets.ModelViewSet):
                 "data": {
                     "event": "driver_status_changed",
                     "order_id": order.id,
+                    # Keep explicit names for driver status changes.
                     "driver_status": new_status,
-                    "old_status": old_status,
+                    "driver_old_status": old_status,
+                    "driver_new_status": new_status,
+                    # Also include stable order status for tab grouping on clients.
+                    "order_status": order.status,
+                    "status": order.status,
                 },
             }
 
@@ -299,16 +304,19 @@ class OrdersViewSet(viewsets.ModelViewSet):
                 to_ws_safe(message),
             )
 
-        if new_status != old_status:
-            OrderStatusHistory.objects.create(
-                order=order,
-                old_status=old_status,
-                new_status=new_status,
-                user=user,
-            )
-
         return Response(
-            {"order_id": order.id, "old_status": old_status, "new_status": new_status},
+            {
+                "order_id": order.id,
+                # Stable order status (for clients that reuse generic status handlers).
+                "order_status": order.status,
+                "status": order.status,
+                "old_status": order.status,
+                "new_status": order.status,
+                # Explicit driver status diff.
+                "driver_status": new_status,
+                "driver_old_status": old_status,
+                "driver_new_status": new_status,
+            },
             status=http_status.HTTP_200_OK,
         )
 

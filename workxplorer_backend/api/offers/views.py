@@ -359,21 +359,27 @@ class OfferViewSet(ModelViewSet):
 
         if scope == "mine":
             qs = qs.filter(carrier=u)
+
         elif scope == "incoming":
             if getattr(u, "is_carrier", False) or getattr(u, "role", None) == "CARRIER":
                 qs = qs.filter(carrier=u, initiator=Offer.Initiator.CUSTOMER)
             else:
-                qs = qs.filter(cargo__customer=u)
+                qs = qs.filter(Q(cargo__customer=u) | Q(logistic=u))
+
         elif scope == "all":
             if not getattr(u, "is_staff", False):
                 return Response({"detail": "Forbidden"}, status=status.HTTP_403_FORBIDDEN)
+
         else:
             if getattr(u, "is_carrier", False) or getattr(u, "role", None) == "CARRIER":
                 qs = qs.filter(carrier=u)
+
             elif getattr(u, "is_customer", False) or getattr(u, "role", None) == "CUSTOMER":
                 qs = qs.filter(cargo__customer=u)
+
             elif getattr(u, "is_logistic", False):
                 qs = qs.filter(Q(cargo__customer=u) | Q(logistic=u) | Q(intermediary=u)).distinct()
+
             else:
                 qs = qs.none()
 

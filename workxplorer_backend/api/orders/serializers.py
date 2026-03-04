@@ -311,9 +311,7 @@ class OrderListSerializer(serializers.ModelSerializer):
             hidden_by = False
 
             if is_customer_user:
-                hidden = customer_hidden or logistic_hidden
-                # For customer's own view do not mark "hidden_by", so contact privacy
-                # does not affect customer actions tied to this flag in clients.
+                hidden = customer_hidden
                 if request_user and request_user.id == obj.customer_id:
                     hidden_by = False
                 else:

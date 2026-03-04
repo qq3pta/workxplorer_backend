@@ -439,20 +439,12 @@ class OfferViewSet(ModelViewSet):
                 initiator__in=[Offer.Initiator.CUSTOMER, Offer.Initiator.LOGISTIC],
             )
         else:
-            qs = (
-                qs.filter(is_active=True)
-                .filter(
-                    Q(cargo__customer=u)
-                    | Q(cargo__created_by=u)
-                    | Q(logistic=u)
-                    | Q(intermediary=u)
-                )
-                .distinct()
-            )
+            qs = qs.filter(is_active=True).filter(Q(cargo__customer=u) | Q(logistic=u)).distinct()
 
         qs = _apply_common_filters(qs, request.query_params)
         page = self.paginate_queryset(qs)
         ser = self.get_serializer(page or qs, many=True)
+
         return self.get_paginated_response(ser.data) if page is not None else Response(ser.data)
 
     @extend_schema(responses=OfferDetailSerializer)

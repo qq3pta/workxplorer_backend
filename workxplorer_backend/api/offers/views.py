@@ -373,12 +373,7 @@ class OfferViewSet(ModelViewSet):
             elif getattr(u, "is_customer", False) or getattr(u, "role", None) == "CUSTOMER":
                 qs = qs.filter(cargo__customer=u)
             elif getattr(u, "is_logistic", False):
-                qs = qs.filter(
-                    Q(cargo__customer=u)
-                    | Q(cargo__created_by=u)
-                    | Q(logistic=u)
-                    | Q(intermediary=u)
-                ).distinct()
+                qs = qs.filter(Q(cargo__customer=u) | Q(logistic=u) | Q(intermediary=u)).distinct()
             else:
                 qs = qs.none()
 

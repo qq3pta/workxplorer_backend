@@ -968,6 +968,13 @@ class OrdersViewSet(viewsets.ModelViewSet):
         hidden = order.customer_hide_contacts or order.logistic_hide_contacts
         hidden_by = order.logistic_hide_contacts
 
+        def _hidden_by_for(user_id):
+            # The customer should not be blocked by a flag that represents
+            # who hid their contacts for other participants.
+            if user_id == order.customer_id:
+                return False
+            return bool(hidden_by)
+
         for user_id in filter(None, participants):
             async_to_sync(channel_layer.group_send)(
                 f"user_{user_id}",
@@ -980,7 +987,7 @@ class OrdersViewSet(viewsets.ModelViewSet):
                             "roles": {
                                 "customer": {
                                     "hidden": bool(hidden),
-                                    "hidden_by": bool(hidden_by),
+                                    "hidden_by": _hidden_by_for(user_id),
                                 }
                             },
                         },
@@ -992,8 +999,8 @@ class OrdersViewSet(viewsets.ModelViewSet):
             {
                 "roles": {
                     "customer": {
-                        "hidden": order.customer_hide_contacts,
-                        "hidden_by": order.logistic_hide_contacts,
+                        "hidden": bool(hidden),
+                        "hidden_by": _hidden_by_for(user.id),
                     }
                 }
             }

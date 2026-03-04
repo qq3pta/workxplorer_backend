@@ -933,13 +933,18 @@ class OrdersViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         hide = serializer.validated_data["hide"]
 
-        if user.id == order.customer_id:
-            order.customer_hide_contacts = bool(hide)
-            order.save(update_fields=["customer_hide_contacts"])
+        actor = None
 
-        elif user.id == order.logistic_id:
+        # Prioritize logistic branch so logistic action never mutates customer flag.
+        if user.id == order.logistic_id and getattr(user, "role", None) == "LOGISTIC":
             order.logistic_hide_contacts = bool(hide)
             order.save(update_fields=["logistic_hide_contacts"])
+            actor = "logistic"
+
+        elif user.id == order.customer_id:
+            order.customer_hide_contacts = bool(hide)
+            order.save(update_fields=["customer_hide_contacts"])
+            actor = "customer"
 
         else:
             return Response({"detail": "No permission"}, status=403)
@@ -960,6 +965,11 @@ class OrdersViewSet(viewsets.ModelViewSet):
                 return False
             return bool(hidden_by)
 
+        def _customer_payload_for(recipient_id):
+            if actor == "logistic":
+                return {"hidden_by": _hidden_by_for(recipient_id)}
+            return {"hidden": bool(hidden)}
+
         for user_id in filter(None, participants):
             async_to_sync(channel_layer.group_send)(
                 f"user_{user_id}",
@@ -969,27 +979,13 @@ class OrdersViewSet(viewsets.ModelViewSet):
                         "data": {
                             "event": "order_privacy_changed",
                             "order_id": order.id,
-                            "roles": {
-                                "customer": {
-                                    "hidden": bool(hidden),
-                                    "hidden_by": _hidden_by_for(user_id),
-                                }
-                            },
+                            "roles": {"customer": _customer_payload_for(user_id)},
                         },
                     }
                 ),
             )
 
-        return Response(
-            {
-                "roles": {
-                    "customer": {
-                        "hidden": bool(hidden),
-                        "hidden_by": _hidden_by_for(user.id),
-                    }
-                }
-            }
-        )
+        return Response({"roles": {"customer": _customer_payload_for(user.id)}})
 
 
 class SharedOrderView(RetrieveAPIView):

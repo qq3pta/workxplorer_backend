@@ -285,7 +285,6 @@ class OfferViewSet(ModelViewSet):
       POST   /api/offers/                  — создать (Перевозчик)
       GET    /api/offers/                  — список, видимый текущему пользователю (scope=…)
       GET    /api/offers/my/               — мои офферы как Перевозчик (alias)
-      GET    /api/offers/incoming/         — входящие (alias): заказчик/логист — офферы от перевозчиков; перевозчик — инвайты
       GET    /api/offers/{id}/             — детали
       POST   /api/offers/{id}/accept/      — принять
       POST   /api/offers/{id}/reject/      — отклонить
@@ -294,7 +293,7 @@ class OfferViewSet(ModelViewSet):
     """
 
     queryset = (
-        Offer.objects.select_related("cargo", "carrier")
+        Offer.objects.select_related("cargo", "carrier", "logistic")
         .annotate(
             offers_active=Count("cargo__offers", filter=Q(cargo__offers__is_active=True)),
             carrier_rating=Avg("carrier__ratings_received__score"),
@@ -354,32 +353,58 @@ class OfferViewSet(ModelViewSet):
 
     def list(self, request, *args, **kwargs):
         u = request.user
+        role = getattr(u, "role", None)
         scope = request.query_params.get("scope")
+
         qs = self.get_queryset()
 
+        # =====================
+        # MY OFFERS
+        # =====================
+
         if scope == "mine":
-            qs = qs.filter(carrier=u, initiator=Offer.Initiator.CARRIER)
+            if role == "CARRIER":
+                qs = qs.filter(carrier=u)
+
+            elif role == "CUSTOMER":
+                qs = qs.filter(
+                    cargo__customer=u,
+                    initiator=Offer.Initiator.CUSTOMER,
+                )
+
+            elif role == "LOGISTIC":
+                qs = qs.filter(
+                    logistic=u,
+                    initiator=Offer.Initiator.LOGISTIC,
+                )
+
+            else:
+                qs = qs.none()
+
+        # =====================
+        # INCOMING
+        # =====================
 
         elif scope == "incoming":
-            role = getattr(u, "role", None)
-
             if role == "CARRIER":
+                # инвайты от customer
                 qs = qs.filter(
                     carrier=u,
                     initiator=Offer.Initiator.CUSTOMER,
                     is_active=True,
                 )
 
-            elif role == "LOGISTIC":
+            elif role == "CUSTOMER":
+                # офферы от carrier
                 qs = qs.filter(
-                    Q(cargo__created_by=u) | Q(cargo__customer=u),
+                    cargo__customer=u,
                     initiator=Offer.Initiator.CARRIER,
                     is_active=True,
                 )
 
-            elif role == "CUSTOMER":
+            elif role == "LOGISTIC":
                 qs = qs.filter(
-                    cargo__customer=u,
+                    logistic=u,
                     initiator=Offer.Initiator.CARRIER,
                     is_active=True,
                 )
@@ -387,18 +412,18 @@ class OfferViewSet(ModelViewSet):
             else:
                 qs = qs.none()
 
-        elif scope == "all":
-            if not getattr(u, "is_staff", False):
-                return Response({"detail": "Forbidden"}, status=status.HTTP_403_FORBIDDEN)
+        # =====================
+        # DEFAULT VIEW
+        # =====================
 
         else:
-            if getattr(u, "is_carrier", False) or getattr(u, "role", None) == "CARRIER":
+            if role == "CARRIER":
                 qs = qs.filter(carrier=u)
 
-            elif getattr(u, "is_customer", False) or getattr(u, "role", None) == "CUSTOMER":
+            elif role == "CUSTOMER":
                 qs = qs.filter(cargo__customer=u)
 
-            elif getattr(u, "is_logistic", False):
+            elif role == "LOGISTIC":
                 qs = qs.filter(Q(cargo__customer=u) | Q(logistic=u) | Q(intermediary=u)).distinct()
 
             else:
@@ -406,7 +431,10 @@ class OfferViewSet(ModelViewSet):
 
         qs = _apply_common_filters(qs, request.query_params)
 
-        # ------------------ Фильтр по response_status ------------------
+        # =====================
+        # RESPONSE STATUS
+        # =====================
+
         response_status = request.query_params.get("response_status")
 
         if response_status == "accepted":
@@ -423,7 +451,8 @@ class OfferViewSet(ModelViewSet):
 
         page = self.paginate_queryset(qs)
         ser = OfferShortSerializer(page or qs, many=True, context={"request": request})
-        return self.get_paginated_response(ser.data) if page is not None else Response(ser.data)
+
+        return self.get_paginated_response(ser.data) if page else Response(ser.data)
 
     @extend_schema(
         tags=["offers"],
@@ -433,68 +462,9 @@ class OfferViewSet(ModelViewSet):
     )
     @action(detail=False, methods=["get"])
     def my(self, request):
-        qs = self.get_queryset().filter(carrier=request.user)
-        qs = _apply_common_filters(qs, request.query_params)
-        page = self.paginate_queryset(qs)
-        ser = self.get_serializer(page or qs, many=True)
-        return self.get_paginated_response(ser.data) if page is not None else Response(ser.data)
-
-    @extend_schema(
-        tags=["offers"],
-        summary="Входящие офферы / инвайты",
-        description=(
-            "Alias к `GET /api/offers/?scope=incoming`.\n"
-            "Заказчик/Логист — видят офферы от перевозчиков на их заявки.\n"
-            "Перевозчик — видит инвайты от заказчиков (initiator=CUSTOMER)."
-        ),
-        responses=OfferShortSerializer(many=True),
-    )
-    @action(detail=False, methods=["get"])
-    def incoming(self, request):
-        u = request.user
-        qs = self.get_queryset()
-
-        role = getattr(u, "role", None)
-
-        if role == "CARRIER":
-            qs = qs.filter(
-                carrier=u,
-                is_active=True,
-                initiator__in=[
-                    Offer.Initiator.CUSTOMER,
-                    Offer.Initiator.LOGISTIC,
-                ],
-            )
-
-        elif role == "LOGISTIC":
-            qs = qs.filter(
-                Q(cargo__created_by=u),
-                is_active=True,
-                initiator__in=[
-                    Offer.Initiator.CARRIER,
-                    Offer.Initiator.LOGISTIC,
-                ],
-            )
-
-        elif role == "CUSTOMER":
-            qs = qs.filter(
-                cargo__customer=u,
-                is_active=True,
-                initiator__in=[
-                    Offer.Initiator.CARRIER,
-                    Offer.Initiator.LOGISTIC,
-                ],
-            )
-
-        else:
-            qs = qs.none()
-
-        qs = _apply_common_filters(qs, request.query_params)
-
-        page = self.paginate_queryset(qs)
-        ser = self.get_serializer(page or qs, many=True)
-
-        return self.get_paginated_response(ser.data) if page is not None else Response(ser.data)
+        request._request.GET = request.GET.copy()
+        request.GET["scope"] = "mine"
+        return self.list(request)
 
     @extend_schema(responses=OfferDetailSerializer)
     def retrieve(self, request, *args, **kwargs):

@@ -468,9 +468,12 @@ class OfferViewSet(ModelViewSet):
 
         elif role == "LOGISTIC":
             qs = qs.filter(
-                Q(cargo__created_by=u) | Q(cargo__customer=u),
+                Q(cargo__created_by=u),
                 is_active=True,
-                initiator=Offer.Initiator.CARRIER,
+                initiator__in=[
+                    Offer.Initiator.CARRIER,
+                    Offer.Initiator.LOGISTIC,
+                ],
             )
 
         elif role == "CUSTOMER":

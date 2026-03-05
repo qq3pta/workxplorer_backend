@@ -1,11 +1,12 @@
-import phonenumbers
 import logging
+import phonenumbers
 
 from phonenumbers import PhoneNumberFormat
 from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model, password_validation
+from django.db.models import Avg
 from django.db.models import Q
 from django.utils import timezone
 from rest_framework import serializers
@@ -339,6 +340,8 @@ class LoginSerializer(serializers.Serializer):
 
 class MeSerializer(serializers.ModelSerializer):
     profile = ProfileSerializer(read_only=True)
+    rating_as_customer = serializers.SerializerMethodField()
+    rating_as_carrier = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -372,6 +375,16 @@ class MeSerializer(serializers.ModelSerializer):
             "is_email_verified",
             "profile",
         )
+
+    def _get_dynamic_rating(self, obj) -> float:
+        avg = obj.ratings_received.aggregate(value=Avg("score"))["value"]
+        return round(float(avg or 0), 1)
+
+    def get_rating_as_customer(self, obj):
+        return self._get_dynamic_rating(obj)
+
+    def get_rating_as_carrier(self, obj):
+        return self._get_dynamic_rating(obj)
 
 
 class UpdateMeSerializer(serializers.ModelSerializer):

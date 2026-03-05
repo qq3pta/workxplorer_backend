@@ -358,13 +358,34 @@ class OfferViewSet(ModelViewSet):
         qs = self.get_queryset()
 
         if scope == "mine":
-            qs = qs.filter(carrier=u)
+            qs = qs.filter(carrier=u, initiator=Offer.Initiator.CARRIER)
 
         elif scope == "incoming":
-            if getattr(u, "is_carrier", False) or getattr(u, "role", None) == "CARRIER":
-                qs = qs.filter(carrier=u, initiator=Offer.Initiator.CUSTOMER)
+            role = getattr(u, "role", None)
+
+            if role == "CARRIER":
+                qs = qs.filter(
+                    carrier=u,
+                    initiator=Offer.Initiator.CUSTOMER,
+                    is_active=True,
+                )
+
+            elif role == "LOGISTIC":
+                qs = qs.filter(
+                    Q(cargo__created_by=u) | Q(cargo__customer=u),
+                    initiator=Offer.Initiator.CARRIER,
+                    is_active=True,
+                )
+
+            elif role == "CUSTOMER":
+                qs = qs.filter(
+                    cargo__customer=u,
+                    initiator=Offer.Initiator.CARRIER,
+                    is_active=True,
+                )
+
             else:
-                qs = qs.filter(Q(cargo__customer=u) | Q(logistic=u))
+                qs = qs.none()
 
         elif scope == "all":
             if not getattr(u, "is_staff", False):
@@ -433,16 +454,36 @@ class OfferViewSet(ModelViewSet):
         u = request.user
         qs = self.get_queryset()
 
-        if getattr(u, "is_carrier", False) or getattr(u, "role", None) == "CARRIER":
+        role = getattr(u, "role", None)
+
+        if role == "CARRIER":
             qs = qs.filter(
                 carrier=u,
                 is_active=True,
-                initiator__in=[Offer.Initiator.CUSTOMER, Offer.Initiator.LOGISTIC],
+                initiator__in=[
+                    Offer.Initiator.CUSTOMER,
+                    Offer.Initiator.LOGISTIC,
+                ],
             )
+
+        elif role == "LOGISTIC":
+            qs = qs.filter(
+                logistic=u,
+                is_active=True,
+                initiator=Offer.Initiator.CARRIER,
+            )
+
+        elif role == "CUSTOMER":
+            qs = qs.filter(
+                cargo__customer=u,
+                is_active=True,
+            )
+
         else:
-            qs = qs.filter(is_active=True).filter(Q(cargo__customer=u) | Q(logistic=u)).distinct()
+            qs = qs.none()
 
         qs = _apply_common_filters(qs, request.query_params)
+
         page = self.paginate_queryset(qs)
         ser = self.get_serializer(page or qs, many=True)
 

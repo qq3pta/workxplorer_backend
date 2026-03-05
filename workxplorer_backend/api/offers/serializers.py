@@ -83,10 +83,8 @@ class OfferCreateSerializer(serializers.ModelSerializer):
 
         if role == "CARRIER":
             carrier_user = user
+            logistic_user = None
             initiator = Offer.Initiator.CARRIER
-
-            if cargo.created_by and getattr(cargo.created_by, "role", None) == "LOGISTIC":
-                logistic_user = cargo.created_by
 
         elif role == "LOGISTIC":
             logistic_user = user
@@ -477,6 +475,8 @@ class OfferShortSerializer(serializers.ModelSerializer):
                 return "Предложение от заказчика"
             if init == OfferModel.Initiator.CARRIER:
                 return "Предложение от посредника"
+            if init == OfferModel.Initiator.LOGISTIC:
+                return "Предложение от логиста"
         except Exception:
             pass
 

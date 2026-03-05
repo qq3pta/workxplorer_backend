@@ -374,9 +374,9 @@ class OfferViewSet(ModelViewSet):
 
             elif role == "LOGISTIC":
                 qs = qs.filter(
-                    logistic=u,
+                    Q(logistic=u) | Q(intermediary=u),
                     initiator=Offer.Initiator.LOGISTIC,
-                )
+                ).distinct()
 
             else:
                 qs = qs.none()
@@ -387,7 +387,8 @@ class OfferViewSet(ModelViewSet):
 
         elif scope == "incoming":
             if role == "CARRIER":
-                # инвайты от customer
+                # инвайты от заказчиков
+
                 qs = qs.filter(
                     carrier=u,
                     initiator=Offer.Initiator.CUSTOMER,
@@ -395,7 +396,8 @@ class OfferViewSet(ModelViewSet):
                 )
 
             elif role == "CUSTOMER":
-                # офферы от carrier
+                # офферы перевозчиков
+
                 qs = qs.filter(
                     cargo__customer=u,
                     initiator=Offer.Initiator.CARRIER,
@@ -404,13 +406,15 @@ class OfferViewSet(ModelViewSet):
 
             elif role == "LOGISTIC":
                 qs = qs.filter(
-                    logistic=u,
+                    cargo__customer=u,
                     initiator=Offer.Initiator.CARRIER,
                     is_active=True,
                 )
 
             else:
                 qs = qs.none()
+
+            qs = qs.distinct()
 
         # =====================
         # DEFAULT VIEW

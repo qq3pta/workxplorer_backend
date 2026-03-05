@@ -53,15 +53,26 @@ class OfferCreateSerializer(serializers.ModelSerializer):
 
         if getattr(cargo, "is_hidden", False):
             raise serializers.ValidationError({"cargo": "Заявка скрыта."})
+
         if cargo.moderation_status != ModerationStatus.APPROVED:
             raise serializers.ValidationError({"cargo": "Заявка не прошла модерацию."})
+
         if cargo.status != CargoStatus.POSTED:
             raise serializers.ValidationError({"cargo": "Заявка уже не активна."})
 
-        if Offer.objects.filter(cargo=cargo, carrier=user, is_active=True).exists():
-            raise serializers.ValidationError(
-                {"cargo": "У вас уже есть активный оффер на эту заявку."}
-            )
+        role = getattr(user, "role", None)
+
+        if role == "CARRIER":
+            if Offer.objects.filter(cargo=cargo, carrier=user, is_active=True).exists():
+                raise serializers.ValidationError(
+                    {"cargo": "У вас уже есть активный оффер на эту заявку."}
+                )
+
+        elif role == "LOGISTIC":
+            if Offer.objects.filter(cargo=cargo, logistic=user, is_active=True).exists():
+                raise serializers.ValidationError(
+                    {"cargo": "У вас уже есть активный оффер на эту заявку."}
+                )
 
         return attrs
 

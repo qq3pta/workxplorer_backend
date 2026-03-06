@@ -414,13 +414,11 @@ class AnalyticsView(APIView):
         role = getattr(user, "role", None)
         if role == UserRole.LOGISTIC:
             qs = qs.filter(customer=user)
-            rating = user.rating_as_customer or 0
         elif role == UserRole.CARRIER:
             qs = qs.filter(carrier=user)
-            rating = user.rating_as_carrier or 0
         else:
             qs = qs.filter(Q(customer=user) | Q(carrier=user))
-            rating = user.rating_as_customer or user.rating_as_carrier or 0
+        rating = user.avg_rating
 
         days = 30
         current_start = now - timedelta(days=days)

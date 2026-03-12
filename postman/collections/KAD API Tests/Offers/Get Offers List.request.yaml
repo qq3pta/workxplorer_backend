@@ -1,0 +1,9 @@
+$kind: http-request
+name: Get Offers List
+url: "{{base_url}}/api/offers/"
+method: GET
+auth:
+  type: bearer
+  credentials:
+    token: "{{access_token}}"
+order: 1773312674773

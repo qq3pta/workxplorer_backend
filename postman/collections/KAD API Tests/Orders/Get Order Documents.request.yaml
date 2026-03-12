@@ -1,0 +1,9 @@
+$kind: http-request
+name: Get Order Documents
+url: "{{base_url}}/api/orders/{{order_id}}/documents/"
+method: GET
+auth:
+  type: bearer
+  credentials:
+    token: "{{access_token}}"
+order: 4024206574674162

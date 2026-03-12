@@ -1,0 +1,9 @@
+$kind: http-request
+name: Decline Order Invite
+url: "{{base_url}}/api/orders/decline-invite/"
+method: POST
+auth:
+  type: bearer
+  credentials:
+    token: "{{access_token}}"
+order: 4503598720615686

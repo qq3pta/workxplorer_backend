@@ -1,0 +1,9 @@
+$kind: http-request
+name: Delete Offer
+url: "{{base_url}}/api/offers/{{offer_id}}/"
+method: DELETE
+auth:
+  type: bearer
+  credentials:
+    token: "{{access_token}}"
+order: 4493532050015623

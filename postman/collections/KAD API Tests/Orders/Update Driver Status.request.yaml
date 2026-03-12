@@ -1,0 +1,9 @@
+$kind: http-request
+name: Update Driver Status
+url: "{{base_url}}/api/orders/{{order_id}}/driver-status/"
+method: PATCH
+auth:
+  type: bearer
+  credentials:
+    token: "{{access_token}}"
+order: 3985154532999150

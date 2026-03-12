@@ -1,0 +1,9 @@
+$kind: http-request
+name: Update Rating Patch
+url: "{{base_url}}/api/ratings/ratings/{{rating_id}}/"
+method: PATCH
+auth:
+  type: bearer
+  credentials:
+    token: "{{access_token}}"
+order: 4429075143416552

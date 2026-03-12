@@ -1,0 +1,9 @@
+$kind: http-request
+name: Resend Verify Email
+url: "{{base_url}}/api/auth/resend-verify/"
+method: POST
+auth:
+  type: bearer
+  credentials:
+    token: "{{access_token}}"
+order: 1769572343425

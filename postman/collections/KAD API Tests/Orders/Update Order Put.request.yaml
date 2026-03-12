@@ -1,0 +1,9 @@
+$kind: http-request
+name: Update Order Put
+url: "{{base_url}}/api/orders/{{order_id}}/"
+method: PUT
+auth:
+  type: bearer
+  credentials:
+    token: "{{access_token}}"
+order: 3841754461408533

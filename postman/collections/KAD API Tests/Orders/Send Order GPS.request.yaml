@@ -1,0 +1,9 @@
+$kind: http-request
+name: Send Order GPS
+url: "{{base_url}}/api/orders/gps/"
+method: POST
+auth:
+  type: bearer
+  credentials:
+    token: "{{access_token}}"
+order: 4503599206590444

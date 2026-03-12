@@ -1,0 +1,9 @@
+$kind: http-request
+name: Get Ratings List
+url: "{{base_url}}/api/ratings/ratings/"
+method: GET
+auth:
+  type: bearer
+  credentials:
+    token: "{{access_token}}"
+order: 1773313189293

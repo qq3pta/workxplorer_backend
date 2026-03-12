@@ -1,0 +1,9 @@
+$kind: http-request
+name: Invite Driver By ID
+url: "{{base_url}}/api/orders/{{order_id}}/invite-by-id/"
+method: POST
+auth:
+  type: bearer
+  credentials:
+    token: "{{access_token}}"
+order: 4502802422224329

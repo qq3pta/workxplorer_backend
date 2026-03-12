@@ -1,0 +1,9 @@
+$kind: http-request
+name: Create Offer Bid
+url: "{{base_url}}/api/offers/{{offer_id}}/bids/"
+method: POST
+auth:
+  type: bearer
+  credentials:
+    token: "{{access_token}}"
+order: 4503502627445496

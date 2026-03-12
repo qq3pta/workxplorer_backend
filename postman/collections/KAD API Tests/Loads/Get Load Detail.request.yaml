@@ -1,0 +1,9 @@
+$kind: http-request
+name: Get Load Detail
+url: "{{base_url}}/api/loads/{{cargo_uuid}}/"
+method: GET
+auth:
+  type: bearer
+  credentials:
+    token: "{{access_token}}"
+order: 4484779055125438

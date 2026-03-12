@@ -1,0 +1,9 @@
+$kind: http-request
+name: Delete Rating
+url: "{{base_url}}/api/ratings/ratings/{{rating_id}}/"
+method: DELETE
+auth:
+  type: bearer
+  credentials:
+    token: "{{access_token}}"
+order: 4447111263545314

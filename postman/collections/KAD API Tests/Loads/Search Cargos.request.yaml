@@ -1,0 +1,9 @@
+$kind: http-request
+name: Search Cargos
+url: "{{base_url}}/api/search/cargos/"
+method: GET
+auth:
+  type: bearer
+  credentials:
+    token: "{{access_token}}"
+order: 4503539578929465

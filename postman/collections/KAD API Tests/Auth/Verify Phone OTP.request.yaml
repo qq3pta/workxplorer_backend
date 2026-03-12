@@ -1,0 +1,9 @@
+$kind: http-request
+name: Verify Phone OTP
+url: "{{base_url}}/api/auth/verify-otp/phone/"
+method: POST
+auth:
+  type: bearer
+  credentials:
+    token: "{{access_token}}"
+order: 1755833405624

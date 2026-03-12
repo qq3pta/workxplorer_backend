@@ -1,0 +1,15 @@
+$kind: http-request
+name: Send Phone OTP
+url: "{{base_url}}/api/auth/send-otp/phone/"
+method: POST
+body:
+  type: json
+  content: |-
+    {
+        "phone": "+998939771412"
+    }
+auth:
+  type: bearer
+  credentials:
+    token: "{{access_token}}"
+order: 1588461567210

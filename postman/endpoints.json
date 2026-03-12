@@ -1,0 +1,1434 @@
+{
+  "info": {
+    "_postman_id": "2a9cd7ff-3aa7-4ced-8f69-80807ce1708e",
+    "name": "KAD API Full Endpoints",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Полный список HTTP эндпоинтов KAD API по модулям."
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{access_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "System",
+      "item": [
+        {
+          "name": "GET /health/",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "url": "{{base_url}}/health/"
+          }
+        },
+        {
+          "name": "GET /api/schema/",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "url": "{{base_url}}/api/schema/"
+          }
+        },
+        {
+          "name": "GET /api/docs/",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "url": "{{base_url}}/api/docs/"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "POST /api/auth/send-otp/phone/",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"+998901234567\"\n}"
+            },
+            "url": "{{base_url}}/api/auth/send-otp/phone/"
+          }
+        },
+        {
+          "name": "POST /api/auth/verify-otp/phone/",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"+998901234567\",\n  \"code\": \"123456\"\n}"
+            },
+            "url": "{{base_url}}/api/auth/verify-otp/phone/"
+          }
+        },
+        {
+          "name": "POST /api/auth/register/",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{user_email}}\",\n  \"password\": \"{{user_password}}\"\n}"
+            },
+            "url": "{{base_url}}/api/auth/register/"
+          }
+        },
+        {
+          "name": "POST /api/auth/resend-verify/",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{user_email}}\"\n}"
+            },
+            "url": "{{base_url}}/api/auth/resend-verify/"
+          }
+        },
+        {
+          "name": "POST /api/auth/verify-email/",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{user_email}}\",\n  \"code\": \"123456\"\n}"
+            },
+            "url": "{{base_url}}/api/auth/verify-email/"
+          }
+        },
+        {
+          "name": "POST /api/auth/login/",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{user_email}}\",\n  \"password\": \"{{user_password}}\",\n  \"remember_me\": false\n}"
+            },
+            "url": "{{base_url}}/api/auth/login/"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+                  "const d = pm.response.json();",
+                  "if (d.access) pm.environment.set('access_token', d.access);",
+                  "if (d.refresh) pm.environment.set('refresh_token', d.refresh);",
+                  "if (d.user && d.user.id !== undefined) pm.environment.set('user_id', String(d.user.id));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /api/auth/refresh/",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh\": \"{{refresh_token}}\"\n}"
+            },
+            "url": "{{base_url}}/api/auth/refresh/"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+                  "const d = pm.response.json();",
+                  "if (d.access) pm.environment.set('access_token', d.access);",
+                  "if (d.refresh) pm.environment.set('refresh_token', d.refresh);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /api/auth/logout/",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh\": \"{{refresh_token}}\"\n}"
+            },
+            "url": "{{base_url}}/api/auth/logout/"
+          }
+        },
+        {
+          "name": "GET /api/auth/me/",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/auth/me/"
+          }
+        },
+        {
+          "name": "PUT /api/auth/me/update/",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"full_name\": \"Updated Name\"\n}"
+            },
+            "url": "{{base_url}}/api/auth/me/update/"
+          }
+        },
+        {
+          "name": "PATCH /api/auth/me/update/",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"company_name\": \"Updated Company\"\n}"
+            },
+            "url": "{{base_url}}/api/auth/me/update/"
+          }
+        },
+        {
+          "name": "GET /api/auth/me/analytics/",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/auth/me/analytics/"
+          }
+        },
+        {
+          "name": "POST /api/auth/change-role/",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role\": \"CARRIER\"\n}"
+            },
+            "url": "{{base_url}}/api/auth/change-role/"
+          }
+        },
+        {
+          "name": "POST /api/auth/forgot-password/",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{user_email}}\"\n}"
+            },
+            "url": "{{base_url}}/api/auth/forgot-password/"
+          }
+        },
+        {
+          "name": "POST /api/auth/change-password/",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"old_password\": \"{{user_password}}\",\n  \"new_password\": \"new-secret\"\n}"
+            },
+            "url": "{{base_url}}/api/auth/change-password/"
+          }
+        },
+        {
+          "name": "POST /api/auth/fcm-token/",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fcm_token\": \"demo-fcm-token\"\n}"
+            },
+            "url": "{{base_url}}/api/auth/fcm-token/"
+          }
+        },
+        {
+          "name": "GET /api/auth/dashboard-stats/",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "url": "{{base_url}}/api/auth/dashboard-stats/"
+          }
+        },
+        {
+          "name": "POST /api/auth/me/email/send/",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": "{{base_url}}/api/auth/me/email/send/"
+          }
+        },
+        {
+          "name": "POST /api/auth/me/email/verify/",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"123456\"\n}"
+            },
+            "url": "{{base_url}}/api/auth/me/email/verify/"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Geo",
+      "item": [
+        {
+          "name": "GET /api/geo/suggest/countries/",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "url": "{{base_url}}/api/geo/suggest/countries/?q={{country_query}}&limit=10"
+          }
+        },
+        {
+          "name": "GET /api/geo/suggest/cities/",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "url": "{{base_url}}/api/geo/suggest/cities/?q={{city_query}}&limit=10"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Loads",
+      "item": [
+        {
+          "name": "GET /api/loads/public/",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/loads/public/"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+                  "const body = pm.response.json();",
+                  "const arr = Array.isArray(body) ? body : (Array.isArray(body.results) ? body.results : []);",
+                  "const first = arr[0];",
+                  "const val = first ? (first.uuid || first.id) : null;",
+                  "if (val !== null && val !== undefined && val !== '') pm.environment.set('cargo_uuid', String(val));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /api/loads/create/",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"origin_city\": \"Tashkent\",\n  \"destination_city\": \"Samarkand\",\n  \"weight_kg\": 1000\n}"
+            },
+            "url": "{{base_url}}/api/loads/create/"
+          }
+        },
+        {
+          "name": "GET /api/loads/mine/",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/loads/mine/"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+                  "const body = pm.response.json();",
+                  "const arr = Array.isArray(body) ? body : (Array.isArray(body.results) ? body.results : []);",
+                  "const first = arr[0];",
+                  "const val = first ? (first.uuid || first.id) : null;",
+                  "if (val !== null && val !== undefined && val !== '') pm.environment.set('cargo_uuid', String(val));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /api/loads/board/",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/loads/board/"
+          }
+        },
+        {
+          "name": "GET /api/loads/{uuid}/",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/loads/{{cargo_uuid}}/"
+          }
+        },
+        {
+          "name": "PUT /api/loads/{uuid}/",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"weight_kg\": 1200\n}"
+            },
+            "url": "{{base_url}}/api/loads/{{cargo_uuid}}/"
+          }
+        },
+        {
+          "name": "PATCH /api/loads/{uuid}/",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"weight_kg\": 1200\n}"
+            },
+            "url": "{{base_url}}/api/loads/{{cargo_uuid}}/"
+          }
+        },
+        {
+          "name": "POST /api/loads/{uuid}/refresh/",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/loads/{{cargo_uuid}}/refresh/"
+          }
+        },
+        {
+          "name": "POST /api/loads/{uuid}/cancel/",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/loads/{{cargo_uuid}}/cancel/"
+          }
+        },
+        {
+          "name": "POST /api/loads/{uuid}/visibility/",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"is_hidden\": true\n}"
+            },
+            "url": "{{base_url}}/api/loads/{{cargo_uuid}}/visibility/"
+          }
+        },
+        {
+          "name": "POST /api/loads/{uuid}/invite/generate/",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/loads/{{cargo_uuid}}/invite/generate/"
+          }
+        },
+        {
+          "name": "GET /api/loads/invite/{token}/",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/loads/invite/{{invite_token}}/"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Search",
+      "item": [
+        {
+          "name": "GET /api/search/cargos/",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/search/cargos/"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Offers",
+      "item": [
+        {
+          "name": "GET /api/offers/",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/offers/"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+                  "const body = pm.response.json();",
+                  "const arr = Array.isArray(body) ? body : (Array.isArray(body.results) ? body.results : []);",
+                  "const first = arr[0];",
+                  "const val = first ? (first.id) : null;",
+                  "if (val !== null && val !== undefined && val !== '') pm.environment.set('offer_id', String(val));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /api/offers/",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cargo\": \"{{cargo_uuid}}\",\n  \"price_value\": 1000000\n}"
+            },
+            "url": "{{base_url}}/api/offers/"
+          }
+        },
+        {
+          "name": "GET /api/offers/{id}/",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/offers/{{offer_id}}/"
+          }
+        },
+        {
+          "name": "PUT /api/offers/{id}/",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"price_value\": 1100000\n}"
+            },
+            "url": "{{base_url}}/api/offers/{{offer_id}}/"
+          }
+        },
+        {
+          "name": "PATCH /api/offers/{id}/",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"price_value\": 1100000\n}"
+            },
+            "url": "{{base_url}}/api/offers/{{offer_id}}/"
+          }
+        },
+        {
+          "name": "DELETE /api/offers/{id}/",
+          "request": {
+            "method": "DELETE",
+            "url": "{{base_url}}/api/offers/{{offer_id}}/"
+          }
+        },
+        {
+          "name": "GET /api/offers/my/",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/offers/my/"
+          }
+        },
+        {
+          "name": "POST /api/offers/{id}/accept/",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/offers/{{offer_id}}/accept/"
+          }
+        },
+        {
+          "name": "POST /api/offers/{id}/reject/",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/offers/{{offer_id}}/reject/"
+          }
+        },
+        {
+          "name": "POST /api/offers/{id}/bids/",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"price_value\": 1050000\n}"
+            },
+            "url": "{{base_url}}/api/offers/{{offer_id}}/bids/"
+          }
+        },
+        {
+          "name": "POST /api/offers/invite/",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cargo\": \"{{cargo_uuid}}\",\n  \"carrier_id\": {{carrier_id}}\n}"
+            },
+            "url": "{{base_url}}/api/offers/invite/"
+          }
+        },
+        {
+          "name": "GET /api/offers/{id}/logs/",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/offers/{{offer_id}}/logs/"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Orders",
+      "item": [
+        {
+          "name": "GET /api/orders/",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/orders/"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+                  "const body = pm.response.json();",
+                  "const arr = Array.isArray(body) ? body : (Array.isArray(body.results) ? body.results : []);",
+                  "const first = arr[0];",
+                  "const val = first ? (first.id) : null;",
+                  "if (val !== null && val !== undefined && val !== '') pm.environment.set('order_id', String(val));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /api/orders/",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"offer\": {{offer_id}}\n}"
+            },
+            "url": "{{base_url}}/api/orders/"
+          }
+        },
+        {
+          "name": "GET /api/orders/{id}/",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/orders/{{order_id}}/"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+                  "const b = pm.response.json();",
+                  "if (b.id !== undefined) pm.environment.set('order_id', String(b.id));",
+                  "if (b.share_token) pm.environment.set('share_token', String(b.share_token));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PUT /api/orders/{id}/",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"pending\"\n}"
+            },
+            "url": "{{base_url}}/api/orders/{{order_id}}/"
+          }
+        },
+        {
+          "name": "PATCH /api/orders/{id}/",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"pending\"\n}"
+            },
+            "url": "{{base_url}}/api/orders/{{order_id}}/"
+          }
+        },
+        {
+          "name": "DELETE /api/orders/{id}/",
+          "request": {
+            "method": "DELETE",
+            "url": "{{base_url}}/api/orders/{{order_id}}/"
+          }
+        },
+        {
+          "name": "GET /api/orders/{id}/driver-status/",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/orders/{{order_id}}/driver-status/"
+          }
+        },
+        {
+          "name": "PATCH /api/orders/{id}/driver-status/",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"driver_status\": \"en_route\"\n}"
+            },
+            "url": "{{base_url}}/api/orders/{{order_id}}/driver-status/"
+          }
+        },
+        {
+          "name": "GET /api/orders/{id}/documents/",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/orders/{{order_id}}/documents/"
+          }
+        },
+        {
+          "name": "POST /api/orders/{id}/documents/",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "category",
+                  "value": "OTHER",
+                  "type": "text"
+                },
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": ""
+                }
+              ]
+            },
+            "url": "{{base_url}}/api/orders/{{order_id}}/documents/"
+          }
+        },
+        {
+          "name": "POST /api/orders/{id}/confirm-terms/",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/orders/{{order_id}}/confirm-terms/"
+          }
+        },
+        {
+          "name": "GET /api/orders/{id}/status-history/",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/orders/{{order_id}}/status-history/"
+          }
+        },
+        {
+          "name": "POST /api/orders/{id}/invite-by-id/",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"driver_id\": {{carrier_id}},\n  \"driver_price\": 1000000,\n  \"driver_currency\": \"UZS\",\n  \"driver_payment_method\": \"cash\"\n}"
+            },
+            "url": "{{base_url}}/api/orders/{{order_id}}/invite-by-id/"
+          }
+        },
+        {
+          "name": "POST /api/orders/{id}/generate-invite/",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"driver_price\": 1000000,\n  \"driver_currency\": \"UZS\",\n  \"driver_payment_method\": \"cash\"\n}"
+            },
+            "url": "{{base_url}}/api/orders/{{order_id}}/generate-invite/"
+          }
+        },
+        {
+          "name": "POST /api/orders/{id}/cancel/",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/orders/{{order_id}}/cancel/"
+          }
+        },
+        {
+          "name": "POST /api/orders/{id}/privacy-toggle/",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"hide\": true\n}"
+            },
+            "url": "{{base_url}}/api/orders/{{order_id}}/privacy-toggle/"
+          }
+        },
+        {
+          "name": "POST /api/orders/accept-invite/",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{invite_token}}\"\n}"
+            },
+            "url": "{{base_url}}/api/orders/accept-invite/"
+          }
+        },
+        {
+          "name": "POST /api/orders/decline-invite/",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{invite_token}}\"\n}"
+            },
+            "url": "{{base_url}}/api/orders/decline-invite/"
+          }
+        },
+        {
+          "name": "GET /api/orders/invite-preview/",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "url": "{{base_url}}/api/orders/invite-preview/?token={{invite_token}}"
+          }
+        },
+        {
+          "name": "POST /api/orders/gps/",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lat\": 41.3111,\n  \"lng\": 69.2797,\n  \"speed\": 45\n}"
+            },
+            "url": "{{base_url}}/api/orders/gps/"
+          }
+        },
+        {
+          "name": "GET /api/orders/orders/shared/{share_token}/",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "url": "{{base_url}}/api/orders/orders/shared/{{share_token}}/"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Notifications",
+      "item": [
+        {
+          "name": "GET /api/notifications/",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/notifications/"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+                  "const body = pm.response.json();",
+                  "const arr = Array.isArray(body) ? body : (Array.isArray(body.results) ? body.results : []);",
+                  "const first = arr[0];",
+                  "const val = first ? (first.id) : null;",
+                  "if (val !== null && val !== undefined && val !== '') pm.environment.set('notification_id', String(val));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /api/notifications/{id}/mark-read/",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/notifications/{{notification_id}}/mark-read/"
+          }
+        },
+        {
+          "name": "POST /api/notifications/mark-all-read/",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/notifications/mark-all-read/"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Payments",
+      "item": [
+        {
+          "name": "GET /api/payments/{id}/",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/payments/{{payment_id}}/"
+          }
+        },
+        {
+          "name": "PATCH /api/payments/{id}/confirm/customer/",
+          "request": {
+            "method": "PATCH",
+            "url": "{{base_url}}/api/payments/{{payment_id}}/confirm/customer/"
+          }
+        },
+        {
+          "name": "PATCH /api/payments/{id}/confirm/carrier/",
+          "request": {
+            "method": "PATCH",
+            "url": "{{base_url}}/api/payments/{{payment_id}}/confirm/carrier/"
+          }
+        },
+        {
+          "name": "PATCH /api/payments/{id}/confirm/logistic/",
+          "request": {
+            "method": "PATCH",
+            "url": "{{base_url}}/api/payments/{{payment_id}}/confirm/logistic/"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Agreements",
+      "item": [
+        {
+          "name": "GET /api/agreements/agreements/",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/agreements/agreements/"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+                  "const body = pm.response.json();",
+                  "const arr = Array.isArray(body) ? body : (Array.isArray(body.results) ? body.results : []);",
+                  "const first = arr[0];",
+                  "const val = first ? (first.id) : null;",
+                  "if (val !== null && val !== undefined && val !== '') pm.environment.set('agreement_id', String(val));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /api/agreements/agreements/{id}/",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/agreements/agreements/{{agreement_id}}/"
+          }
+        },
+        {
+          "name": "POST /api/agreements/agreements/{id}/accept/",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/agreements/agreements/{{agreement_id}}/accept/"
+          }
+        },
+        {
+          "name": "POST /api/agreements/agreements/{id}/reject/",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/agreements/agreements/{{agreement_id}}/reject/"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Ratings",
+      "item": [
+        {
+          "name": "GET /api/ratings/ratings/",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/ratings/ratings/"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+                  "const body = pm.response.json();",
+                  "const arr = Array.isArray(body) ? body : (Array.isArray(body.results) ? body.results : []);",
+                  "const first = arr[0];",
+                  "const val = first ? (first.id) : null;",
+                  "if (val !== null && val !== undefined && val !== '') pm.environment.set('rating_id', String(val));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /api/ratings/ratings/",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"order\": {{order_id}},\n  \"rated_user\": {{user_id}},\n  \"score\": 5,\n  \"comment\": \"Great\"\n}"
+            },
+            "url": "{{base_url}}/api/ratings/ratings/"
+          }
+        },
+        {
+          "name": "GET /api/ratings/ratings/{id}/",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/ratings/ratings/{{rating_id}}/"
+          }
+        },
+        {
+          "name": "PUT /api/ratings/ratings/{id}/",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"score\": 4,\n  \"comment\": \"Updated\"\n}"
+            },
+            "url": "{{base_url}}/api/ratings/ratings/{{rating_id}}/"
+          }
+        },
+        {
+          "name": "PATCH /api/ratings/ratings/{id}/",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"score\": 4\n}"
+            },
+            "url": "{{base_url}}/api/ratings/ratings/{{rating_id}}/"
+          }
+        },
+        {
+          "name": "DELETE /api/ratings/ratings/{id}/",
+          "request": {
+            "method": "DELETE",
+            "url": "{{base_url}}/api/ratings/ratings/{{rating_id}}/"
+          }
+        },
+        {
+          "name": "GET /api/ratings/rating-users/",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/ratings/rating-users/"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+                  "const body = pm.response.json();",
+                  "const arr = Array.isArray(body) ? body : (Array.isArray(body.results) ? body.results : []);",
+                  "const first = arr[0];",
+                  "const val = first ? (first.id) : null;",
+                  "if (val !== null && val !== undefined && val !== '') pm.environment.set('rating_user_id', String(val));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /api/ratings/rating-users/{id}/",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/ratings/rating-users/{{rating_user_id}}/"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Support",
+      "item": [
+        {
+          "name": "POST /api/support/",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"Need help\"\n}"
+            },
+            "url": "{{base_url}}/api/support/"
+          }
+        },
+        {
+          "name": "POST /api/support/consultation/",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"consult@example.com\"\n}"
+            },
+            "url": "{{base_url}}/api/support/consultation/"
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000"
+    },
+    {
+      "key": "access_token",
+      "value": ""
+    },
+    {
+      "key": "refresh_token",
+      "value": ""
+    },
+    {
+      "key": "user_email",
+      "value": "user@example.com"
+    },
+    {
+      "key": "user_password",
+      "value": "secret"
+    },
+    {
+      "key": "user_id",
+      "value": "1"
+    },
+    {
+      "key": "carrier_id",
+      "value": "2"
+    },
+    {
+      "key": "cargo_uuid",
+      "value": "00000000-0000-0000-0000-000000000000"
+    },
+    {
+      "key": "offer_id",
+      "value": "1"
+    },
+    {
+      "key": "order_id",
+      "value": "1"
+    },
+    {
+      "key": "payment_id",
+      "value": "1"
+    },
+    {
+      "key": "notification_id",
+      "value": "1"
+    },
+    {
+      "key": "agreement_id",
+      "value": "1"
+    },
+    {
+      "key": "rating_id",
+      "value": "1"
+    },
+    {
+      "key": "rating_user_id",
+      "value": "1"
+    },
+    {
+      "key": "invite_token",
+      "value": "00000000-0000-0000-0000-000000000000"
+    },
+    {
+      "key": "share_token",
+      "value": "00000000-0000-0000-0000-000000000000"
+    },
+    {
+      "key": "country_query",
+      "value": "uz"
+    },
+    {
+      "key": "city_query",
+      "value": "tash"
+    }
+  ],
+  "description": "\n\nNotes:\n- Login/refresh auto-save JWT to environment.\n- Several list endpoints auto-save first ID/UUID to environment.\n- Requests with {id}/{uuid}/{token} require existing data in the target environment."
+}

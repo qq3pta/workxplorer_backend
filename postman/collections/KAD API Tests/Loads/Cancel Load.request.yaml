@@ -1,0 +1,9 @@
+$kind: http-request
+name: Cancel Load
+url: "{{base_url}}/api/loads/{{cargo_uuid}}/cancel/"
+method: POST
+auth:
+  type: bearer
+  credentials:
+    token: "{{access_token}}"
+order: 4499500618753672

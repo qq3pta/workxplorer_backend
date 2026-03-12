@@ -1,0 +1,9 @@
+$kind: http-request
+name: Confirm Payment Customer
+url: "{{base_url}}/api/payments/{{payment_id}}/confirm/customer/"
+method: PATCH
+auth:
+  type: bearer
+  credentials:
+    token: "{{access_token}}"
+order: 3085968420193464

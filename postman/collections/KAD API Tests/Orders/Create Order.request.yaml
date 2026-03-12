@@ -1,0 +1,9 @@
+$kind: http-request
+name: Create Order
+url: "{{base_url}}/api/orders/"
+method: POST
+auth:
+  type: bearer
+  credentials:
+    token: "{{access_token}}"
+order: 865643293521963

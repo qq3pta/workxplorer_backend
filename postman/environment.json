@@ -1,0 +1,109 @@
+{
+  "id": "349f2e1d-08f1-49ea-b725-90c90f54f2d0",
+  "name": "PROD",
+  "values": [
+    {
+      "key": "base_url",
+      "value": "https://kad-one.com",
+      "enabled": true
+    },
+    {
+      "key": "user_email",
+      "value": "user@example.com",
+      "enabled": true
+    },
+    {
+      "key": "user_password",
+      "value": "secret",
+      "enabled": true
+    },
+    {
+      "key": "access_token",
+      "value": "",
+      "enabled": true
+    },
+    {
+      "key": "refresh_token",
+      "value": "",
+      "enabled": true
+    },
+    {
+      "key": "user_id",
+      "value": "1",
+      "enabled": true
+    },
+    {
+      "key": "country_query",
+      "value": "1",
+      "enabled": true
+    },
+    {
+      "key": "city_query",
+      "value": "1",
+      "enabled": true
+    },
+    {
+      "key": "search_query",
+      "value": "",
+      "enabled": true
+    },
+    {
+      "key": "cargo_uuid",
+      "value": "1",
+      "enabled": true
+    },
+    {
+      "key": "offer_id",
+      "value": "1",
+      "enabled": true
+    },
+    {
+      "key": "order_id",
+      "value": "1",
+      "enabled": true
+    },
+    {
+      "key": "payment_id",
+      "value": "1",
+      "enabled": true
+    },
+    {
+      "key": "invite_token",
+      "value": "1",
+      "enabled": true
+    },
+    {
+      "key": "carrier_id",
+      "value": "1",
+      "enabled": true
+    },
+    {
+      "key": "notification_id",
+      "value": "1",
+      "enabled": true
+    },
+    {
+      "key": "agreement_id",
+      "value": "1",
+      "enabled": true
+    },
+    {
+      "key": "rating_id",
+      "value": "1",
+      "enabled": true
+    },
+    {
+      "key": "rating_user_id",
+      "value": "1",
+      "enabled": true
+    },
+    {
+      "key": "share_token",
+      "value": "1",
+      "enabled": true
+    }
+  ],
+  "_postman_variable_scope": "environment",
+  "_postman_exported_at": "2026-03-12T00:00:00.000Z",
+  "_postman_exported_using": "Codex"
+}

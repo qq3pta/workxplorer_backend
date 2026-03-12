@@ -1,0 +1,9 @@
+$kind: http-request
+name: Update Offer Put
+url: "{{base_url}}/api/offers/{{offer_id}}/"
+method: PUT
+auth:
+  type: bearer
+  credentials:
+    token: "{{access_token}}"
+order: 4357605824576582

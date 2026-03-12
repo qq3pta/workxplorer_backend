@@ -1,0 +1,9 @@
+$kind: http-request
+name: Get Order Detail
+url: "{{base_url}}/api/orders/{{order_id}}/"
+method: GET
+auth:
+  type: bearer
+  credentials:
+    token: "{{access_token}}"
+order: 2780343100271685

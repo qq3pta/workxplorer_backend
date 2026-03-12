@@ -1,0 +1,9 @@
+$kind: http-request
+name: Update Me Put
+url: "{{base_url}}/api/auth/me/update/"
+method: PUT
+auth:
+  type: bearer
+  credentials:
+    token: "{{access_token}}"
+order: 1301720310850454

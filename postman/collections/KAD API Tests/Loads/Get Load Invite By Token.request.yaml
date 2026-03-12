@@ -1,0 +1,9 @@
+$kind: http-request
+name: Get Load Invite By Token
+url: "{{base_url}}/api/loads/invite/{{invite_token}}/"
+method: GET
+auth:
+  type: bearer
+  credentials:
+    token: "{{access_token}}"
+order: 4503170941359016

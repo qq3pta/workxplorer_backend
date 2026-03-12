@@ -1,0 +1,9 @@
+$kind: http-request
+name: Save FCM Token
+url: "{{base_url}}/api/auth/fcm-token/"
+method: POST
+auth:
+  type: bearer
+  credentials:
+    token: "{{access_token}}"
+order: 4051570760866327

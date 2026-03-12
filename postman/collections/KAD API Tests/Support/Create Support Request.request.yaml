@@ -1,0 +1,9 @@
+$kind: http-request
+name: Create Support Request
+url: "{{base_url}}/api/support/"
+method: POST
+auth:
+  type: bearer
+  credentials:
+    token: "{{access_token}}"
+order: 1773313264244

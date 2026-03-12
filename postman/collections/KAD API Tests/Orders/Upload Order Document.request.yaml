@@ -1,0 +1,9 @@
+$kind: http-request
+name: Upload Order Document
+url: "{{base_url}}/api/orders/{{order_id}}/documents/"
+method: POST
+auth:
+  type: bearer
+  credentials:
+    token: "{{access_token}}"
+order: 4192976928727219

@@ -1,0 +1,9 @@
+$kind: http-request
+name: Update Me Patch
+url: "{{base_url}}/api/auth/me/update/"
+method: PATCH
+auth:
+  type: bearer
+  credentials:
+    token: "{{access_token}}"
+order: 3547173318798130

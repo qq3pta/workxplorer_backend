@@ -1,0 +1,47 @@
+name: PROD
+values:
+  - key: base_url
+    value: ''
+    enabled: true
+  - key: access_token
+    value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzczMzU5NDQ2LCJpYXQiOjE3NzMzMTYyNDYsImp0aSI6IjA5NzQ5NTA0OTVkZjRmZGRhOGNhYWQ2YWU5MjlkNzdiIiwidXNlcl9pZCI6IjIifQ.tPHKB34D121BX4AWE15s_oeMX-0e7kPCly7_DhqA9H8
+    enabled: true
+  - key: refresh_token
+    value: ''
+    enabled: true
+  - key: user_id
+    value: ''
+    enabled: true
+  - key: order_id
+    value: ''
+    enabled: true
+  - key: offer_id
+    value: ''
+    enabled: true
+  - key: cargo_uuid
+    value: ''
+    enabled: true
+  - key: payment_id
+    value: ''
+    enabled: true
+  - key: agreement_id
+    value: ''
+    enabled: true
+  - key: rating_id
+    value: ''
+    enabled: true
+  - key: rating_user_id
+    value: ''
+    enabled: true
+  - key: invite_token
+    value: ''
+    enabled: true
+  - key: share_token
+    value: ''
+    enabled: true
+  - key: city_query
+    value: ''
+    enabled: true
+  - key: country_query
+    value: ''
+    enabled: true

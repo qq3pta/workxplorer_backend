@@ -1,0 +1,9 @@
+$kind: http-request
+name: Update Rating Put
+url: "{{base_url}}/api/ratings/ratings/{{rating_id}}/"
+method: PUT
+auth:
+  type: bearer
+  credentials:
+    token: "{{access_token}}"
+order: 4275766571271014

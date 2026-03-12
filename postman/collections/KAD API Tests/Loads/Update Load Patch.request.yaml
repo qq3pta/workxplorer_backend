@@ -1,0 +1,9 @@
+$kind: http-request
+name: Update Load Patch
+url: "{{base_url}}/api/loads/{{cargo_uuid}}/"
+method: PATCH
+auth:
+  type: bearer
+  credentials:
+    token: "{{access_token}}"
+order: 4486957795784792

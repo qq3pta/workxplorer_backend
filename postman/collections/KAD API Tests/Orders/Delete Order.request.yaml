@@ -1,0 +1,9 @@
+$kind: http-request
+name: Delete Order
+url: "{{base_url}}/api/orders/{{order_id}}/"
+method: DELETE
+auth:
+  type: bearer
+  credentials:
+    token: "{{access_token}}"
+order: 3906757322112570

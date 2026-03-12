@@ -1,0 +1,9 @@
+$kind: http-request
+name: Update Load Put
+url: "{{base_url}}/api/loads/{{cargo_uuid}}/"
+method: PUT
+auth:
+  type: bearer
+  credentials:
+    token: "{{access_token}}"
+order: 4485780164507743

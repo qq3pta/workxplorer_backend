@@ -1,0 +1,11 @@
+$kind: http-request
+name: Preview Order Invite
+url: "{{base_url}}/api/orders/invite-preview/?token={{invite_token}}"
+method: GET
+queryParams:
+  token: "{{invite_token}}"
+auth:
+  type: bearer
+  credentials:
+    token: "{{access_token}}"
+order: 4503599180037640

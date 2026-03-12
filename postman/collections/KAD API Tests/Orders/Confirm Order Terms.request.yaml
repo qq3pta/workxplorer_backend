@@ -1,0 +1,9 @@
+$kind: http-request
+name: Confirm Order Terms
+url: "{{base_url}}/api/orders/{{order_id}}/confirm-terms/"
+method: POST
+auth:
+  type: bearer
+  credentials:
+    token: "{{access_token}}"
+order: 4445627671192732

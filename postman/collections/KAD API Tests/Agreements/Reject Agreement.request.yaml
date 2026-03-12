@@ -1,0 +1,9 @@
+$kind: http-request
+name: Reject Agreement
+url: "{{base_url}}/api/agreements/agreements/{{agreement_id}}/reject/"
+method: POST
+auth:
+  type: bearer
+  credentials:
+    token: "{{access_token}}"
+order: 4211140878155728

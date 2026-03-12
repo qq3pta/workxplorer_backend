@@ -1,0 +1,9 @@
+$kind: http-request
+name: Get Driver Status
+url: "{{base_url}}/api/orders/{{order_id}}/driver-status/"
+method: GET
+auth:
+  type: bearer
+  credentials:
+    token: "{{access_token}}"
+order: 3914099717052136

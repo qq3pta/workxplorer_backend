@@ -1,0 +1,12 @@
+$kind: http-request
+name: Suggest Cities
+url: "{{base_url}}/api/geo/suggest/cities/?q={{city_query}}&limit=10"
+method: GET
+queryParams:
+  q: "{{city_query}}"
+  limit: "10"
+auth:
+  type: bearer
+  credentials:
+    token: "{{access_token}}"
+order: 1825970444136568

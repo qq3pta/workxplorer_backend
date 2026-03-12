@@ -1,0 +1,9 @@
+$kind: http-request
+name: Mark All Notifications Read
+url: "{{base_url}}/api/notifications/mark-all-read/"
+method: POST
+auth:
+  type: bearer
+  credentials:
+    token: "{{access_token}}"
+order: 4199250436175024

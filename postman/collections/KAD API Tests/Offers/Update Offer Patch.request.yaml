@@ -1,0 +1,9 @@
+$kind: http-request
+name: Update Offer Patch
+url: "{{base_url}}/api/offers/{{offer_id}}/"
+method: PATCH
+auth:
+  type: bearer
+  credentials:
+    token: "{{access_token}}"
+order: 4491749299296536

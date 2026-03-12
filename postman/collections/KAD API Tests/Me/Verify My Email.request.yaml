@@ -1,0 +1,9 @@
+$kind: http-request
+name: Verify My Email
+url: "{{base_url}}/api/auth/me/email/verify/"
+method: POST
+auth:
+  type: bearer
+  credentials:
+    token: "{{access_token}}"
+order: 4458695978991367

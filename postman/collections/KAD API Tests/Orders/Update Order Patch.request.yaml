@@ -1,0 +1,9 @@
+$kind: http-request
+name: Update Order Patch
+url: "{{base_url}}/api/orders/{{order_id}}/"
+method: PATCH
+auth:
+  type: bearer
+  credentials:
+    token: "{{access_token}}"
+order: 3844424844088226

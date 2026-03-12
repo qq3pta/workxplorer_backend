@@ -1,0 +1,9 @@
+$kind: http-request
+name: Get Agreement Detail
+url: "{{base_url}}/api/agreements/agreements/{{agreement_id}}/"
+method: GET
+auth:
+  type: bearer
+  credentials:
+    token: "{{access_token}}"
+order: 1185604287483626

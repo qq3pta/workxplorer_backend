@@ -1,0 +1,9 @@
+$kind: http-request
+name: Change Load Visibility
+url: "{{base_url}}/api/loads/{{cargo_uuid}}/visibility/"
+method: POST
+auth:
+  type: bearer
+  credentials:
+    token: "{{access_token}}"
+order: 4502143742094275

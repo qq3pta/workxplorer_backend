@@ -1,0 +1,9 @@
+$kind: http-request
+name: Accept Agreement
+url: "{{base_url}}/api/agreements/agreements/{{agreement_id}}/accept/"
+method: POST
+auth:
+  type: bearer
+  credentials:
+    token: "{{access_token}}"
+order: 3990390157105067

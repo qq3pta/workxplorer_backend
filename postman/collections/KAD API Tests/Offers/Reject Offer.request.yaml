@@ -1,0 +1,9 @@
+$kind: http-request
+name: Reject Offer
+url: "{{base_url}}/api/offers/{{offer_id}}/reject/"
+method: POST
+auth:
+  type: bearer
+  credentials:
+    token: "{{access_token}}"
+order: 4503448335679056

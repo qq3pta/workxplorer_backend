@@ -1,0 +1,9 @@
+$kind: http-request
+name: Refresh Load
+url: "{{base_url}}/api/loads/{{cargo_uuid}}/refresh/"
+method: POST
+auth:
+  type: bearer
+  credentials:
+    token: "{{access_token}}"
+order: 4498980083105337

@@ -1,0 +1,9 @@
+$kind: http-request
+name: Create Offer
+url: "{{base_url}}/api/offers/"
+method: POST
+auth:
+  type: bearer
+  credentials:
+    token: "{{access_token}}"
+order: 1223594772781153

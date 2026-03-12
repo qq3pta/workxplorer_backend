@@ -1,0 +1,9 @@
+$kind: http-request
+name: Get My Loads
+url: "{{base_url}}/api/loads/mine/"
+method: GET
+auth:
+  type: bearer
+  credentials:
+    token: "{{access_token}}"
+order: 3341393457571379

@@ -1,0 +1,9 @@
+$kind: http-request
+name: Get Schema
+url: "{{base_url}}/api/schema/"
+method: GET
+auth:
+  type: bearer
+  credentials:
+    token: "{{access_token}}"
+order: 3786448693024018

@@ -1,0 +1,9 @@
+$kind: http-request
+name: Toggle Order Privacy
+url: "{{base_url}}/api/orders/{{order_id}}/privacy-toggle/"
+method: POST
+auth:
+  type: bearer
+  credentials:
+    token: "{{access_token}}"
+order: 4503578191468764

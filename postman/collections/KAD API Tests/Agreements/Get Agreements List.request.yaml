@@ -1,0 +1,9 @@
+$kind: http-request
+name: Get Agreements List
+url: "{{base_url}}/api/agreements/agreements/"
+method: GET
+auth:
+  type: bearer
+  credentials:
+    token: "{{access_token}}"
+order: 1773313160951

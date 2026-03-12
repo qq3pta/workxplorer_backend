@@ -375,7 +375,6 @@ class OfferViewSet(ModelViewSet):
             elif role == "LOGISTIC":
                 qs = qs.filter(
                     Q(logistic=u) | Q(intermediary=u),
-                    initiator=Offer.Initiator.LOGISTIC,
                 ).distinct()
 
             else:

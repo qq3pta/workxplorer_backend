@@ -402,7 +402,7 @@ class OfferViewSet(ModelViewSet):
 
             elif role == "LOGISTIC":
                 qs = qs.filter(
-                    Q(cargo__customer=u) | Q(cargo__created_by=u),
+                    logistic=u,
                     initiator=Offer.Initiator.CARRIER,
                     is_active=True,
                 )

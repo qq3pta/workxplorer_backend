@@ -262,13 +262,13 @@ class OrderListSerializer(serializers.ModelSerializer):
         return self._get_user_company(obj.customer)
 
     def get_customer_name(self, obj):
-        return self._get_user_full_name(obj.customer)
+        return self._get_user_company(obj.customer)
 
     def get_carrier_company(self, obj):
         return self._get_user_company(obj.carrier)
 
     def get_carrier_name(self, obj):
-        return self._get_user_full_name(obj.carrier)
+        return self._get_user_company(obj.carrier)
 
     def get_logistic_company(self, obj):
         return self._get_user_company(obj.logistic)

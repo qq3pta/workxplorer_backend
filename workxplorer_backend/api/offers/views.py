@@ -370,10 +370,7 @@ class OfferViewSet(ModelViewSet):
                 )
 
             elif role == "LOGISTIC":
-                qs = qs.filter(
-                    logistic=u,
-                    initiator=Offer.Initiator.LOGISTIC,
-                )
+                qs = qs.filter(logistic=u)
 
             elif role == "CUSTOMER":
                 qs = qs.filter(

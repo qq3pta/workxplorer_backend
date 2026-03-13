@@ -4,7 +4,7 @@ values:
     value: ''
     enabled: true
   - key: access_token
-    value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzczMzU5NDQ2LCJpYXQiOjE3NzMzMTYyNDYsImp0aSI6IjA5NzQ5NTA0OTVkZjRmZGRhOGNhYWQ2YWU5MjlkNzdiIiwidXNlcl9pZCI6IjIifQ.tPHKB34D121BX4AWE15s_oeMX-0e7kPCly7_DhqA9H8
+    value: ''
     enabled: true
   - key: refresh_token
     value: ''

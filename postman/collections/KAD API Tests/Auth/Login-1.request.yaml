@@ -12,7 +12,5 @@ body:
         "remember_me": true
     }
 auth:
-  type: bearer
-  credentials:
-    token: "{{access_token}}"
+  type: noauth
 order: 1773311536630

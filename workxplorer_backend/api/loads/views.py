@@ -317,13 +317,13 @@ class PublicLoadsView(generics.ListAPIView):
     pagination_class = OptimizedLoadsPagination
 
     def get_queryset(self):
-        # Оптимизация: используем композитный индекс и ограничиваем поля
         qs = (
             Cargo.objects.filter(
                 moderation_status=ModerationStatus.APPROVED,
                 is_hidden=False,
                 status=CargoStatus.POSTED,
             )
+            .exclude(offers__agreement__status="pending")
             .exclude(
                 origin_point__isnull=True,
                 dest_point__isnull=True,

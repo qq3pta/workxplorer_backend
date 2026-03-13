@@ -359,12 +359,21 @@ class OfferViewSet(ModelViewSet):
         qs = self.get_queryset()
 
         # =====================
-        # MY OFFERS
+        # MINE (я предложил)
         # =====================
 
         if scope == "mine":
             if role == "CARRIER":
-                qs = qs.filter(carrier=u)
+                qs = qs.filter(
+                    carrier=u,
+                    initiator=Offer.Initiator.CARRIER,
+                )
+
+            elif role == "LOGISTIC":
+                qs = qs.filter(
+                    logistic=u,
+                    initiator=Offer.Initiator.LOGISTIC,
+                )
 
             elif role == "CUSTOMER":
                 qs = qs.filter(
@@ -372,22 +381,15 @@ class OfferViewSet(ModelViewSet):
                     initiator=Offer.Initiator.CUSTOMER,
                 )
 
-            elif role == "LOGISTIC":
-                qs = qs.filter(
-                    Q(logistic=u) | Q(intermediary=u),
-                ).distinct()
-
             else:
                 qs = qs.none()
 
         # =====================
-        # INCOMING
+        # INCOMING (предложили мне)
         # =====================
 
         elif scope == "incoming":
             if role == "CARRIER":
-                # инвайты от заказчиков
-
                 qs = qs.filter(
                     carrier=u,
                     initiator=Offer.Initiator.CUSTOMER,
@@ -395,8 +397,6 @@ class OfferViewSet(ModelViewSet):
                 )
 
             elif role == "CUSTOMER":
-                # офферы перевозчиков
-
                 qs = qs.filter(
                     cargo__customer=u,
                     initiator=Offer.Initiator.CARRIER,
@@ -405,7 +405,7 @@ class OfferViewSet(ModelViewSet):
 
             elif role == "LOGISTIC":
                 qs = qs.filter(
-                    cargo__customer=u,
+                    Q(cargo__customer=u) | Q(cargo__created_by=u),
                     initiator=Offer.Initiator.CARRIER,
                     is_active=True,
                 )
@@ -413,10 +413,8 @@ class OfferViewSet(ModelViewSet):
             else:
                 qs = qs.none()
 
-            qs = qs.distinct()
-
         # =====================
-        # DEFAULT VIEW
+        # DEFAULT
         # =====================
 
         else:
@@ -427,10 +425,17 @@ class OfferViewSet(ModelViewSet):
                 qs = qs.filter(cargo__customer=u)
 
             elif role == "LOGISTIC":
-                qs = qs.filter(Q(cargo__customer=u) | Q(logistic=u) | Q(intermediary=u)).distinct()
+                qs = qs.filter(
+                    Q(logistic=u)
+                    | Q(intermediary=u)
+                    | Q(cargo__customer=u)
+                    | Q(cargo__created_by=u)
+                )
 
             else:
                 qs = qs.none()
+
+        qs = qs.distinct()
 
         qs = _apply_common_filters(qs, request.query_params)
 
@@ -452,10 +457,18 @@ class OfferViewSet(ModelViewSet):
                 id__in=[o.id for o in qs if o.get_response_status_for(u) == response_status]
             )
 
-        page = self.paginate_queryset(qs)
-        ser = OfferShortSerializer(page or qs, many=True, context={"request": request})
+        # =====================
+        # PAGINATION
+        # =====================
 
-        return self.get_paginated_response(ser.data) if page else Response(ser.data)
+        page = self.paginate_queryset(qs)
+
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(qs, many=True)
+        return Response(serializer.data)
 
     @extend_schema(
         tags=["offers"],

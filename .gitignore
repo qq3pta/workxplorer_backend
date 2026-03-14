@@ -15,3 +15,5 @@ media/
 .ruff_cache/
 static/
 .continue/
+.postman
+postman

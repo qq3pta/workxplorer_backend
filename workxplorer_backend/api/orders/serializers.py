@@ -262,13 +262,19 @@ class OrderListSerializer(serializers.ModelSerializer):
         return self._get_user_company(obj.customer)
 
     def get_customer_name(self, obj):
-        return self._get_user_full_name(obj.customer)
+        company = self._get_user_company(obj.customer)
+        if company:
+            return company
+        return getattr(obj.customer, "username", "") if obj.customer else ""
 
     def get_carrier_company(self, obj):
         return self._get_user_company(obj.carrier)
 
     def get_carrier_name(self, obj):
-        return self._get_user_full_name(obj.carrier)
+        company = self._get_user_company(obj.carrier)
+        if company:
+            return company
+        return getattr(obj.carrier, "username", "") if obj.carrier else ""
 
     def get_logistic_company(self, obj):
         return self._get_user_company(obj.logistic)

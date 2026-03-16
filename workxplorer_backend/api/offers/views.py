@@ -364,18 +364,16 @@ class OfferViewSet(ModelViewSet):
 
         if scope == "mine":
             if role == "CARRIER":
-                qs = qs.filter(
-                    carrier=u,
-                    initiator=Offer.Initiator.CARRIER,
+                qs = qs.filter(carrier=u).filter(
+                    Q(initiator=Offer.Initiator.CARRIER) | Q(is_counter=True)
                 )
 
             elif role == "LOGISTIC":
                 qs = qs.filter(logistic=u)
 
             elif role == "CUSTOMER":
-                qs = qs.filter(
-                    cargo__customer=u,
-                    initiator=Offer.Initiator.CUSTOMER,
+                qs = qs.filter(cargo__customer=u).filter(
+                    Q(initiator=Offer.Initiator.CUSTOMER) | Q(is_counter=True)
                 )
 
             else:

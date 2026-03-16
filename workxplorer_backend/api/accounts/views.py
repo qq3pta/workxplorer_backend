@@ -443,6 +443,28 @@ class AnalyticsView(APIView):
         distance_km = float(agg["total_km"] or 0)
         deals_count = qs.count()
 
+        current_agg = current_qs.aggregate(
+            total_price=Sum("price_total"), total_km=Sum("route_distance_km")
+        )
+        prev_agg = prev_qs.aggregate(
+            total_price=Sum("price_total"), total_km=Sum("route_distance_km")
+        )
+
+        current_total_price = float(current_agg["total_price"] or 0)
+        current_total_km = float(current_agg["total_km"] or 0)
+        prev_total_price = float(prev_agg["total_price"] or 0)
+        prev_total_km = float(prev_agg["total_km"] or 0)
+
+        avg_price_per_km = current_total_price / current_total_km if current_total_km > 0 else 0.0
+        prev_avg_price_per_km = prev_total_price / prev_total_km if prev_total_km > 0 else 0.0
+
+        if prev_avg_price_per_km > 0:
+            avg_price_per_km_change = (
+                avg_price_per_km - prev_avg_price_per_km
+            ) / prev_avg_price_per_km
+        else:
+            avg_price_per_km_change = 1.0 if avg_price_per_km > 0 else 0.0
+
         # ---------- BAR CHART ----------
         year = int(request.query_params.get("year", now.year))
         half = request.query_params.get("half", "1")
@@ -534,6 +556,11 @@ class AnalyticsView(APIView):
             "rating": float(rating or 0),
             "distance_km": distance_km,
             "deals_count": deals_count,
+            "average_price_per_km": round(avg_price_per_km, 2),
+            "average_price_per_km_change": round(avg_price_per_km_change, 3),
+            # Compatibility aliases for different frontend mappings.
+            "avg_price_per_km": round(avg_price_per_km, 2),
+            "price_per_km": round(avg_price_per_km, 2),
             "bar_chart": bar_chart,
             "pie_chart": pie_chart,
         }

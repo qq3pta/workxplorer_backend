@@ -507,8 +507,6 @@ class AnalyticsSerializer(serializers.Serializer):
     deals_count = serializers.IntegerField()
     average_price_per_km = serializers.FloatField()
     average_price_per_km_change = serializers.FloatField()
-    avg_price_per_km = serializers.FloatField()
-    price_per_km = serializers.FloatField()
 
     bar_chart = serializers.DictField()
     pie_chart = serializers.DictField()

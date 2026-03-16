@@ -108,7 +108,7 @@ class CargoSearchView(generics.ListAPIView):
         if price_max:
             qs = qs.filter(price_total_uzs__lte=price_max)
 
-        qs = qs.annotate(customer_rating=Avg("customer__ratings_received__score"))
+        qs = qs.annotate(customer_rating=Coalesce(Avg("customer__ratings_received__score"), 0.0))
 
         rating_min = qp.get("rating_min")
         rating_max = qp.get("rating_max")

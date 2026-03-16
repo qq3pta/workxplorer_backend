@@ -558,9 +558,6 @@ class AnalyticsView(APIView):
             "deals_count": deals_count,
             "average_price_per_km": round(avg_price_per_km, 2),
             "average_price_per_km_change": round(avg_price_per_km_change, 3),
-            # Compatibility aliases for different frontend mappings.
-            "avg_price_per_km": round(avg_price_per_km, 2),
-            "price_per_km": round(avg_price_per_km, 2),
             "bar_chart": bar_chart,
             "pie_chart": pie_chart,
         }

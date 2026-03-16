@@ -374,7 +374,7 @@ class PublicLoadsView(generics.ListAPIView):
                 path_km=F("path_m") / 1000.0,
                 route_km=Coalesce(F("route_km_cached"), F("path_km")),
                 price_uzs_anno=F("price_uzs"),
-                company_rating=Avg("customer__ratings_received__score"),
+                company_rating=Coalesce(Avg("customer__ratings_received__score"), 0.0),
             )
         )
 
@@ -588,7 +588,7 @@ class CargoInviteOpenView(generics.GenericAPIView):
                 path_km=F("path_m") / 1000.0,
                 route_km=Coalesce(F("route_km_cached"), F("path_km")),
                 price_uzs_anno=F("price_uzs"),
-                company_rating=Avg("customer__ratings_received__score"),
+                company_rating=Coalesce(Avg("customer__ratings_received__score"), 0.0),
             )
             .select_related("customer")
             .first()

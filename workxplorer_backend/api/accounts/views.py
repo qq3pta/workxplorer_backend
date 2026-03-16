@@ -408,8 +408,9 @@ class AnalyticsView(APIView):
     def get(self, request):
         user = request.user
         now = timezone.now()
+        completed_statuses = [Order.OrderStatus.DELIVERED, Order.OrderStatus.PAID]
 
-        qs = Order.objects.filter(status=Order.OrderStatus.DELIVERED)
+        qs = Order.objects.filter(status__in=completed_statuses)
 
         role = getattr(user, "role", None)
         if role == UserRole.LOGISTIC:
@@ -468,7 +469,7 @@ class AnalyticsView(APIView):
         base_qs = Order.objects.filter(
             created_at__year=year,
             created_at__month__in=months,
-            status=Order.OrderStatus.DELIVERED,
+            status__in=completed_statuses,
         )
 
         by_month = base_qs.annotate(m=TruncMonth("created_at")).values("m")
@@ -505,14 +506,14 @@ class AnalyticsView(APIView):
             ]
         ).count()
 
-        successful = orders_qs.filter(status=Order.OrderStatus.DELIVERED).count()
+        successful = orders_qs.filter(status__in=completed_statuses).count()
 
         cancelled = orders_qs.exclude(
             status__in=[
                 Order.OrderStatus.NO_DRIVER,
                 Order.OrderStatus.PENDING,
                 Order.OrderStatus.EN_ROUTE,
-                Order.OrderStatus.DELIVERED,
+                *completed_statuses,
             ]
         ).count()
 
@@ -521,7 +522,7 @@ class AnalyticsView(APIView):
             "in_process": in_process,
             "successful": successful,
             "cancelled": cancelled,
-            "total": successful + cancelled,
+            "total": in_search + in_process + successful + cancelled,
         }
 
         # ---------- RESPONSE ----------

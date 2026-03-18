@@ -76,6 +76,8 @@ def _apply_common_filters(qs, params):
         # ======================
     if p.get("transport_type"):
         qs = qs.filter(cargo__transport_type=p["transport_type"])
+    if p.get("cargo_category"):
+        qs = qs.filter(cargo__cargo_category=p["cargo_category"])
 
         # ======================
         # ЦЕНА + ВАЛЮТА (как в loads)
@@ -242,6 +244,7 @@ def _apply_common_filters(qs, params):
                 "accepted_by_carrier", required=False, type=str, description="true|false"
             ),
             OpenApiParameter("transport_type", required=False, type=str),
+            OpenApiParameter("cargo_category", required=False, type=str),
             OpenApiParameter("price_currency", required=False, type=str),
             OpenApiParameter("min_price", required=False, type=str),
             OpenApiParameter("max_price", required=False, type=str),

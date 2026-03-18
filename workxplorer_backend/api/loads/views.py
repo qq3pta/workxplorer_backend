@@ -122,7 +122,9 @@ class CargoDictionaryView(generics.GenericAPIView):
             transport_types.append(
                 {
                     "value": value,
-                    "label": dict(Cargo._meta.get_field("transport_type").choices).get(value, value),
+                    "label": dict(Cargo._meta.get_field("transport_type").choices).get(
+                        value, value
+                    ),
                     "cargo_categories": [
                         {
                             "value": category,

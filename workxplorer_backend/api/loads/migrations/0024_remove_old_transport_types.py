@@ -10,7 +10,6 @@ def normalize_removed_transport_types(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("loads", "0023_cargo_category_and_optional_fields"),
     ]

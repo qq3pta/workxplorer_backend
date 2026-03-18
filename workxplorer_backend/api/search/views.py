@@ -94,6 +94,10 @@ class CargoSearchView(generics.ListAPIView):
                 pass
             qs = qs.filter(transport_type=tt)
 
+        cargo_category = qp.get("cargo_category")
+        if cargo_category:
+            qs = qs.filter(cargo_category=cargo_category)
+
         price_currency = qp.get("price_currency")
         if price_currency:
             qs = qs.filter(price_currency=price_currency)

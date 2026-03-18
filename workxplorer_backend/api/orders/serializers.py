@@ -101,6 +101,11 @@ class OrderListSerializer(serializers.ModelSerializer):
 
     origin_city = serializers.CharField(source="cargo.origin_city", read_only=True)
     destination_city = serializers.CharField(source="cargo.destination_city", read_only=True)
+    cargo_category = serializers.CharField(source="cargo.cargo_category", read_only=True)
+    cargo_category_display = serializers.CharField(
+        source="cargo.get_cargo_category_display",
+        read_only=True,
+    )
 
     origin_address = serializers.CharField(source="cargo.origin_address", read_only=True)
     destination_address = serializers.CharField(source="cargo.destination_address", read_only=True)
@@ -176,6 +181,8 @@ class OrderListSerializer(serializers.ModelSerializer):
             "route_distance_km",
             "price_per_km",
             "origin_city",
+            "cargo_category",
+            "cargo_category_display",
             "origin_address",
             "origin_lat",
             "origin_lng",
@@ -485,6 +492,7 @@ class InvitePreviewSerializer(serializers.Serializer):
 
     weight_kg = serializers.IntegerField(allow_null=True)
     transport_type = serializers.CharField(allow_null=True)
+    cargo_category = serializers.CharField(allow_null=True)
 
     inviter = serializers.DictField(allow_null=True)
 

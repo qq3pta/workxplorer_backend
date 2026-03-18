@@ -16,7 +16,7 @@ from asgiref.sync import async_to_sync
 
 from api.notifications.services import notify
 
-from .choices import ContactPref, Currency, ModerationStatus, TransportType
+from .choices import CargoCategory, ContactPref, Currency, ModerationStatus, TransportType
 
 
 class CargoStatus(models.TextChoices):
@@ -53,7 +53,7 @@ class Cargo(models.Model):
     )
 
     # --- ДЕТАЛИ ГРУЗА ---
-    product = models.CharField("Название груза", max_length=120)
+    product = models.CharField("Название груза", max_length=120, blank=True, default="")
     description = models.TextField("Описание", blank=True)
     # --- ОТКУДА ---
     origin_country = models.CharField(max_length=100, default="", blank=True)
@@ -73,7 +73,12 @@ class Cargo(models.Model):
     delivery_date = models.DateField("Дата доставки", null=True, blank=True)
     # --- ТРАНСПОРТ ---
     transport_type = models.CharField(max_length=10, choices=TransportType.choices)
-    weight_kg = models.DecimalField(max_digits=12, decimal_places=2)
+    cargo_category = models.CharField(
+        max_length=24,
+        choices=CargoCategory.choices,
+        default=CargoCategory.OTHER,
+    )
+    weight_kg = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     axles = models.PositiveSmallIntegerField(
         null=True,
         blank=True,
@@ -171,10 +176,12 @@ class Cargo(models.Model):
             models.Index(fields=["axles"]),
             models.Index(fields=["volume_m3"]),
             models.Index(fields=["transport_type", "load_date"], name="cargo_transport_idx"),
+            models.Index(fields=["cargo_category"], name="cargo_category_idx"),
         ]
 
     def __str__(self):
-        return f"{self.product} ({self.origin_city} → {self.destination_city})"
+        cargo_name = self.product or self.get_cargo_category_display() or "Груз"
+        return f"{cargo_name} ({self.origin_city} → {self.destination_city})"
 
     def save(self, *args, **kwargs):
         is_new = self.pk is None

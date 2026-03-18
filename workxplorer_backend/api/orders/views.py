@@ -74,6 +74,8 @@ def _apply_orders_filters(qs, p):
     # ---------- TRANSPORT ----------
     if p.get("transport_type"):
         qs = qs.filter(cargo__transport_type=p["transport_type"])
+    if p.get("cargo_category"):
+        qs = qs.filter(cargo__cargo_category=p["cargo_category"])
 
     # ---------- ВЕС ----------
     try:
@@ -779,6 +781,7 @@ class OrdersViewSet(viewsets.ModelViewSet):
             "route_distance_km": getattr(order, "route_distance_km", None),
             "weight_kg": getattr(cargo, "weight_kg", None),
             "transport_type": getattr(cargo, "transport_type", None),
+            "cargo_category": getattr(cargo, "cargo_category", None),
             "inviter": inviter_data,
             "driver_price": order.driver_price,
             "driver_currency": getattr(order, "driver_currency", None),

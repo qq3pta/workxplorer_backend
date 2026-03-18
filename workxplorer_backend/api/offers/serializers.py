@@ -270,6 +270,11 @@ class OfferShortSerializer(serializers.ModelSerializer):
 
     cargo_uuid = serializers.UUIDField(source="cargo.uuid", read_only=True)
     cargo_title = serializers.CharField(source="cargo.product", read_only=True)
+    cargo_category = serializers.CharField(source="cargo.cargo_category", read_only=True)
+    cargo_category_display = serializers.CharField(
+        source="cargo.get_cargo_category_display",
+        read_only=True,
+    )
 
     customer_company = serializers.SerializerMethodField()
     customer_full_name = serializers.SerializerMethodField()
@@ -320,6 +325,8 @@ class OfferShortSerializer(serializers.ModelSerializer):
             "cargo",
             "cargo_uuid",
             "cargo_title",
+            "cargo_category",
+            "cargo_category_display",
             "customer_company",
             "customer_id",
             "customer_full_name",

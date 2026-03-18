@@ -30,7 +30,11 @@ from ..accounts.permissions import (
     IsCustomerOrCarrierOrLogistic,
     IsCustomerOrLogistic,
 )
-from .choices import ModerationStatus
+from .choices import (
+    CargoCategory,
+    ModerationStatus,
+    TRANSPORT_TO_CARGO_CATEGORIES,
+)
 from .models import Cargo, CargoStatus
 from .serializers import CargoListSerializer, CargoPublishSerializer
 from .pagination import OptimizedLoadsPagination, LoadsBoardPagination
@@ -44,6 +48,11 @@ def _swagger(view) -> bool:
 
 class RefreshResponseSerializer(drf_serializers.Serializer):
     detail = drf_serializers.CharField()
+
+
+class CargoDictionaryResponseSerializer(drf_serializers.Serializer):
+    default_cargo_category = drf_serializers.CharField()
+    transport_types = drf_serializers.ListField(child=drf_serializers.DictField())
 
 
 class ExtractMinutes(Func):
@@ -99,6 +108,39 @@ class PublishCargoView(generics.CreateAPIView):
                 "dest_lng": data.get("dest_lng"),
             },
             status=status.HTTP_201_CREATED,
+        )
+
+
+@extend_schema(tags=["loads"], responses=CargoDictionaryResponseSerializer)
+class CargoDictionaryView(generics.GenericAPIView):
+    permission_classes = [IsAuthenticatedAndVerified, IsCustomerOrCarrierOrLogistic]
+    serializer_class = CargoDictionaryResponseSerializer
+
+    def get(self, request):
+        transport_types = []
+        for value, categories in TRANSPORT_TO_CARGO_CATEGORIES.items():
+            transport_types.append(
+                {
+                    "value": value,
+                    "label": dict(Cargo._meta.get_field("transport_type").choices).get(
+                        value, value
+                    ),
+                    "cargo_categories": [
+                        {
+                            "value": category,
+                            "label": CargoCategory(category).label,
+                        }
+                        for category in categories
+                    ],
+                }
+            )
+
+        return Response(
+            {
+                "default_cargo_category": CargoCategory.OTHER,
+                "transport_types": transport_types,
+            },
+            status=status.HTTP_200_OK,
         )
 
 
@@ -210,6 +252,7 @@ class MyCargosView(generics.ListAPIView):
                 "load_date",
                 "delivery_date",
                 "transport_type",
+                "cargo_category",
                 "weight_kg",
                 "axles",
                 "volume_m3",
@@ -275,6 +318,7 @@ class MyCargosBoardView(generics.ListAPIView):
                 "load_date",
                 "delivery_date",
                 "transport_type",
+                "cargo_category",
                 "weight_kg",
                 "axles",
                 "volume_m3",
@@ -343,6 +387,7 @@ class PublicLoadsView(generics.ListAPIView):
                 "load_date",
                 "delivery_date",
                 "transport_type",
+                "cargo_category",
                 "weight_kg",
                 "axles",
                 "volume_m3",

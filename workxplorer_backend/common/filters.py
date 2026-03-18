@@ -62,6 +62,8 @@ def apply_loads_filters(qs, p, hide_expired=False):
     # ======================
     if p.get("transport_type"):
         qs = qs.filter(transport_type=p["transport_type"])
+    if p.get("cargo_category"):
+        qs = qs.filter(cargo_category=p["cargo_category"])
 
     # ======================
     # WEIGHT (t → kg)

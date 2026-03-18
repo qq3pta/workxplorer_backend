@@ -15,7 +15,12 @@ from api.geo.management.commands.import_cities import COUNTRY_NORMALIZATION
 from api.geo.models import GeoPlace
 from api.geo.services import GeocodingError, geocode_city
 
-from .choices import ModerationStatus, Currency
+from .choices import (
+    CargoCategory,
+    Currency,
+    ModerationStatus,
+    get_allowed_cargo_categories,
+)
 from .models import Cargo, PaymentMethod
 
 
@@ -46,6 +51,19 @@ class RouteKmMixin(serializers.Serializer):
 
 class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
     price_uzs = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
+
+    product = serializers.CharField(required=False, allow_blank=True, default="")
+    cargo_category = serializers.ChoiceField(
+        choices=CargoCategory.choices,
+        required=False,
+        default=CargoCategory.OTHER,
+    )
+    weight_kg = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        required=False,
+        allow_null=True,
+    )
 
     price_value = serializers.DecimalField(
         max_digits=14,
@@ -97,6 +115,7 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
             "load_date",
             "delivery_date",
             "transport_type",
+            "cargo_category",
             "weight_kg",
             "weight_tons",
             "axles",
@@ -240,6 +259,15 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
         wk = attrs.get("weight_kg")
         if wk is not None and Decimal(str(wk)) <= 0:
             raise serializers.ValidationError({"weight_kg": "Вес должен быть больше нуля."})
+
+        transport_type = self._val_or_instance(attrs, "transport_type")
+
+        cargo_category = self._val_or_instance(attrs, "cargo_category") or CargoCategory.OTHER
+        allowed_categories = get_allowed_cargo_categories(transport_type)
+        if cargo_category not in allowed_categories:
+            raise serializers.ValidationError(
+                {"cargo_category": "Категория груза не подходит выбранному типу транспорта."}
+            )
 
         price = attrs.get("price_value")
         if price is not None and price != "" and price < 0:
@@ -416,6 +444,7 @@ class CargoListSerializer(RouteKmMixin, serializers.ModelSerializer):
             "load_date",
             "delivery_date",
             "transport_type",
+            "cargo_category",
             "weight_kg",
             "weight_t",
             "axles",

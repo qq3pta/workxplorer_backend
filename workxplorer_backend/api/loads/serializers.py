@@ -264,11 +264,7 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
         transport_type = self._val_or_instance(attrs, "transport_type")
         if transport_type in PUBLISH_DISABLED_TRANSPORT_TYPES:
             raise serializers.ValidationError(
-                {
-                    "transport_type": (
-                        "Этот тип транспорта временно недоступен для публикации."
-                    )
-                }
+                {"transport_type": ("Этот тип транспорта временно недоступен для публикации.")}
             )
 
         cargo_category = self._val_or_instance(attrs, "cargo_category") or CargoCategory.OTHER

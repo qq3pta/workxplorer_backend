@@ -50,9 +50,20 @@ class RefreshResponseSerializer(drf_serializers.Serializer):
     detail = drf_serializers.CharField()
 
 
+class CargoCategoryItemSerializer(drf_serializers.Serializer):
+    value = drf_serializers.CharField()
+    label = drf_serializers.CharField()
+
+
+class TransportTypeItemSerializer(drf_serializers.Serializer):
+    value = drf_serializers.CharField()
+    label = drf_serializers.CharField()
+    cargo_categories = CargoCategoryItemSerializer(many=True)
+
+
 class CargoDictionaryResponseSerializer(drf_serializers.Serializer):
     default_cargo_category = drf_serializers.CharField()
-    transport_types = drf_serializers.ListField(child=drf_serializers.DictField())
+    transport_types = TransportTypeItemSerializer(many=True)
 
 
 class ExtractMinutes(Func):

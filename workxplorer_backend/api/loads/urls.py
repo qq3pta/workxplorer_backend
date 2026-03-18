@@ -3,6 +3,7 @@ from django.urls import path
 from .views import (
     CargoCancelView,
     CargoDetailView,
+    CargoDictionaryView,
     CargoInviteGenerateView,
     CargoInviteOpenView,
     CargoRefreshView,
@@ -16,6 +17,7 @@ from .views import (
 app_name = "loads"
 
 urlpatterns = [
+    path("dictionaries/cargo/", CargoDictionaryView.as_view(), name="cargo-dictionary"),
     path("public/", PublicLoadsView.as_view(), name="public"),
     path("create/", PublishCargoView.as_view(), name="create"),
     path("mine/", MyCargosView.as_view(), name="mine"),

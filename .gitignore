@@ -17,3 +17,5 @@ static/
 .continue/
 .postman
 postman
+.poetry-cache/
+.DS_Store

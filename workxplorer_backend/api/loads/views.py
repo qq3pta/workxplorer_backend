@@ -33,9 +33,7 @@ from ..accounts.permissions import (
 from .choices import (
     CargoCategory,
     ModerationStatus,
-    PUBLISH_DISABLED_TRANSPORT_TYPES,
     TRANSPORT_TO_CARGO_CATEGORIES,
-    TransportType,
 )
 from .models import Cargo, CargoStatus
 from .serializers import CargoListSerializer, CargoPublishSerializer
@@ -54,7 +52,6 @@ class RefreshResponseSerializer(drf_serializers.Serializer):
 
 class CargoDictionaryResponseSerializer(drf_serializers.Serializer):
     default_cargo_category = drf_serializers.CharField()
-    disabled_transport_types = drf_serializers.ListField(child=drf_serializers.CharField())
     transport_types = drf_serializers.ListField(child=drf_serializers.DictField())
 
 
@@ -121,13 +118,11 @@ class CargoDictionaryView(generics.GenericAPIView):
 
     def get(self, request):
         transport_types = []
-        for value, label in TransportType.choices:
-            categories = TRANSPORT_TO_CARGO_CATEGORIES.get(value, (CargoCategory.OTHER,))
+        for value, categories in TRANSPORT_TO_CARGO_CATEGORIES.items():
             transport_types.append(
                 {
                     "value": value,
-                    "label": label,
-                    "enabled_for_publish": value not in PUBLISH_DISABLED_TRANSPORT_TYPES,
+                    "label": dict(Cargo._meta.get_field("transport_type").choices).get(value, value),
                     "cargo_categories": [
                         {
                             "value": category,
@@ -141,7 +136,6 @@ class CargoDictionaryView(generics.GenericAPIView):
         return Response(
             {
                 "default_cargo_category": CargoCategory.OTHER,
-                "disabled_transport_types": sorted(PUBLISH_DISABLED_TRANSPORT_TYPES),
                 "transport_types": transport_types,
             },
             status=status.HTTP_200_OK,

@@ -7,9 +7,6 @@ class TransportType(TextChoices):
     REEFER = "REEFER", "Рефрижератор"
     DUMP = "DUMP", "Самосвал"
     CARTR = "CARTR", "Автотранспортер"
-    GRAIN = "GRAIN", "Зерновоз"
-    LOG = "LOG", "Лесовоз"
-    PICKUP = "PICKUP", "Пикап"
     MEGA = "MEGA", "Мега фура"
     OTHER = "OTHER", "Другое"
 
@@ -30,13 +27,6 @@ class CargoCategory(TextChoices):
     WASTE = "WASTE", "Отходы"
     CARS = "CARS", "Автомобили"
     OTHER = "OTHER", "Другое"
-
-
-PUBLISH_DISABLED_TRANSPORT_TYPES = {
-    TransportType.GRAIN,
-    TransportType.PICKUP,
-    TransportType.LOG,
-}
 
 
 TRANSPORT_TO_CARGO_CATEGORIES = {
@@ -93,10 +83,6 @@ TRANSPORT_TO_CARGO_CATEGORIES = {
         CargoCategory.OTHER,
     ),
     TransportType.OTHER: (CargoCategory.OTHER,),
-    # Исторические типы сохраняем для обратной совместимости.
-    TransportType.GRAIN: (CargoCategory.OTHER,),
-    TransportType.PICKUP: (CargoCategory.OTHER,),
-    TransportType.LOG: (CargoCategory.OTHER,),
 }
 
 

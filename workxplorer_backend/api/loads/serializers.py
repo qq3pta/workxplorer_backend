@@ -19,7 +19,6 @@ from .choices import (
     CargoCategory,
     Currency,
     ModerationStatus,
-    PUBLISH_DISABLED_TRANSPORT_TYPES,
     get_allowed_cargo_categories,
 )
 from .models import Cargo, PaymentMethod
@@ -262,10 +261,6 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
             raise serializers.ValidationError({"weight_kg": "Вес должен быть больше нуля."})
 
         transport_type = self._val_or_instance(attrs, "transport_type")
-        if transport_type in PUBLISH_DISABLED_TRANSPORT_TYPES:
-            raise serializers.ValidationError(
-                {"transport_type": ("Этот тип транспорта временно недоступен для публикации.")}
-            )
 
         cargo_category = self._val_or_instance(attrs, "cargo_category") or CargoCategory.OTHER
         allowed_categories = get_allowed_cargo_categories(transport_type)

@@ -139,13 +139,23 @@ def geocode_city(
         or city_raw
     )
 
-    cc = (rec.get("address", {}).get("country_code") or "")[:2].upper()
+    address = rec.get("address", {})
+
+    cc = (address.get("country_code") or "")[:2].upper()
+
+    region = (
+        address.get("state")
+        or address.get("region")
+        or address.get("county")
+        or address.get("state_district")
+    )
 
     GeoPlace.objects.create(
         name=cache_name,
         name_latin=unidecode(cache_name).lower(),
         country=country_raw or rec.get("address", {}).get("country", "") or cc,
         country_code=key_cc or cc,
+        region=region,
         point=point,
         raw=rec,
     )

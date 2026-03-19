@@ -109,9 +109,11 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
             "origin_country",
             "origin_city",
             "origin_address",
+            "origin_region",
             "destination_country",
             "destination_city",
             "destination_address",
+            "destination_region",
             "load_date",
             "delivery_date",
             "transport_type",
@@ -132,7 +134,7 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
             "dest_lat",
             "dest_lng",
         )
-        read_only_fields = ("route_km", "price_uzs", "uuid")
+        read_only_fields = ("route_km", "price_uzs", "uuid", "origin_region", "destination_region")
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -182,6 +184,30 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
 
         cache.set(cache_key, place if place else "NOT_FOUND", 86400)  # 24 часа
         return place
+
+    def _get_region_for_place(self, country: str, city: str) -> str | None:
+        if not city:
+            return None
+
+        gp = self._smart_find_place(country, city)
+
+        if gp and gp.region:
+            return gp.region
+
+        if gp and not gp.region:
+            try:
+                geocode_city(country=country, city=city)
+            except GeocodingError:
+                return None
+
+        if not gp:
+            try:
+                geocode_city(country=country, city=city)
+            except GeocodingError:
+                return None
+
+        gp = self._smart_find_place(country, city)
+        return gp.region if gp else None
 
     def _geocode_origin(self, attrs):
         country = (attrs.get("origin_country") or "").strip()
@@ -311,6 +337,11 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
         dest_lat = validated_data.pop("dest_lat", None)
         dest_lng = validated_data.pop("dest_lng", None)
 
+        origin_country = (validated_data.get("origin_country") or "").strip()
+        origin_city = (validated_data.get("origin_city") or "").strip()
+        destination_country = (validated_data.get("destination_country") or "").strip()
+        destination_city = (validated_data.get("destination_city") or "").strip()
+
         if origin_lat is not None and origin_lng is not None:
             origin_point = Point(float(origin_lng), float(origin_lat), srid=4326)
         else:
@@ -324,10 +355,15 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
         if not origin_point or not dest_point:
             raise serializers.ValidationError("Не удалось определить координаты маршрута.")
 
+        origin_region = self._get_region_for_place(origin_country, origin_city)
+        destination_region = self._get_region_for_place(destination_country, destination_city)
+
         cargo = Cargo.objects.create(
             customer=user,
             origin_point=origin_point,
             dest_point=dest_point,
+            origin_region=origin_region,
+            destination_region=destination_region,
             moderation_status=ModerationStatus.APPROVED,
             **validated_data,
         )
@@ -354,18 +390,30 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
 
         if origin_lat is not None and origin_lng is not None:
             instance.origin_point = Point(float(origin_lng), float(origin_lat), srid=4326)
-            need_origin = False
+            need_origin = True
         elif need_origin:
             instance.origin_point = self._geocode_origin(validated_data)
 
         if dest_lat is not None and dest_lng is not None:
             instance.dest_point = Point(float(dest_lng), float(dest_lat), srid=4326)
-            need_dest = False
+            need_dest = True
         elif need_dest:
             instance.dest_point = self._geocode_dest(validated_data)
 
         for field, value in validated_data.items():
             setattr(instance, field, value)
+
+        if need_origin:
+            instance.origin_region = self._get_region_for_place(
+                instance.origin_country,
+                instance.origin_city,
+            )
+
+        if need_dest:
+            instance.destination_region = self._get_region_for_place(
+                instance.destination_country,
+                instance.destination_city,
+            )
 
         instance.save()
 
@@ -438,9 +486,11 @@ class CargoListSerializer(RouteKmMixin, serializers.ModelSerializer):
             "origin_country",
             "origin_city",
             "origin_address",
+            "origin_region",
             "destination_country",
             "destination_city",
             "destination_address",
+            "destination_region",
             "load_date",
             "delivery_date",
             "transport_type",

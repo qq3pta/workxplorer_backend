@@ -1260,7 +1260,7 @@ class Command(BaseCommand):
             point = Point(lon, lat)
 
             existing = GeoPlace.objects.filter(
-                name_latin=name_latin,
+                name__iexact=city_clean,
                 country_code=cc.upper(),
             ).first()
 
@@ -1272,13 +1272,12 @@ class Command(BaseCommand):
 
             if not existing:
                 existing = GeoPlace.objects.filter(
-                    name__iexact=city_clean,
+                    name_latin=name_latin,
                     country_code=cc.upper(),
                 ).first()
 
             if existing:
                 existing.country = country_clean
-                existing.name = city_clean
                 existing.region = region_clean
                 existing.name_latin = name_latin
                 existing.point = point

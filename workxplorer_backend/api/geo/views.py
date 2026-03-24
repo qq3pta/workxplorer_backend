@@ -14,11 +14,90 @@ class SuggestThrottle(AnonRateThrottle):
     rate = "60/min"
 
 
-def is_latin(text: str) -> bool:
-    return unidecode(text).lower() == text.lower()
+COUNTRY_DISPLAY_MAP = {
+    "Казахстан": {"ru": "Казахстан", "en": "Kazakhstan", "uz": "Kazakhstan"},
+    "Kazakhstan": {"ru": "Казахстан", "en": "Kazakhstan", "uz": "Kazakhstan"},
+    "Узбекистан": {"ru": "Узбекистан", "en": "Uzbekistan", "uz": "Uzbekistan"},
+    "Uzbekistan": {"ru": "Узбекистан", "en": "Uzbekistan", "uz": "Uzbekistan"},
+    "Киргизия": {"ru": "Киргизия", "en": "Kyrgyzstan", "uz": "Kyrgyzstan"},
+    "Кыргызстан": {"ru": "Киргизия", "en": "Kyrgyzstan", "uz": "Kyrgyzstan"},
+    "Kyrgyzstan": {"ru": "Киргизия", "en": "Kyrgyzstan", "uz": "Kyrgyzstan"},
+    "Таджикистан": {"ru": "Таджикистан", "en": "Tajikistan", "uz": "Tajikistan"},
+    "Tajikistan": {"ru": "Таджикистан", "en": "Tajikistan", "uz": "Tajikistan"},
+    "Туркменистан": {"ru": "Туркменистан", "en": "Turkmenistan", "uz": "Turkmenistan"},
+    "Turkmenistan": {"ru": "Туркменистан", "en": "Turkmenistan", "uz": "Turkmenistan"},
+    "Китай": {"ru": "Китай", "en": "China", "uz": "China"},
+    "China": {"ru": "Китай", "en": "China", "uz": "China"},
+    "Монголия": {"ru": "Монголия", "en": "Mongolia", "uz": "Mongolia"},
+    "Mongolia": {"ru": "Монголия", "en": "Mongolia", "uz": "Mongolia"},
+    "Афганистан": {"ru": "Афганистан", "en": "Afghanistan", "uz": "Afghanistan"},
+    "Afghanistan": {"ru": "Афганистан", "en": "Afghanistan", "uz": "Afghanistan"},
+    "Пакистан": {"ru": "Пакистан", "en": "Pakistan", "uz": "Pakistan"},
+    "Pakistan": {"ru": "Пакистан", "en": "Pakistan", "uz": "Pakistan"},
+    "Индия": {"ru": "Индия", "en": "India", "uz": "India"},
+    "India": {"ru": "Индия", "en": "India", "uz": "India"},
+    "Азербайджан": {"ru": "Азербайджан", "en": "Azerbaijan", "uz": "Azerbaijan"},
+    "Azerbaijan": {"ru": "Азербайджан", "en": "Azerbaijan", "uz": "Azerbaijan"},
+    "Армения": {"ru": "Армения", "en": "Armenia", "uz": "Armenia"},
+    "Armenia": {"ru": "Армения", "en": "Armenia", "uz": "Armenia"},
+    "Грузия": {"ru": "Грузия", "en": "Georgia", "uz": "Georgia"},
+    "Georgia": {"ru": "Грузия", "en": "Georgia", "uz": "Georgia"},
+    "Турция": {"ru": "Турция", "en": "Turkey", "uz": "Turkey"},
+    "Turkey": {"ru": "Турция", "en": "Turkey", "uz": "Turkey"},
+    "Иран": {"ru": "Иран", "en": "Iran", "uz": "Iran"},
+    "Iran": {"ru": "Иран", "en": "Iran", "uz": "Iran"},
+    "Россия": {"ru": "Россия", "en": "Russia", "uz": "Russia"},
+    "Russia": {"ru": "Россия", "en": "Russia", "uz": "Russia"},
+    "Беларусь": {"ru": "Беларусь", "en": "Belarus", "uz": "Belarus"},
+    "Belarus": {"ru": "Беларусь", "en": "Belarus", "uz": "Belarus"},
+    "Украина": {"ru": "Украина", "en": "Ukraine", "uz": "Ukraine"},
+    "Ukraine": {"ru": "Украина", "en": "Ukraine", "uz": "Ukraine"},
+    "Польша": {"ru": "Польша", "en": "Poland", "uz": "Poland"},
+    "Poland": {"ru": "Польша", "en": "Poland", "uz": "Poland"},
+    "Венгрия": {"ru": "Венгрия", "en": "Hungary", "uz": "Hungary"},
+    "Hungary": {"ru": "Венгрия", "en": "Hungary", "uz": "Hungary"},
+    "Румыния": {"ru": "Румыния", "en": "Romania", "uz": "Romania"},
+    "Romania": {"ru": "Румыния", "en": "Romania", "uz": "Romania"},
+    "Болгария": {"ru": "Болгария", "en": "Bulgaria", "uz": "Bulgaria"},
+    "Bulgaria": {"ru": "Болгария", "en": "Bulgaria", "uz": "Bulgaria"},
+    "Сербия": {"ru": "Сербия", "en": "Serbia", "uz": "Serbia"},
+    "Serbia": {"ru": "Сербия", "en": "Serbia", "uz": "Serbia"},
+    "Греция": {"ru": "Греция", "en": "Greece", "uz": "Greece"},
+    "Greece": {"ru": "Греция", "en": "Greece", "uz": "Greece"},
+}
 
 
-# ---------------- Countries ----------------
+def get_lang(request) -> str:
+    lang = (request.query_params.get("lang") or "ru").strip().lower()
+    if lang not in {"ru", "en", "uz"}:
+        return "ru"
+    return lang
+
+
+def normalize_country(country: str, lang: str) -> str:
+    data = COUNTRY_DISPLAY_MAP.get((country or "").strip())
+    if not data:
+        return (country or "").strip()
+    return data.get(lang, data["ru"])
+
+
+def is_cyrillic(text: str) -> bool:
+    return any("А" <= ch <= "я" or ch in "ЁёЎўҚқҒғҲҳ" for ch in text)
+
+
+def pick_city_variant(variants, lang: str):
+    if lang == "ru":
+        chosen = next((v for v in variants if is_cyrillic(v.name)), None)
+    else:  # en и uz -> латиница
+        chosen = next((v for v in variants if not is_cyrillic(v.name)), None)
+
+    return chosen or variants[0]
+
+
+class SuggestThrottle(AnonRateThrottle):
+    rate = "60/min"
+
+
 class CountrySuggestView(APIView):
     permission_classes = [AllowAny]
     throttle_classes = [SuggestThrottle]
@@ -40,6 +119,13 @@ class CountrySuggestView(APIView):
                 type=OpenApiTypes.INT,
                 location="query",
             ),
+            OpenApiParameter(
+                "lang",
+                description="Язык интерфейса: ru/en/uz",
+                required=False,
+                type=OpenApiTypes.STR,
+                location="query",
+            ),
         ],
         responses={200: CountrySuggestResponseSerializer},
         tags=["Geo"],
@@ -47,16 +133,22 @@ class CountrySuggestView(APIView):
     def get(self, request):
         q = (request.query_params.get("q") or "").strip()
         limit = max(1, min(50, int(request.query_params.get("limit") or 50)))
+        lang = get_lang(request)
 
         qs = GeoPlace.objects.values("country", "country_code").distinct()
         if q:
             qs = qs.filter(country__icontains=q)
 
-        results = [{"name": x["country"], "code": x["country_code"]} for x in qs[:limit]]
+        results = [
+            {
+                "name": normalize_country(x["country"], lang),
+                "code": x["country_code"],
+            }
+            for x in qs[:limit]
+        ]
         return Response(CountrySuggestResponseSerializer({"results": results}).data)
 
 
-# ---------------- Cities ----------------
 class CitySuggestView(APIView):
     permission_classes = [AllowAny]
     throttle_classes = [SuggestThrottle]
@@ -78,6 +170,13 @@ class CitySuggestView(APIView):
                 type=OpenApiTypes.INT,
                 location="query",
             ),
+            OpenApiParameter(
+                "lang",
+                description="Язык интерфейса: ru/en/uz",
+                required=False,
+                type=OpenApiTypes.STR,
+                location="query",
+            ),
         ],
         responses={200: CitySuggestResponseSerializer},
         tags=["Geo"],
@@ -85,6 +184,7 @@ class CitySuggestView(APIView):
     def get(self, request):
         q = (request.query_params.get("q") or "").strip()
         limit = max(1, min(50, int(request.query_params.get("limit") or 50)))
+        lang = get_lang(request)
 
         if not q:
             return Response({"results": []})
@@ -96,6 +196,7 @@ class CitySuggestView(APIView):
             Q(name__icontains=q)
             | Q(name_latin__icontains=q_lower)
             | Q(name_latin__icontains=q_latin)
+            | Q(country__icontains=q)
         ).order_by("name")
 
         grouped = {}
@@ -118,15 +219,12 @@ class CitySuggestView(APIView):
 
         for key in ordered_keys:
             variants = grouped[key]
-
-            chosen = next((v for v in variants if is_latin(v.name)), None)
-            if not chosen:
-                chosen = variants[0]
+            chosen = pick_city_variant(variants, lang)
 
             results.append(
                 {
                     "name": chosen.name,
-                    "country": chosen.country,
+                    "country": normalize_country(chosen.country, lang),
                     "country_code": chosen.country_code,
                 }
             )

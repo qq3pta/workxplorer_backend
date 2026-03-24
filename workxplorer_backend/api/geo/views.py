@@ -94,10 +94,6 @@ def pick_city_variant(variants, lang: str):
     return chosen or variants[0]
 
 
-class SuggestThrottle(AnonRateThrottle):
-    rate = "60/min"
-
-
 class CountrySuggestView(APIView):
     permission_classes = [AllowAny]
     throttle_classes = [SuggestThrottle]
@@ -192,12 +188,17 @@ class CitySuggestView(APIView):
         q_lower = q.lower()
         q_latin = unidecode(q).lower()
 
-        qs = GeoPlace.objects.filter(
-            Q(name__icontains=q)
-            | Q(name_latin__icontains=q_lower)
-            | Q(name_latin__icontains=q_latin)
-            | Q(country__icontains=q)
-        ).order_by("name")
+        if lang == "ru":
+            qs = GeoPlace.objects.filter(Q(name__icontains=q) | Q(country__icontains=q)).order_by(
+                "name"
+            )
+        else:
+            qs = GeoPlace.objects.filter(
+                Q(name__icontains=q)
+                | Q(name_latin__icontains=q_lower)
+                | Q(name_latin__icontains=q_latin)
+                | Q(country__icontains=q)
+            ).order_by("name")
 
         grouped = {}
         ordered_keys = []

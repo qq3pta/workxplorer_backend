@@ -85,16 +85,38 @@ class CitySuggestView(APIView):
         if not q:
             return Response({"results": []})
 
+        q_lower = q.lower()
         q_latin = unidecode(q).lower()
 
         qs = GeoPlace.objects.filter(
             Q(name__icontains=q)
-            | Q(name_latin__icontains=q.lower())
+            | Q(name_latin__icontains=q_lower)
             | Q(name_latin__icontains=q_latin)
-        ).order_by("name")[:limit]
+        ).order_by("name")
 
-        results = [
-            {"name": x.name, "country": x.country, "country_code": x.country_code} for x in qs
-        ]
+        seen = set()
+        results = []
+
+        for x in qs:
+            point_key = None
+            if x.point:
+                point_key = (round(x.point.x, 6), round(x.point.y, 6))
+
+            dedupe_key = point_key or (x.country_code, x.name_latin.lower())
+
+            if dedupe_key in seen:
+                continue
+            seen.add(dedupe_key)
+
+            results.append(
+                {
+                    "name": x.name,
+                    "country": x.country,
+                    "country_code": x.country_code,
+                }
+            )
+
+            if len(results) >= limit:
+                break
 
         return Response(CitySuggestResponseSerializer({"results": results}).data)

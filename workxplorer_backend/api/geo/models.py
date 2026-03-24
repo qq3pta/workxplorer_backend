@@ -11,6 +11,7 @@ class GeoPlace(models.Model):
     name = models.CharField(max_length=128)
     name_latin = models.CharField(max_length=128, db_index=True)
     country = models.CharField(max_length=128)
+    region = models.CharField(max_length=128, null=True, blank=True, db_index=True)
     country_code = models.CharField(
         max_length=2,
         validators=[RegexValidator(r"^[A-Z]{2}$", message="ISO-2 код страны, например UZ, KZ")],

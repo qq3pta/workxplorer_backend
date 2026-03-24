@@ -1243,7 +1243,15 @@ class Command(BaseCommand):
         created = 0
         updated = 0
 
-        for country, cc, city, region, lat, lon in CITIES:
+        for item in CITIES:
+            if len(item) == 6:
+                country, cc, city, region, lat, lon = item
+            elif len(item) == 5:
+                country, cc, city, lat, lon = item
+                region = None
+            else:
+                raise ValueError(f"Неверный формат записи в CITIES: {item}")
+
             country_clean = COUNTRY_NORMALIZATION.get(country.strip(), country.strip())
             city_clean = city.strip()
             region_clean = region.strip() if region else None

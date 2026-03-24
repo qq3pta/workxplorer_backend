@@ -14,6 +14,10 @@ class SuggestThrottle(AnonRateThrottle):
     rate = "60/min"
 
 
+def is_latin(text: str) -> bool:
+    return unidecode(text).lower() == text.lower()
+
+
 # ---------------- Countries ----------------
 class CountrySuggestView(APIView):
     permission_classes = [AllowAny]
@@ -94,8 +98,8 @@ class CitySuggestView(APIView):
             | Q(name_latin__icontains=q_latin)
         ).order_by("name")
 
-        seen = set()
-        results = []
+        grouped = {}
+        ordered_keys = []
 
         for x in qs:
             point_key = None
@@ -104,15 +108,26 @@ class CitySuggestView(APIView):
 
             dedupe_key = point_key or (x.country_code, x.name_latin.lower())
 
-            if dedupe_key in seen:
-                continue
-            seen.add(dedupe_key)
+            if dedupe_key not in grouped:
+                grouped[dedupe_key] = []
+                ordered_keys.append(dedupe_key)
+
+            grouped[dedupe_key].append(x)
+
+        results = []
+
+        for key in ordered_keys:
+            variants = grouped[key]
+
+            chosen = next((v for v in variants if is_latin(v.name)), None)
+            if not chosen:
+                chosen = variants[0]
 
             results.append(
                 {
-                    "name": x.name,
-                    "country": x.country,
-                    "country_code": x.country_code,
+                    "name": chosen.name,
+                    "country": chosen.country,
+                    "country_code": chosen.country_code,
                 }
             )
 

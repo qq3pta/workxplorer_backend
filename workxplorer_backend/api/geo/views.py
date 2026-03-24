@@ -1,8 +1,10 @@
+from django.db.models import Q
 from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle
 from rest_framework.views import APIView
+from unidecode import unidecode
 
 from .models import GeoPlace
 from .serializers import CitySuggestResponseSerializer, CountrySuggestResponseSerializer
@@ -83,7 +85,13 @@ class CitySuggestView(APIView):
         if not q:
             return Response({"results": []})
 
-        qs = GeoPlace.objects.filter(name__icontains=q)[:limit]
+        q_latin = unidecode(q).lower()
+
+        qs = GeoPlace.objects.filter(
+            Q(name__icontains=q)
+            | Q(name_latin__icontains=q.lower())
+            | Q(name_latin__icontains=q_latin)
+        ).order_by("name")[:limit]
 
         results = [
             {"name": x.name, "country": x.country, "country_code": x.country_code} for x in qs

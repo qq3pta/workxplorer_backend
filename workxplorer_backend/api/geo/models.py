@@ -17,6 +17,8 @@ class GeoPlace(models.Model):
         validators=[RegexValidator(r"^[A-Z]{2}$", message="ISO-2 код страны, например UZ, KZ")],
     )
 
+    region = models.CharField(max_length=128, null=True, blank=True, db_index=True)
+
     point = gis_models.PointField(null=True, blank=True)
     provider = models.CharField(max_length=32, default="nominatim")
     raw = models.JSONField(null=True, blank=True)
@@ -35,6 +37,7 @@ class GeoPlace(models.Model):
             models.Index(fields=["country_code", "name"], name="geoplace_cc_name_idx"),
             models.Index(Lower("name"), name="geoplace_lower_name_idx"),
             models.Index(Lower("name_latin"), name="geoplace_lower_latin_idx"),
+            models.Index(fields=["region"], name="geoplace_region_idx"),
         ]
         ordering = ["country_code", "name"]
 
@@ -49,7 +52,11 @@ class GeoPlace(models.Model):
 
         if self.country:
             self.country = self.country.strip()
+
         if self.country_code:
             self.country_code = self.country_code.strip().upper()[:2]
+
+        if self.region:
+            self.region = self.region.strip()
 
         super().save(*args, **kwargs)

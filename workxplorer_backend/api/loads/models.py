@@ -60,11 +60,13 @@ class Cargo(models.Model):
     origin_address = models.CharField(max_length=255)
     origin_city = models.CharField(max_length=100)
     origin_city_latin = models.CharField(max_length=120, blank=True, null=True)
+    origin_region = models.CharField(max_length=128, blank=True, null=True, db_index=True)
     # --- КУДА ---
     destination_country = models.CharField(max_length=100, default="", blank=True)
     destination_address = models.CharField(max_length=255)
     destination_city = models.CharField(max_length=100)
     destination_city_latin = models.CharField(max_length=120, blank=True, null=True)
+    destination_region = models.CharField(max_length=128, blank=True, null=True, db_index=True)
     # --- КООРДИНАТЫ ---
     origin_point = gis_models.PointField(geography=True, srid=4326, null=True, blank=True)
     dest_point = gis_models.PointField(geography=True, srid=4326, null=True, blank=True)

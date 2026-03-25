@@ -517,6 +517,7 @@ class OrdersViewSet(viewsets.ModelViewSet):
                 "driver_price": float(order.driver_price),
                 "driver_currency": order.driver_currency,
                 "driver_payment_method": order.driver_payment_method,
+                "transport_type": getattr(order.cargo, "transport_type", None),
             },
             status=200,
         )
@@ -589,6 +590,7 @@ class OrdersViewSet(viewsets.ModelViewSet):
                 "driver_price": float(order.driver_price) if order.driver_price else None,
                 "driver_currency": order.driver_currency,
                 "driver_payment_method": order.driver_payment_method,
+                "transport_type": getattr(order.cargo, "transport_type", None),
             },
             status=200,
         )
@@ -660,6 +662,7 @@ class OrdersViewSet(viewsets.ModelViewSet):
                 "order_id": order.id,
                 "next_action": "accept_offer",
                 "driver_price": float(order.driver_price) if order.driver_price else None,
+                "transport_type": getattr(order.cargo, "transport_type", None),
             },
             status=200,
         )

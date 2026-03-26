@@ -75,7 +75,7 @@ class GroupCreateSerializer(serializers.Serializer):
 
 
 class InviteLinkRequestSerializer(serializers.Serializer):
-    expires_in_hours = serializers.IntegerField(min_value=1, max_value=24 * 30, default=24 * 7)
+    expires_in_hours = serializers.IntegerField(min_value=48, max_value=48, default=48)
 
 
 class InviteLinkResponseSerializer(serializers.Serializer):
@@ -186,11 +186,12 @@ class ChatListItemSerializer(serializers.ModelSerializer):
         msg = obj.messages.select_related("sender").order_by("-created_at").first()
         if not msg:
             return None
+        msg_data = MessageSerializer(instance=msg).data
         return {
             "id": msg.id,
             "text": msg.text,
             "sender_id": msg.sender_id,
-            "sender_name": MessageSerializer(instance=msg).data["sender_name"],
+            "sender_name": msg_data["sender_name"],
             "created_at": msg.created_at,
         }
 

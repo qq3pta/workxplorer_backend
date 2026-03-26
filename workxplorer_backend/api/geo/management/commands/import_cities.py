@@ -1264,18 +1264,6 @@ class Command(BaseCommand):
                 country_code=cc.upper(),
             ).first()
 
-            if not existing:
-                existing = GeoPlace.objects.filter(
-                    point=point,
-                    country_code=cc.upper(),
-                ).first()
-
-            if not existing:
-                existing = GeoPlace.objects.filter(
-                    name_latin=name_latin,
-                    country_code=cc.upper(),
-                ).first()
-
             if existing:
                 existing.country = country_clean
                 existing.region = region_clean

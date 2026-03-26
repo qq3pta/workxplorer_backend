@@ -2,7 +2,7 @@ from django.contrib.auth import get_user_model
 from django.db import transaction
 from rest_framework import serializers
 
-from .models import Chat, ChatParticipant
+from .models import Chat, ChatParticipant, Message
 
 User = get_user_model()
 
@@ -97,3 +97,100 @@ class UserSearchResultSerializer(serializers.ModelSerializer):
     def get_full_name(self, obj):
         full_name = (obj.get_full_name() or "").strip()
         return full_name or obj.username or obj.email or f"User#{obj.id}"
+
+
+class MessageSerializer(serializers.ModelSerializer):
+    sender_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Message
+        fields = ["id", "chat", "sender", "sender_name", "text", "is_edited", "created_at", "updated_at"]
+        read_only_fields = ["id", "chat", "sender", "sender_name", "is_edited", "created_at", "updated_at"]
+
+    def get_sender_name(self, obj):
+        if not obj.sender:
+            return "Удаленный пользователь"
+        full_name = (obj.sender.get_full_name() or "").strip()
+        return full_name or obj.sender.username or obj.sender.email or f"User#{obj.sender_id}"
+
+
+class MessageCreateSerializer(serializers.Serializer):
+    text = serializers.CharField(max_length=5000)
+
+    def validate_text(self, value):
+        text = value.strip()
+        if not text:
+            raise serializers.ValidationError("Сообщение не может быть пустым.")
+        return text
+
+    def create(self, validated_data):
+        chat = self.context["chat"]
+        user = self.context["request"].user
+        return Message.objects.create(chat=chat, sender=user, text=validated_data["text"])
+
+
+class ChatListItemSerializer(serializers.ModelSerializer):
+    participants_count = serializers.IntegerField(source="participants.count", read_only=True)
+    unread_count = serializers.SerializerMethodField()
+    last_message = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Chat
+        fields = [
+            "id",
+            "chat_type",
+            "title",
+            "participants_count",
+            "unread_count",
+            "last_message",
+            "last_message_at",
+            "created_at",
+        ]
+
+    def _get_participant(self, obj):
+        request = self.context.get("request")
+        if not request or not request.user or not request.user.is_authenticated:
+            return None
+        return getattr(obj, "_viewer_participant", None)
+
+    def get_unread_count(self, obj):
+        participant = self._get_participant(obj)
+        if not participant:
+            return 0
+        if participant.last_read_at:
+            return obj.messages.filter(created_at__gt=participant.last_read_at).exclude(
+                sender_id=participant.user_id
+            ).count()
+        return obj.messages.exclude(sender_id=participant.user_id).count()
+
+    def get_last_message(self, obj):
+        msg = obj.messages.select_related("sender").order_by("-created_at").first()
+        if not msg:
+            return None
+        return {
+            "id": msg.id,
+            "text": msg.text,
+            "sender_id": msg.sender_id,
+            "sender_name": MessageSerializer(instance=msg).data["sender_name"],
+            "created_at": msg.created_at,
+        }
+
+
+class MarkReadSerializer(serializers.Serializer):
+    up_to_message_id = serializers.IntegerField(required=False, min_value=1)
+
+    def save(self, **kwargs):
+        chat = self.context["chat"]
+        participant = self.context["participant"]
+        message_id = self.validated_data.get("up_to_message_id")
+
+        qs = Message.objects.filter(chat=chat)
+        if message_id:
+            qs = qs.filter(id__lte=message_id)
+        latest = qs.order_by("-created_at").first()
+
+        if latest:
+            participant.last_read_at = latest.created_at
+            participant.save(update_fields=["last_read_at"])
+
+        return {"last_read_at": participant.last_read_at}

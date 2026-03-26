@@ -87,11 +87,9 @@ def is_cyrillic(text: str) -> bool:
 
 def pick_city_variant(variants, lang: str):
     if lang == "ru":
-        chosen = next((v for v in variants if is_cyrillic(v.name)), None)
-    else:  # en и uz -> латиница
-        chosen = next((v for v in variants if not is_cyrillic(v.name)), None)
-
-    return chosen or variants[0]
+        return next((v for v in variants if is_cyrillic(v.name)), None)
+    else:
+        return next((v for v in variants if not is_cyrillic(v.name)), None)
 
 
 class CountrySuggestView(APIView):
@@ -194,10 +192,7 @@ class CitySuggestView(APIView):
             )
         else:
             qs = GeoPlace.objects.filter(
-                Q(name__icontains=q)
-                | Q(name_latin__icontains=q_lower)
-                | Q(name_latin__icontains=q_latin)
-                | Q(country__icontains=q)
+                Q(name_latin__icontains=q_lower) | Q(name_latin__icontains=q_latin)
             ).order_by("name")
 
         grouped = {}
@@ -221,6 +216,9 @@ class CitySuggestView(APIView):
         for key in ordered_keys:
             variants = grouped[key]
             chosen = pick_city_variant(variants, lang)
+
+            if not chosen:
+                continue
 
             results.append(
                 {

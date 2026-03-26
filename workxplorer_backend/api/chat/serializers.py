@@ -38,8 +38,8 @@ class GroupCreateSerializer(serializers.Serializer):
     def validate_participant_ids(self, value):
         # De-duplicate while preserving order.
         deduped = list(dict.fromkeys(value))
-        if len(deduped) > 100:
-            raise serializers.ValidationError("Нельзя добавить больше 100 участников за раз.")
+        if len(deduped) > 10:
+            raise serializers.ValidationError("Нельзя добавить больше 10 участников за раз.")
         return deduped
 
     @transaction.atomic

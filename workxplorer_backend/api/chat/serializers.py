@@ -104,8 +104,25 @@ class MessageSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Message
-        fields = ["id", "chat", "sender", "sender_name", "text", "is_edited", "created_at", "updated_at"]
-        read_only_fields = ["id", "chat", "sender", "sender_name", "is_edited", "created_at", "updated_at"]
+        fields = [
+            "id",
+            "chat",
+            "sender",
+            "sender_name",
+            "text",
+            "is_edited",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "chat",
+            "sender",
+            "sender_name",
+            "is_edited",
+            "created_at",
+            "updated_at",
+        ]
 
     def get_sender_name(self, obj):
         if not obj.sender:
@@ -158,9 +175,11 @@ class ChatListItemSerializer(serializers.ModelSerializer):
         if not participant:
             return 0
         if participant.last_read_at:
-            return obj.messages.filter(created_at__gt=participant.last_read_at).exclude(
-                sender_id=participant.user_id
-            ).count()
+            return (
+                obj.messages.filter(created_at__gt=participant.last_read_at)
+                .exclude(sender_id=participant.user_id)
+                .count()
+            )
         return obj.messages.exclude(sender_id=participant.user_id).count()
 
     def get_last_message(self, obj):

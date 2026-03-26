@@ -33,7 +33,7 @@ services:
     working_dir: /app/workxplorer_backend
     volumes:
       - ./workxplorer_backend:/app/workxplorer_backend
-      - /srv/workxplorer/volumes/media:/app/workxplorer_backend/media
+      - ./srv/workxplorer/volumes/media:/app/workxplorer_backend/media
     depends_on:
       db:
         condition: service_healthy

@@ -42,7 +42,7 @@ class Chat(models.Model):
             return self.title
         return f"Chat#{self.pk} ({self.chat_type})"
 
-    def refresh_invite(self, *, expires_in_hours: int = 168) -> None:
+    def refresh_invite(self, *, expires_in_hours: int = 48) -> None:
         self.allow_join_by_link = True
         self.invite_token = uuid.uuid4()
         self.invite_expires_at = timezone.now() + timedelta(hours=expires_in_hours)

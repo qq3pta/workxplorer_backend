@@ -10,9 +10,29 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.AlterField(
-            model_name="driverlocation",
-            name="point",
-            field=django.contrib.gis.db.models.fields.PointField(blank=True, null=True, srid=4326),
+        migrations.SeparateDatabaseAndState(
+            database_operations=[
+                migrations.RunSQL(
+                    sql="""
+                        ALTER TABLE orders_driverlocation
+                        ALTER COLUMN point TYPE geometry(Point,4326)
+                        USING point::geometry(Point,4326);
+                    """,
+                    reverse_sql="""
+                        ALTER TABLE orders_driverlocation
+                        ALTER COLUMN point TYPE geography(Point,4326)
+                        USING point::geography;
+                    """,
+                ),
+            ],
+            state_operations=[
+                migrations.AlterField(
+                    model_name="driverlocation",
+                    name="point",
+                    field=django.contrib.gis.db.models.fields.PointField(
+                        blank=True, null=True, srid=4326
+                    ),
+                ),
+            ],
         ),
     ]

@@ -1,3 +1,6 @@
+import uuid
+from datetime import timedelta
+
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
@@ -14,6 +17,9 @@ class Chat(models.Model):
         default=ChatType.PERSONAL,
     )
     title = models.CharField(max_length=255, blank=True)
+    allow_join_by_link = models.BooleanField(default=False)
+    invite_token = models.UUIDField(unique=True, null=True, blank=True, db_index=True)
+    invite_expires_at = models.DateTimeField(null=True, blank=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -36,6 +42,18 @@ class Chat(models.Model):
             return self.title
         return f"Chat#{self.pk} ({self.chat_type})"
 
+    def refresh_invite(self, *, expires_in_hours: int = 168) -> None:
+        self.allow_join_by_link = True
+        self.invite_token = uuid.uuid4()
+        self.invite_expires_at = timezone.now() + timedelta(hours=expires_in_hours)
+        self.save(update_fields=["allow_join_by_link", "invite_token", "invite_expires_at"])
+
+    @property
+    def is_invite_active(self) -> bool:
+        if not self.allow_join_by_link or not self.invite_token or not self.invite_expires_at:
+            return False
+        return self.invite_expires_at > timezone.now()
+
 
 class ChatParticipant(models.Model):
     chat = models.ForeignKey(Chat, on_delete=models.CASCADE, related_name="participants")
@@ -48,6 +66,7 @@ class ChatParticipant(models.Model):
     last_read_at = models.DateTimeField(null=True, blank=True)
     is_muted = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
+    is_admin = models.BooleanField(default=False)
 
     class Meta:
         ordering = ["-joined_at"]

@@ -25,6 +25,10 @@ from .services import user_can_manage_group, user_is_chat_participant
 User = get_user_model()
 
 
+class ErrorDetailSerializer(serializers.Serializer):
+    detail = serializers.CharField()
+
+
 class ChatPingView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -50,7 +54,7 @@ class GroupCreateView(APIView):
     @extend_schema(
         tags=["chat"],
         request=GroupCreateSerializer,
-        responses={201: ChatSummarySerializer, 400: OpenApiTypes.OBJECT},
+        responses={201: ChatSummarySerializer, 400: ErrorDetailSerializer},
     )
     def post(self, request):
         serializer = GroupCreateSerializer(data=request.data, context={"request": request})
@@ -67,8 +71,8 @@ class GroupInviteLinkView(APIView):
         request=InviteLinkRequestSerializer,
         responses={
             200: InviteLinkResponseSerializer,
-            403: OpenApiTypes.OBJECT,
-            404: OpenApiTypes.OBJECT,
+            403: ErrorDetailSerializer,
+            404: ErrorDetailSerializer,
         },
     )
     def post(self, request, chat_id: int):
@@ -101,7 +105,11 @@ class JoinByLinkView(APIView):
     @extend_schema(
         tags=["chat"],
         request=JoinByLinkSerializer,
-        responses={200: ChatSummarySerializer, 400: OpenApiTypes.OBJECT, 404: OpenApiTypes.OBJECT},
+        responses={
+            200: ChatSummarySerializer,
+            400: ErrorDetailSerializer,
+            404: ErrorDetailSerializer,
+        },
     )
     def post(self, request):
         serializer = JoinByLinkSerializer(data=request.data)
@@ -199,7 +207,7 @@ class ChatMessagesView(APIView):
 
     @extend_schema(
         tags=["chat"],
-        responses={200: MessageSerializer(many=True), 404: OpenApiTypes.OBJECT},
+        responses={200: MessageSerializer(many=True), 404: ErrorDetailSerializer},
     )
     def get(self, request, chat_id: int):
         chat, participant = self.get_chat_and_participant(request.user, chat_id)
@@ -214,7 +222,7 @@ class ChatMessagesView(APIView):
     @extend_schema(
         tags=["chat"],
         request=MessageCreateSerializer,
-        responses={201: MessageSerializer, 404: OpenApiTypes.OBJECT},
+        responses={201: MessageSerializer, 404: ErrorDetailSerializer},
     )
     def post(self, request, chat_id: int):
         chat, _participant = self.get_chat_and_participant(request.user, chat_id)
@@ -240,7 +248,7 @@ class ChatReadView(APIView):
                 "ChatReadResponse",
                 {"last_read_at": serializers.DateTimeField(allow_null=True)},
             ),
-            404: OpenApiTypes.OBJECT,
+            404: ErrorDetailSerializer,
         },
     )
     def post(self, request, chat_id: int):

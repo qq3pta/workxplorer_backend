@@ -8,6 +8,24 @@ from .models import Chat, ChatParticipant, Message
 User = get_user_model()
 
 
+def build_user_display_name(user) -> str:
+    full_name = (user.get_full_name() or "").strip()
+    return full_name or user.username or user.email or f"User#{user.id}"
+
+
+def build_user_avatar_url(user, request=None):
+    photo = getattr(user, "photo", None)
+    if not photo:
+        return None
+    try:
+        url = photo.url
+    except Exception:
+        return None
+    if request:
+        return request.build_absolute_uri(url)
+    return url
+
+
 class ChatSummarySerializer(serializers.ModelSerializer):
     participants_count = serializers.IntegerField(source="participants.count", read_only=True)
 
@@ -88,7 +106,7 @@ class JoinByLinkSerializer(serializers.Serializer):
     token = serializers.UUIDField()
 
 
-class UserSearchResultSerializer(serializers.ModelSerializer):
+class UserPreviewSerializer(serializers.ModelSerializer):
     avatar = serializers.SerializerMethodField()
     full_name = serializers.SerializerMethodField()
     user_role = serializers.CharField(source="role", read_only=True)
@@ -99,53 +117,19 @@ class UserSearchResultSerializer(serializers.ModelSerializer):
 
     @extend_schema_field(serializers.CharField())
     def get_full_name(self, obj):
-        full_name = (obj.get_full_name() or "").strip()
-        return full_name or obj.username or obj.email or f"User#{obj.id}"
+        return build_user_display_name(obj)
 
     @extend_schema_field(serializers.URLField(allow_null=True))
     def get_avatar(self, obj):
-        photo = getattr(obj, "photo", None)
-        if not photo:
-            return None
-        try:
-            url = photo.url
-        except Exception:
-            return None
-
-        request = self.context.get("request")
-        if request:
-            return request.build_absolute_uri(url)
-        return url
+        return build_user_avatar_url(obj, request=self.context.get("request"))
 
 
-class ChatMemberSerializer(serializers.ModelSerializer):
-    full_name = serializers.SerializerMethodField()
-    avatar = serializers.SerializerMethodField()
-    user_role = serializers.CharField(source="role", read_only=True)
+class UserSearchResultSerializer(UserPreviewSerializer):
+    pass
 
-    class Meta:
-        model = User
-        fields = ["id", "full_name", "avatar", "user_role"]
 
-    @extend_schema_field(serializers.CharField())
-    def get_full_name(self, obj):
-        full_name = (obj.get_full_name() or "").strip()
-        return full_name or obj.username or obj.email or f"User#{obj.id}"
-
-    @extend_schema_field(serializers.URLField(allow_null=True))
-    def get_avatar(self, obj):
-        photo = getattr(obj, "photo", None)
-        if not photo:
-            return None
-        try:
-            url = photo.url
-        except Exception:
-            return None
-
-        request = self.context.get("request")
-        if request:
-            return request.build_absolute_uri(url)
-        return url
+class ChatMemberSerializer(UserPreviewSerializer):
+    pass
 
 
 class ChatInfoSerializer(serializers.ModelSerializer):
@@ -203,27 +187,14 @@ class ChatInfoSerializer(serializers.ModelSerializer):
         other_user = self._other_user(obj)
         if not other_user:
             return obj.title or "Личный чат"
-        full_name = (other_user.get_full_name() or "").strip()
-        return full_name or other_user.username or other_user.email or f"User#{other_user.id}"
+        return build_user_display_name(other_user)
 
     @extend_schema_field(serializers.URLField(allow_null=True))
     def get_chat_avatar(self, obj):
         other_user = self._other_user(obj)
         if not other_user:
             return None
-
-        photo = getattr(other_user, "photo", None)
-        if not photo:
-            return None
-        try:
-            url = photo.url
-        except Exception:
-            return None
-
-        request = self.context.get("request")
-        if request:
-            return request.build_absolute_uri(url)
-        return url
+        return build_user_avatar_url(other_user, request=self.context.get("request"))
 
 
 class MessageSerializer(serializers.ModelSerializer):
@@ -255,8 +226,7 @@ class MessageSerializer(serializers.ModelSerializer):
     def get_sender_name(self, obj):
         if not obj.sender:
             return "Удаленный пользователь"
-        full_name = (obj.sender.get_full_name() or "").strip()
-        return full_name or obj.sender.username or obj.sender.email or f"User#{obj.sender_id}"
+        return build_user_display_name(obj.sender)
 
 
 class MessageCreateSerializer(serializers.Serializer):
@@ -359,27 +329,14 @@ class ChatListItemSerializer(serializers.ModelSerializer):
         other_user = self._get_other_user(obj)
         if not other_user:
             return obj.title or "Личный чат"
-        full_name = (other_user.get_full_name() or "").strip()
-        return full_name or other_user.username or other_user.email or f"User#{other_user.id}"
+        return build_user_display_name(other_user)
 
     @extend_schema_field(serializers.URLField(allow_null=True))
     def get_chat_avatar(self, obj):
         other_user = self._get_other_user(obj)
         if not other_user:
             return None
-
-        photo = getattr(other_user, "photo", None)
-        if not photo:
-            return None
-        try:
-            url = photo.url
-        except Exception:
-            return None
-
-        request = self.context.get("request")
-        if request:
-            return request.build_absolute_uri(url)
-        return url
+        return build_user_avatar_url(other_user, request=self.context.get("request"))
 
 
 class OpenPersonalChatSerializer(serializers.Serializer):

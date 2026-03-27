@@ -90,7 +90,9 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     @sync_to_async
     def _user_chat_ids(self) -> list[int]:
         return list(
-            ChatParticipant.objects.filter(user=self.user, is_active=True).values_list("chat_id", flat=True)
+            ChatParticipant.objects.filter(user=self.user, is_active=True).values_list(
+                "chat_id", flat=True
+            )
         )
 
     @sync_to_async

@@ -6,6 +6,7 @@ from .views import (
     ChatMessagesView,
     ChatPingView,
     ChatReadView,
+    GroupAddParticipantsView,
     GroupCreateView,
     GroupInviteLinkView,
     JoinByLinkView,
@@ -16,6 +17,11 @@ from .views import (
 urlpatterns = [
     path("ping/", ChatPingView.as_view(), name="chat-ping"),
     path("groups/", GroupCreateView.as_view(), name="chat-group-create"),
+    path(
+        "groups/<str:chat_id>/participants/",
+        GroupAddParticipantsView.as_view(),
+        name="chat-group-add-participants",
+    ),
     path(
         "groups/<str:chat_id>/invite-link/", GroupInviteLinkView.as_view(), name="chat-invite-link"
     ),

@@ -13,6 +13,7 @@ from .serializers import (
     ChatInfoSerializer,
     ChatListItemSerializer,
     ChatSummarySerializer,
+    GroupAddParticipantsSerializer,
     GroupCreateSerializer,
     InviteLinkRequestSerializer,
     InviteLinkResponseSerializer,
@@ -132,6 +133,74 @@ class GroupInviteLinkView(APIView):
             {"token": chat.invite_token, "expires_at": chat.invite_expires_at}
         )
         return Response(response.data)
+
+
+class GroupAddParticipantsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        tags=["chat"],
+        request=GroupAddParticipantsSerializer,
+        responses={
+            200: inline_serializer(
+                "GroupAddParticipantsResponse",
+                {
+                    "chat": ChatSummarySerializer(),
+                    "added_user_ids": serializers.ListField(child=serializers.IntegerField()),
+                },
+            ),
+            400: ErrorDetailSerializer,
+            403: ErrorDetailSerializer,
+            404: ErrorDetailSerializer,
+        },
+    )
+    def post(self, request, chat_id: str):
+        chat, _participant = resolve_chat_and_participant(request.user, chat_id)
+        if not chat:
+            return Response({"detail": "Чат не найден."}, status=404)
+        if chat.chat_type != Chat.ChatType.GROUP:
+            return Response(
+                {"detail": "Добавлять участников можно только в групповой чат."}, status=400
+            )
+        if not user_can_manage_group(chat, request.user.id):
+            return Response(
+                {"detail": "Недостаточно прав для управления групповым чатом."}, status=403
+            )
+
+        serializer = GroupAddParticipantsSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        participant_ids = serializer.validated_data["participant_ids"]
+
+        users_qs = User.objects.filter(id__in=participant_ids).exclude(id=request.user.id)
+        found_ids = set(users_qs.values_list("id", flat=True))
+        missing = [uid for uid in participant_ids if uid not in found_ids]
+        if missing:
+            return Response({"detail": f"Пользователи не найдены: {missing}"}, status=400)
+
+        added_user_ids: list[int] = []
+        for user in users_qs:
+            participant, created = ChatParticipant.objects.get_or_create(
+                chat=chat,
+                user=user,
+                defaults={"is_active": True, "is_admin": False},
+            )
+            if created:
+                added_user_ids.append(user.id)
+                continue
+
+            if not participant.is_active:
+                participant.is_active = True
+                participant.save(update_fields=["is_active"])
+                added_user_ids.append(user.id)
+
+        if added_user_ids:
+            emit_added_to_group(chat, added_user_ids, added_by_id=request.user.id)
+            for user_id in added_user_ids:
+                emit_member_joined(chat, user_id)
+
+        return Response(
+            {"chat": ChatSummarySerializer(chat).data, "added_user_ids": added_user_ids}
+        )
 
 
 class JoinByLinkView(APIView):

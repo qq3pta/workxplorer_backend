@@ -93,6 +93,20 @@ class GroupCreateSerializer(serializers.Serializer):
         return chat
 
 
+class GroupAddParticipantsSerializer(serializers.Serializer):
+    participant_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        required=True,
+        allow_empty=False,
+    )
+
+    def validate_participant_ids(self, value):
+        deduped = list(dict.fromkeys(value))
+        if len(deduped) > 10:
+            raise serializers.ValidationError("Нельзя добавить больше 10 участников за раз.")
+        return deduped
+
+
 class InviteLinkRequestSerializer(serializers.Serializer):
     expires_in_hours = serializers.IntegerField(min_value=48, max_value=48, default=48)
 

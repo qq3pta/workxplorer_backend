@@ -53,7 +53,9 @@ class GroupInviteLinkView(APIView):
             return Response({"detail": "Нет доступа к чату."}, status=403)
 
         if not user_can_manage_group(chat, request.user.id):
-            return Response({"detail": "Недостаточно прав для управления групповым чатом."}, status=403)
+            return Response(
+                {"detail": "Недостаточно прав для управления групповым чатом."}, status=403
+            )
 
         serializer = InviteLinkRequestSerializer(data=request.data or {})
         serializer.is_valid(raise_exception=True)

@@ -235,6 +235,9 @@ class RegisterSerializer(serializers.ModelSerializer):
         Profile.objects.update_or_create(
             user=user, defaults={k: v for k, v in profile_data.items() if v is not None}
         )
+        from api.chat.services import sync_user_default_role_chat
+
+        sync_user_default_role_chat(user)
         return user
 
 
@@ -495,6 +498,9 @@ class RoleChangeSerializer(serializers.Serializer):
             return {"detail": "Роль уже установлена"}
         user.role = new_role
         user.save(update_fields=["role"])
+        from api.chat.services import sync_user_default_role_chat
+
+        sync_user_default_role_chat(user, emit_events=True)
         return {"detail": "Роль обновлена", "role": user.role}
 
 

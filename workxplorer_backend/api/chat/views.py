@@ -10,6 +10,7 @@ from rest_framework.views import APIView
 
 from .models import Chat, ChatParticipant
 from .serializers import (
+    ChatInfoSerializer,
     ChatListItemSerializer,
     ChatSummarySerializer,
     GroupCreateSerializer,
@@ -19,6 +20,7 @@ from .serializers import (
     MarkReadSerializer,
     MessageCreateSerializer,
     MessageSerializer,
+    OpenPersonalChatSerializer,
     UserSearchResultSerializer,
 )
 from .services import (
@@ -26,6 +28,7 @@ from .services import (
     emit_member_joined,
     emit_message_read,
     emit_new_message,
+    sync_user_default_role_chat,
     user_can_manage_group,
     user_is_chat_participant,
 )
@@ -207,7 +210,67 @@ class UserSearchView(APIView):
             .exclude(id=request.user.id)
             .order_by("first_name", "last_name", "username")[:20]
         )
-        return Response(UserSearchResultSerializer(qs, many=True).data)
+        return Response(
+            UserSearchResultSerializer(qs, many=True, context={"request": request}).data
+        )
+
+
+class OpenPersonalChatView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        tags=["chat"],
+        request=OpenPersonalChatSerializer,
+        responses={
+            200: inline_serializer(
+                "OpenPersonalChatResponse",
+                {
+                    "created": serializers.BooleanField(),
+                    "chat": ChatInfoSerializer(),
+                },
+            ),
+            400: ErrorDetailSerializer,
+            404: ErrorDetailSerializer,
+        },
+    )
+    def post(self, request):
+        serializer = OpenPersonalChatSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        target_user_id = serializer.validated_data["user_id"]
+        target_user = User.objects.filter(id=target_user_id).first()
+        if not target_user:
+            return Response({"detail": "Пользователь не найден."}, status=404)
+        if target_user.id == request.user.id:
+            return Response({"detail": "Нельзя создать личный чат с самим собой."}, status=400)
+
+        existing_chat = (
+            Chat.objects.filter(chat_type=Chat.ChatType.PERSONAL)
+            .filter(participants__user=request.user, participants__is_active=True)
+            .filter(participants__user=target_user, participants__is_active=True)
+            .distinct()
+            .order_by("-last_message_at")
+            .first()
+        )
+        if existing_chat:
+            payload = ChatInfoSerializer(existing_chat, context={"request": request}).data
+            return Response({"created": False, "chat": payload})
+
+        chat = Chat.objects.create(
+            chat_type=Chat.ChatType.PERSONAL,
+            title="",
+            created_by=request.user,
+        )
+        ChatParticipant.objects.bulk_create(
+            [
+                ChatParticipant(chat=chat, user=request.user, is_admin=False, is_active=True),
+                ChatParticipant(chat=chat, user=target_user, is_admin=False, is_active=True),
+            ],
+            ignore_conflicts=True,
+        )
+        emit_added_to_group(chat, [target_user.id], added_by_id=request.user.id)
+        payload = ChatInfoSerializer(chat, context={"request": request}).data
+        return Response({"created": True, "chat": payload}, status=201)
 
 
 class ChatListView(APIView):
@@ -218,6 +281,7 @@ class ChatListView(APIView):
         responses={200: ChatListItemSerializer(many=True)},
     )
     def get(self, request):
+        sync_user_default_role_chat(request.user, emit_events=True)
         participant_qs = (
             ChatParticipant.objects.filter(user=request.user, is_active=True)
             .select_related("chat")
@@ -265,6 +329,20 @@ class ChatMessagesView(APIView):
         msg = serializer.save()
         emit_new_message(msg)
         return Response(MessageSerializer(msg).data, status=201)
+
+
+class ChatInfoView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        tags=["chat"],
+        responses={200: ChatInfoSerializer, 404: ErrorDetailSerializer},
+    )
+    def get(self, request, chat_id: str):
+        chat, _participant = resolve_chat_and_participant(request.user, chat_id)
+        if not chat:
+            return Response({"detail": "Чат не найден или нет доступа."}, status=404)
+        return Response(ChatInfoSerializer(chat, context={"request": request}).data)
 
 
 class ChatReadView(APIView):

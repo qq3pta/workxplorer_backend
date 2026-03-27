@@ -6,6 +6,12 @@ from common.ws_utils import to_ws_safe
 
 from .models import Chat, ChatParticipant, Message
 
+ROLE_DEFAULT_GROUP_TITLES = {
+    "LOGISTIC": "Общий с логистами",
+    "CARRIER": "Общий с перевозчиками",
+    "CUSTOMER": "Общий с заказчиками",
+}
+
 
 def user_is_chat_participant(chat: Chat, user_id: int) -> bool:
     return ChatParticipant.objects.filter(chat=chat, user_id=user_id, is_active=True).exists()
@@ -75,6 +81,70 @@ def _chat_payload(chat: Chat) -> dict:
         "last_message_at": chat.last_message_at,
         "created_at": chat.created_at,
     }
+
+
+def _get_or_create_default_role_chat(role: str) -> Chat | None:
+    title = ROLE_DEFAULT_GROUP_TITLES.get(role)
+    if not title:
+        return None
+
+    existing = (
+        Chat.objects.filter(
+            chat_type=Chat.ChatType.GROUP,
+            title=title,
+            created_by__isnull=True,
+        )
+        .order_by("id")
+        .first()
+    )
+    if existing:
+        return existing
+
+    return Chat.objects.create(
+        chat_type=Chat.ChatType.GROUP,
+        title=title,
+        created_by=None,
+        allow_join_by_link=False,
+    )
+
+
+def sync_user_default_role_chat(user, *, emit_events: bool = False) -> Chat | None:
+    if not user or not getattr(user, "id", None):
+        return None
+
+    role = getattr(user, "role", None)
+    if role not in ROLE_DEFAULT_GROUP_TITLES:
+        return None
+
+    target_chat = _get_or_create_default_role_chat(role)
+    if not target_chat:
+        return None
+
+    participant, created = ChatParticipant.objects.get_or_create(
+        chat=target_chat,
+        user=user,
+        defaults={"is_active": True, "is_admin": False},
+    )
+    became_active = False
+    if not created and not participant.is_active:
+        participant.is_active = True
+        participant.save(update_fields=["is_active"])
+        became_active = True
+
+    other_titles = [title for key, title in ROLE_DEFAULT_GROUP_TITLES.items() if key != role]
+    if other_titles:
+        ChatParticipant.objects.filter(
+            user=user,
+            chat__chat_type=Chat.ChatType.GROUP,
+            chat__title__in=other_titles,
+            chat__created_by__isnull=True,
+            is_active=True,
+        ).update(is_active=False)
+
+    if emit_events and (created or became_active):
+        emit_added_to_group(target_chat, [user.id], added_by_id=None)
+
+    return target_chat
 
 
 def emit_new_message(message: Message) -> None:

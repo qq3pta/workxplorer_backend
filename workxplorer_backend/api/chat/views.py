@@ -26,7 +26,10 @@ from .serializers import (
 )
 from .services import (
     emit_added_to_group,
+    emit_chat_removed,
+    emit_group_deleted,
     emit_member_joined,
+    emit_member_left,
     emit_message_read,
     emit_new_message,
     sync_user_default_role_chat,
@@ -201,6 +204,81 @@ class GroupAddParticipantsView(APIView):
         return Response(
             {"chat": ChatSummarySerializer(chat).data, "added_user_ids": added_user_ids}
         )
+
+
+class GroupLeaveView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        tags=["chat"],
+        responses={204: None, 400: ErrorDetailSerializer, 404: ErrorDetailSerializer},
+    )
+    def post(self, request, chat_id: str):
+        chat, participant = resolve_chat_and_participant(request.user, chat_id)
+        if not chat or not participant:
+            return Response({"detail": "Чат не найден."}, status=404)
+        if chat.chat_type != Chat.ChatType.GROUP:
+            return Response({"detail": "Покинуть можно только групповой чат."}, status=400)
+        if chat.created_by_id == request.user.id:
+            return Response(
+                {"detail": "Владелец не может покинуть группу. Удалите группу целиком."}, status=400
+            )
+
+        participant.is_active = False
+        participant.is_admin = False
+        participant.save(update_fields=["is_active", "is_admin"])
+
+        emit_member_left(chat.id, request.user.id)
+        emit_chat_removed(request.user.id, chat.id, reason="left_group")
+        return Response(status=204)
+
+
+class PersonalChatDeleteView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        tags=["chat"],
+        responses={204: None, 400: ErrorDetailSerializer, 404: ErrorDetailSerializer},
+    )
+    def delete(self, request, chat_id: str):
+        chat, participant = resolve_chat_and_participant(request.user, chat_id)
+        if not chat or not participant:
+            return Response({"detail": "Чат не найден."}, status=404)
+        if chat.chat_type != Chat.ChatType.PERSONAL:
+            return Response({"detail": "Удалять этим методом можно только личный чат."}, status=400)
+
+        participant.is_active = False
+        participant.save(update_fields=["is_active"])
+        emit_chat_removed(request.user.id, chat.id, reason="personal_deleted")
+        return Response(status=204)
+
+
+class GroupDeleteView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        tags=["chat"],
+        responses={204: None, 403: ErrorDetailSerializer, 404: ErrorDetailSerializer},
+    )
+    def delete(self, request, chat_id: str):
+        chat, _participant = resolve_chat_and_participant(request.user, chat_id)
+        if not chat:
+            return Response({"detail": "Чат не найден."}, status=404)
+        if chat.chat_type != Chat.ChatType.GROUP:
+            return Response({"detail": "Удалять этим методом можно только группу."}, status=404)
+        if chat.created_by_id != request.user.id:
+            return Response({"detail": "Удалить группу может только владелец."}, status=403)
+
+        user_ids = list(chat.participants.filter(is_active=True).values_list("user_id", flat=True))
+        chat_id_int = chat.id
+        title = chat.title
+        chat.delete()
+
+        emit_group_deleted(user_ids, chat_id_int, title=title, deleted_by_id=request.user.id)
+        for user_id in user_ids:
+            emit_chat_removed(user_id, chat_id_int, reason="group_deleted")
+
+        return Response(status=204)
 
 
 class JoinByLinkView(APIView):

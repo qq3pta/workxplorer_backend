@@ -411,16 +411,20 @@ class CargoListSerializer(RouteKmMixin, serializers.ModelSerializer):
     dest_lng = serializers.SerializerMethodField()
     is_hidden = serializers.BooleanField(read_only=True)
 
-    def get_origin_lat(self, obj):
+    @extend_schema_field(serializers.FloatField(allow_null=True))
+    def get_origin_lat(self, obj) -> float | None:
         return obj.origin_point.y if obj.origin_point else None
 
-    def get_origin_lng(self, obj):
+    @extend_schema_field(serializers.FloatField(allow_null=True))
+    def get_origin_lng(self, obj) -> float | None:
         return obj.origin_point.x if obj.origin_point else None
 
-    def get_dest_lat(self, obj):
+    @extend_schema_field(serializers.FloatField(allow_null=True))
+    def get_dest_lat(self, obj) -> float | None:
         return obj.dest_point.y if obj.dest_point else None
 
-    def get_dest_lng(self, obj):
+    @extend_schema_field(serializers.FloatField(allow_null=True))
+    def get_dest_lng(self, obj) -> float | None:
         return obj.dest_point.x if obj.dest_point else None
 
     def __init__(self, *args, **kwargs):
@@ -527,7 +531,8 @@ class CargoListSerializer(RouteKmMixin, serializers.ModelSerializer):
     def _get_author(self, obj):
         return obj.created_by if obj.created_by else obj.customer
 
-    def get_user_name(self, obj):
+    @extend_schema_field(serializers.CharField())
+    def get_user_name(self, obj) -> str:
         """Оптимизированное получение имени пользователя"""
         cache_key = f"user_name_{obj.id}"
         if cache_key in self._computation_cache:
@@ -551,7 +556,8 @@ class CargoListSerializer(RouteKmMixin, serializers.ModelSerializer):
         self._computation_cache[cache_key] = result
         return result
 
-    def get_user_id(self, obj):
+    @extend_schema_field(serializers.IntegerField())
+    def get_user_id(self, obj) -> int:
         author = self._get_author(obj)
         return author.id
 

@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from .models import UserRating
@@ -121,6 +122,7 @@ class RatingUserListSerializer(serializers.ModelSerializer):
     # -----------------------
     # KM суммарно для перевозчика
     # -----------------------
+    @extend_schema_field(serializers.IntegerField(allow_null=True))
     def get_total_distance(self, obj):
         if getattr(obj, "role", None) != "CARRIER":
             return None
@@ -129,6 +131,7 @@ class RatingUserListSerializer(serializers.ModelSerializer):
     # -----------------------
     # Piechart statistics
     # -----------------------
+    @extend_schema_field(serializers.DictField(child=serializers.IntegerField()))
     def get_pie_chart(self, obj):
         """
         Pie chart распределения заказов пользователя по статусам,

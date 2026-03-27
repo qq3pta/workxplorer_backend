@@ -21,7 +21,14 @@ from .serializers import (
     MessageSerializer,
     UserSearchResultSerializer,
 )
-from .services import user_can_manage_group, user_is_chat_participant
+from .services import (
+    emit_added_to_group,
+    emit_member_joined,
+    emit_message_read,
+    emit_new_message,
+    user_can_manage_group,
+    user_is_chat_participant,
+)
 
 User = get_user_model()
 
@@ -82,6 +89,10 @@ class GroupCreateView(APIView):
         serializer = GroupCreateSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         chat = serializer.save()
+        added_user_ids = list(
+            chat.participants.exclude(user_id=request.user.id).values_list("user_id", flat=True)
+        )
+        emit_added_to_group(chat, added_user_ids, added_by_id=request.user.id)
         return Response(ChatSummarySerializer(chat).data, status=201)
 
 
@@ -150,9 +161,15 @@ class JoinByLinkView(APIView):
             user=request.user,
             defaults={"is_active": True, "is_admin": False},
         )
+        became_active = False
         if not created and not participant.is_active:
             participant.is_active = True
             participant.save(update_fields=["is_active"])
+            became_active = True
+
+        if created or became_active:
+            emit_added_to_group(chat, [request.user.id], added_by_id=None)
+            emit_member_joined(chat, request.user.id)
 
         return Response(ChatSummarySerializer(chat).data, status=200)
 
@@ -246,6 +263,7 @@ class ChatMessagesView(APIView):
         )
         serializer.is_valid(raise_exception=True)
         msg = serializer.save()
+        emit_new_message(msg)
         return Response(MessageSerializer(msg).data, status=201)
 
 
@@ -274,4 +292,5 @@ class ChatReadView(APIView):
         )
         serializer.is_valid(raise_exception=True)
         payload = serializer.save()
+        emit_message_read(participant.chat_id, request.user.id, payload.get("last_read_at"))
         return Response(payload)

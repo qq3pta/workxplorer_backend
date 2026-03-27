@@ -9,8 +9,9 @@ django.setup()
 from api.notifications.middleware import JwtAuthMiddleware  # noqa: E402
 from api.notifications.routing import websocket_urlpatterns as notifications_ws  # noqa: E402
 from api.loads.routing import websocket_urlpatterns as loads_ws  # noqa: E402
+from api.chat.routing import websocket_urlpatterns as chat_ws  # noqa: E402
 
-combined_urlpatterns = notifications_ws + loads_ws
+combined_urlpatterns = notifications_ws + loads_ws + chat_ws
 
 django_asgi_app = get_asgi_application()
 

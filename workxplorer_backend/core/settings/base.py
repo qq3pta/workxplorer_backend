@@ -76,6 +76,7 @@ INSTALLED_APPS = [
     "api.payments",
     "api.agreements",
     "api.support",
+    "api.chat",
     "channels",
 ]
 

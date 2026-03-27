@@ -1,5 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.db import transaction
+from drf_spectacular.utils import extend_schema_field, inline_serializer
 from rest_framework import serializers
 
 from .models import Chat, ChatParticipant, Message
@@ -94,6 +95,7 @@ class UserSearchResultSerializer(serializers.ModelSerializer):
         model = User
         fields = ["id", "full_name", "username", "email", "phone", "company_name"]
 
+    @extend_schema_field(serializers.CharField())
     def get_full_name(self, obj):
         full_name = (obj.get_full_name() or "").strip()
         return full_name or obj.username or obj.email or f"User#{obj.id}"
@@ -124,6 +126,7 @@ class MessageSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
 
+    @extend_schema_field(serializers.CharField())
     def get_sender_name(self, obj):
         if not obj.sender:
             return "Удаленный пользователь"
@@ -170,6 +173,7 @@ class ChatListItemSerializer(serializers.ModelSerializer):
             return None
         return getattr(obj, "_viewer_participant", None)
 
+    @extend_schema_field(serializers.IntegerField())
     def get_unread_count(self, obj):
         participant = self._get_participant(obj)
         if not participant:
@@ -182,6 +186,18 @@ class ChatListItemSerializer(serializers.ModelSerializer):
             )
         return obj.messages.exclude(sender_id=participant.user_id).count()
 
+    @extend_schema_field(
+        inline_serializer(
+            "ChatLastMessagePreview",
+            fields={
+                "id": serializers.IntegerField(),
+                "text": serializers.CharField(),
+                "sender_id": serializers.IntegerField(allow_null=True),
+                "sender_name": serializers.CharField(),
+                "created_at": serializers.DateTimeField(),
+            },
+        )
+    )
     def get_last_message(self, obj):
         msg = obj.messages.select_related("sender").order_by("-created_at").first()
         if not msg:

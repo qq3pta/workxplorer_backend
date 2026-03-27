@@ -1,20 +1,19 @@
-import phonenumbers
 import logging
-
-from phonenumbers import PhoneNumberFormat
 from datetime import timedelta
 
+import phonenumbers
 from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model, password_validation
-from django.db.models import Avg
-from django.db.models import Q
+from django.db.models import Avg, Q
 from django.utils import timezone
+from drf_spectacular.utils import extend_schema_field
+from phonenumbers import PhoneNumberFormat
 from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from .emails import send_code_email
 from .models import EmailOTP, PhoneOTP, Profile, UserRole
-from .utils.sms import send_sms_otp, check_sms_otp
+from .utils.sms import check_sms_otp, send_sms_otp
 
 User = get_user_model()
 
@@ -380,9 +379,11 @@ class MeSerializer(serializers.ModelSerializer):
         avg = obj.ratings_received.aggregate(value=Avg("score"))["value"]
         return round(float(avg or 0), 1)
 
+    @extend_schema_field(serializers.FloatField())
     def get_rating_as_customer(self, obj):
         return self._get_dynamic_rating(obj)
 
+    @extend_schema_field(serializers.FloatField())
     def get_rating_as_carrier(self, obj):
         return self._get_dynamic_rating(obj)
 

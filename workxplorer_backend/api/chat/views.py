@@ -1,6 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.db.models import Q
 from django.utils import timezone
+from django.utils.text import slugify
 from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema, inline_serializer
 from rest_framework import serializers
 from rest_framework.permissions import IsAuthenticated
@@ -23,6 +24,31 @@ from .serializers import (
 from .services import user_can_manage_group, user_is_chat_participant
 
 User = get_user_model()
+
+
+class ErrorDetailSerializer(serializers.Serializer):
+    detail = serializers.CharField()
+
+
+def resolve_chat_and_participant(user, chat_identifier: str):
+    chat_id_str = str(chat_identifier).strip()
+
+    if chat_id_str.isdigit():
+        try:
+            participant = ChatParticipant.objects.select_related("chat").get(
+                chat_id=int(chat_id_str), user=user, is_active=True
+            )
+            return participant.chat, participant
+        except ChatParticipant.DoesNotExist:
+            return None, None
+
+    target_slug = slugify(chat_id_str)
+    participants = ChatParticipant.objects.select_related("chat").filter(user=user, is_active=True)
+    for participant in participants:
+        if slugify(participant.chat.title or "") == target_slug:
+            return participant.chat, participant
+
+    return None, None
 
 
 class ChatPingView(APIView):
@@ -50,7 +76,7 @@ class GroupCreateView(APIView):
     @extend_schema(
         tags=["chat"],
         request=GroupCreateSerializer,
-        responses={201: ChatSummarySerializer, 400: OpenApiTypes.OBJECT},
+        responses={201: ChatSummarySerializer, 400: ErrorDetailSerializer},
     )
     def post(self, request):
         serializer = GroupCreateSerializer(data=request.data, context={"request": request})
@@ -67,14 +93,13 @@ class GroupInviteLinkView(APIView):
         request=InviteLinkRequestSerializer,
         responses={
             200: InviteLinkResponseSerializer,
-            403: OpenApiTypes.OBJECT,
-            404: OpenApiTypes.OBJECT,
+            403: ErrorDetailSerializer,
+            404: ErrorDetailSerializer,
         },
     )
-    def post(self, request, chat_id: int):
-        try:
-            chat = Chat.objects.get(pk=chat_id)
-        except Chat.DoesNotExist:
+    def post(self, request, chat_id: str):
+        chat, _participant = resolve_chat_and_participant(request.user, chat_id)
+        if not chat:
             return Response({"detail": "Чат не найден."}, status=404)
 
         if not user_is_chat_participant(chat, request.user.id):
@@ -101,7 +126,11 @@ class JoinByLinkView(APIView):
     @extend_schema(
         tags=["chat"],
         request=JoinByLinkSerializer,
-        responses={200: ChatSummarySerializer, 400: OpenApiTypes.OBJECT, 404: OpenApiTypes.OBJECT},
+        responses={
+            200: ChatSummarySerializer,
+            400: ErrorDetailSerializer,
+            404: ErrorDetailSerializer,
+        },
     )
     def post(self, request):
         serializer = JoinByLinkSerializer(data=request.data)
@@ -188,21 +217,12 @@ class ChatListView(APIView):
 class ChatMessagesView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def get_chat_and_participant(self, user, chat_id):
-        try:
-            participant = ChatParticipant.objects.select_related("chat").get(
-                chat_id=chat_id, user=user, is_active=True
-            )
-        except ChatParticipant.DoesNotExist:
-            return None, None
-        return participant.chat, participant
-
     @extend_schema(
         tags=["chat"],
-        responses={200: MessageSerializer(many=True), 404: OpenApiTypes.OBJECT},
+        responses={200: MessageSerializer(many=True), 404: ErrorDetailSerializer},
     )
-    def get(self, request, chat_id: int):
-        chat, participant = self.get_chat_and_participant(request.user, chat_id)
+    def get(self, request, chat_id: str):
+        chat, participant = resolve_chat_and_participant(request.user, chat_id)
         if not chat:
             return Response({"detail": "Чат не найден или нет доступа."}, status=404)
 
@@ -214,10 +234,10 @@ class ChatMessagesView(APIView):
     @extend_schema(
         tags=["chat"],
         request=MessageCreateSerializer,
-        responses={201: MessageSerializer, 404: OpenApiTypes.OBJECT},
+        responses={201: MessageSerializer, 404: ErrorDetailSerializer},
     )
-    def post(self, request, chat_id: int):
-        chat, _participant = self.get_chat_and_participant(request.user, chat_id)
+    def post(self, request, chat_id: str):
+        chat, _participant = resolve_chat_and_participant(request.user, chat_id)
         if not chat:
             return Response({"detail": "Чат не найден или нет доступа."}, status=404)
 
@@ -240,15 +260,12 @@ class ChatReadView(APIView):
                 "ChatReadResponse",
                 {"last_read_at": serializers.DateTimeField(allow_null=True)},
             ),
-            404: OpenApiTypes.OBJECT,
+            404: ErrorDetailSerializer,
         },
     )
-    def post(self, request, chat_id: int):
-        try:
-            participant = ChatParticipant.objects.select_related("chat").get(
-                chat_id=chat_id, user=request.user, is_active=True
-            )
-        except ChatParticipant.DoesNotExist:
+    def post(self, request, chat_id: str):
+        _chat, participant = resolve_chat_and_participant(request.user, chat_id)
+        if not participant:
             return Response({"detail": "Чат не найден или нет доступа."}, status=404)
 
         serializer = MarkReadSerializer(

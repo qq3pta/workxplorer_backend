@@ -1,6 +1,8 @@
 from django.contrib.auth import get_user_model
 from django.db.models import Q
 from django.utils import timezone
+from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema, inline_serializer
+from rest_framework import serializers
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -26,6 +28,18 @@ User = get_user_model()
 class ChatPingView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        tags=["chat"],
+        responses={
+            200: inline_serializer(
+                "ChatPingResponse",
+                {
+                    "status": serializers.CharField(),
+                    "service": serializers.CharField(),
+                },
+            )
+        },
+    )
     def get(self, request):
         return Response({"status": "ok", "service": "chat"})
 
@@ -33,6 +47,11 @@ class ChatPingView(APIView):
 class GroupCreateView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        tags=["chat"],
+        request=GroupCreateSerializer,
+        responses={201: ChatSummarySerializer, 400: OpenApiTypes.OBJECT},
+    )
     def post(self, request):
         serializer = GroupCreateSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
@@ -43,6 +62,15 @@ class GroupCreateView(APIView):
 class GroupInviteLinkView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        tags=["chat"],
+        request=InviteLinkRequestSerializer,
+        responses={
+            200: InviteLinkResponseSerializer,
+            403: OpenApiTypes.OBJECT,
+            404: OpenApiTypes.OBJECT,
+        },
+    )
     def post(self, request, chat_id: int):
         try:
             chat = Chat.objects.get(pk=chat_id)
@@ -70,6 +98,11 @@ class GroupInviteLinkView(APIView):
 class JoinByLinkView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        tags=["chat"],
+        request=JoinByLinkSerializer,
+        responses={200: ChatSummarySerializer, 400: OpenApiTypes.OBJECT, 404: OpenApiTypes.OBJECT},
+    )
     def post(self, request):
         serializer = JoinByLinkSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -98,6 +131,19 @@ class JoinByLinkView(APIView):
 class UserSearchView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        tags=["chat"],
+        parameters=[
+            OpenApiParameter(
+                name="q",
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                description="Поисковая строка (минимум 2 символа).",
+                required=True,
+            )
+        ],
+        responses={200: UserSearchResultSerializer(many=True)},
+    )
     def get(self, request):
         q = (request.query_params.get("q") or "").strip()
         if len(q) < 2:
@@ -121,6 +167,10 @@ class UserSearchView(APIView):
 class ChatListView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        tags=["chat"],
+        responses={200: ChatListItemSerializer(many=True)},
+    )
     def get(self, request):
         participant_qs = (
             ChatParticipant.objects.filter(user=request.user, is_active=True)
@@ -147,6 +197,10 @@ class ChatMessagesView(APIView):
             return None, None
         return participant.chat, participant
 
+    @extend_schema(
+        tags=["chat"],
+        responses={200: MessageSerializer(many=True), 404: OpenApiTypes.OBJECT},
+    )
     def get(self, request, chat_id: int):
         chat, participant = self.get_chat_and_participant(request.user, chat_id)
         if not chat:
@@ -157,6 +211,11 @@ class ChatMessagesView(APIView):
         participant.save(update_fields=["last_read_at"])
         return Response(MessageSerializer(messages, many=True).data)
 
+    @extend_schema(
+        tags=["chat"],
+        request=MessageCreateSerializer,
+        responses={201: MessageSerializer, 404: OpenApiTypes.OBJECT},
+    )
     def post(self, request, chat_id: int):
         chat, _participant = self.get_chat_and_participant(request.user, chat_id)
         if not chat:
@@ -173,6 +232,17 @@ class ChatMessagesView(APIView):
 class ChatReadView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        tags=["chat"],
+        request=MarkReadSerializer,
+        responses={
+            200: inline_serializer(
+                "ChatReadResponse",
+                {"last_read_at": serializers.DateTimeField(allow_null=True)},
+            ),
+            404: OpenApiTypes.OBJECT,
+        },
+    )
     def post(self, request, chat_id: int):
         try:
             participant = ChatParticipant.objects.select_related("chat").get(

@@ -229,6 +229,13 @@ class OpenPersonalChatView(APIView):
                     "chat": ChatInfoSerializer(),
                 },
             ),
+            201: inline_serializer(
+                "OpenPersonalChatCreatedResponse",
+                {
+                    "created": serializers.BooleanField(),
+                    "chat": ChatInfoSerializer(),
+                },
+            ),
             400: ErrorDetailSerializer,
             404: ErrorDetailSerializer,
         },

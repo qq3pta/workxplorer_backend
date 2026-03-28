@@ -182,6 +182,7 @@ class ChatInfoSerializer(serializers.ModelSerializer):
     company_name = serializers.SerializerMethodField()
     user_last_seen = serializers.SerializerMethodField()
     user_is_online = serializers.SerializerMethodField()
+    creator = serializers.SerializerMethodField()
 
     class Meta:
         model = Chat
@@ -196,6 +197,7 @@ class ChatInfoSerializer(serializers.ModelSerializer):
             "user_is_online",
             "participants_count",
             "members",
+            "creator",
             "created_at",
             "updated_at",
         ]
@@ -264,6 +266,12 @@ class ChatInfoSerializer(serializers.ModelSerializer):
         if not other_user:
             return False
         return build_user_is_online(other_user)
+
+    @extend_schema_field(ChatMemberSerializer(allow_null=True))
+    def get_creator(self, obj):
+        if obj.chat_type != Chat.ChatType.GROUP or not obj.created_by:
+            return None
+        return ChatMemberSerializer(obj.created_by, context=self.context).data
 
 
 class MessageSerializer(serializers.ModelSerializer):

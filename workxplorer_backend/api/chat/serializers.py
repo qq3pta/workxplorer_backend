@@ -1,11 +1,15 @@
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
 from django.db import transaction
+from django.utils import timezone
 from drf_spectacular.utils import extend_schema_field, inline_serializer
 from rest_framework import serializers
 
 from .models import Chat, ChatParticipant, Message
 
 User = get_user_model()
+ONLINE_WINDOW = timedelta(minutes=5)
 
 
 def build_user_display_name(user) -> str:
@@ -24,6 +28,13 @@ def build_user_avatar_url(user, request=None):
     if request:
         return request.build_absolute_uri(url)
     return url
+
+
+def build_user_is_online(user) -> bool:
+    last_seen = getattr(user, "last_seen", None)
+    if not last_seen:
+        return False
+    return last_seen >= timezone.now() - ONLINE_WINDOW
 
 
 class ChatSummarySerializer(serializers.ModelSerializer):
@@ -107,6 +118,10 @@ class GroupAddParticipantsSerializer(serializers.Serializer):
         return deduped
 
 
+class GroupInviteDecisionSerializer(serializers.Serializer):
+    action = serializers.ChoiceField(choices=("accept", "decline"))
+
+
 class InviteLinkRequestSerializer(serializers.Serializer):
     expires_in_hours = serializers.IntegerField(min_value=48, max_value=48, default=48)
 
@@ -124,10 +139,12 @@ class UserPreviewSerializer(serializers.ModelSerializer):
     avatar = serializers.SerializerMethodField()
     full_name = serializers.SerializerMethodField()
     user_role = serializers.CharField(source="role", read_only=True)
+    last_seen = serializers.DateTimeField(read_only=True)
+    is_online = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ["id", "full_name", "avatar", "user_role"]
+        fields = ["id", "full_name", "avatar", "user_role", "last_seen", "is_online"]
 
     @extend_schema_field(serializers.CharField())
     def get_full_name(self, obj):
@@ -137,13 +154,24 @@ class UserPreviewSerializer(serializers.ModelSerializer):
     def get_avatar(self, obj):
         return build_user_avatar_url(obj, request=self.context.get("request"))
 
+    @extend_schema_field(serializers.BooleanField())
+    def get_is_online(self, obj):
+        return build_user_is_online(obj)
+
 
 class UserSearchResultSerializer(UserPreviewSerializer):
     pass
 
 
 class ChatMemberSerializer(UserPreviewSerializer):
-    pass
+    company_name = serializers.SerializerMethodField()
+
+    class Meta(UserPreviewSerializer.Meta):
+        fields = [*UserPreviewSerializer.Meta.fields, "company_name"]
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_company_name(self, obj):
+        return (obj.company_name or "").strip() or None
 
 
 class ChatInfoSerializer(serializers.ModelSerializer):
@@ -151,6 +179,10 @@ class ChatInfoSerializer(serializers.ModelSerializer):
     members = serializers.SerializerMethodField()
     display_title = serializers.SerializerMethodField()
     chat_avatar = serializers.SerializerMethodField()
+    company_name = serializers.SerializerMethodField()
+    user_last_seen = serializers.SerializerMethodField()
+    user_is_online = serializers.SerializerMethodField()
+    creator = serializers.SerializerMethodField()
 
     class Meta:
         model = Chat
@@ -160,8 +192,12 @@ class ChatInfoSerializer(serializers.ModelSerializer):
             "title",
             "display_title",
             "chat_avatar",
+            "company_name",
+            "user_last_seen",
+            "user_is_online",
             "participants_count",
             "members",
+            "creator",
             "created_at",
             "updated_at",
         ]
@@ -209,6 +245,33 @@ class ChatInfoSerializer(serializers.ModelSerializer):
         if not other_user:
             return None
         return build_user_avatar_url(other_user, request=self.context.get("request"))
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_company_name(self, obj):
+        other_user = self._other_user(obj)
+        if not other_user:
+            return None
+        return (other_user.company_name or "").strip() or None
+
+    @extend_schema_field(serializers.DateTimeField(allow_null=True))
+    def get_user_last_seen(self, obj):
+        other_user = self._other_user(obj)
+        if not other_user:
+            return None
+        return other_user.last_seen
+
+    @extend_schema_field(serializers.BooleanField())
+    def get_user_is_online(self, obj):
+        other_user = self._other_user(obj)
+        if not other_user:
+            return False
+        return build_user_is_online(other_user)
+
+    @extend_schema_field(ChatMemberSerializer(allow_null=True))
+    def get_creator(self, obj):
+        if obj.chat_type != Chat.ChatType.GROUP or not obj.created_by:
+            return None
+        return ChatMemberSerializer(obj.created_by, context=self.context).data
 
 
 class MessageSerializer(serializers.ModelSerializer):
@@ -264,6 +327,9 @@ class ChatListItemSerializer(serializers.ModelSerializer):
     last_message = serializers.SerializerMethodField()
     display_title = serializers.SerializerMethodField()
     chat_avatar = serializers.SerializerMethodField()
+    company_name = serializers.SerializerMethodField()
+    user_last_seen = serializers.SerializerMethodField()
+    user_is_online = serializers.SerializerMethodField()
 
     class Meta:
         model = Chat
@@ -273,6 +339,9 @@ class ChatListItemSerializer(serializers.ModelSerializer):
             "title",
             "display_title",
             "chat_avatar",
+            "company_name",
+            "user_last_seen",
+            "user_is_online",
             "participants_count",
             "unread_count",
             "last_message",
@@ -351,6 +420,27 @@ class ChatListItemSerializer(serializers.ModelSerializer):
         if not other_user:
             return None
         return build_user_avatar_url(other_user, request=self.context.get("request"))
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_company_name(self, obj):
+        other_user = self._get_other_user(obj)
+        if not other_user:
+            return None
+        return (other_user.company_name or "").strip() or None
+
+    @extend_schema_field(serializers.DateTimeField(allow_null=True))
+    def get_user_last_seen(self, obj):
+        other_user = self._get_other_user(obj)
+        if not other_user:
+            return None
+        return other_user.last_seen
+
+    @extend_schema_field(serializers.BooleanField())
+    def get_user_is_online(self, obj):
+        other_user = self._get_other_user(obj)
+        if not other_user:
+            return False
+        return build_user_is_online(other_user)
 
 
 class OpenPersonalChatSerializer(serializers.Serializer):

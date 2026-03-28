@@ -9,6 +9,7 @@ from .views import (
     GroupAddParticipantsView,
     GroupCreateView,
     GroupDeleteView,
+    GroupInviteDecisionView,
     GroupInviteLinkView,
     GroupLeaveView,
     JoinByLinkView,
@@ -27,6 +28,11 @@ urlpatterns = [
     ),
     path(
         "groups/<str:chat_id>/invite-link/", GroupInviteLinkView.as_view(), name="chat-invite-link"
+    ),
+    path(
+        "groups/<str:chat_id>/invite/decision/",
+        GroupInviteDecisionView.as_view(),
+        name="chat-group-invite-decision",
     ),
     path("groups/<str:chat_id>/leave/", GroupLeaveView.as_view(), name="chat-group-leave"),
     path("groups/<str:chat_id>/", GroupDeleteView.as_view(), name="chat-group-delete"),

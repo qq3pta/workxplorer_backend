@@ -228,3 +228,38 @@ def emit_message_read(chat_id: int, user_id: int, last_read_at) -> None:
             "last_read_at": last_read_at,
         },
     )
+
+
+def emit_member_left(chat_id: int, user_id: int) -> None:
+    _ws_send(
+        ws_chat_group(chat_id),
+        {
+            "event": "member_left",
+            "chat_id": chat_id,
+            "user_id": user_id,
+        },
+    )
+
+
+def emit_chat_removed(user_id: int, chat_id: int, reason: str) -> None:
+    _ws_send(
+        ws_user_group(user_id),
+        {
+            "event": "chat_removed",
+            "chat_id": chat_id,
+            "reason": reason,
+        },
+    )
+
+
+def emit_group_deleted(user_ids: list[int], chat_id: int, title: str, deleted_by_id: int) -> None:
+    for user_id in user_ids:
+        _ws_send(
+            ws_user_group(user_id),
+            {
+                "event": "group_deleted",
+                "chat_id": chat_id,
+                "title": title,
+                "deleted_by_id": deleted_by_id,
+            },
+        )

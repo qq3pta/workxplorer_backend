@@ -143,7 +143,14 @@ class UserSearchResultSerializer(UserPreviewSerializer):
 
 
 class ChatMemberSerializer(UserPreviewSerializer):
-    pass
+    company_name = serializers.SerializerMethodField()
+
+    class Meta(UserPreviewSerializer.Meta):
+        fields = [*UserPreviewSerializer.Meta.fields, "company_name"]
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_company_name(self, obj):
+        return (obj.company_name or "").strip() or None
 
 
 class ChatInfoSerializer(serializers.ModelSerializer):

@@ -118,6 +118,10 @@ class GroupAddParticipantsSerializer(serializers.Serializer):
         return deduped
 
 
+class GroupInviteDecisionSerializer(serializers.Serializer):
+    action = serializers.ChoiceField(choices=("accept", "decline"))
+
+
 class InviteLinkRequestSerializer(serializers.Serializer):
     expires_in_hours = serializers.IntegerField(min_value=48, max_value=48, default=48)
 

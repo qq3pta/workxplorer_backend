@@ -15,6 +15,7 @@ from .serializers import (
     ChatSummarySerializer,
     GroupAddParticipantsSerializer,
     GroupCreateSerializer,
+    GroupInviteDecisionSerializer,
     InviteLinkRequestSerializer,
     InviteLinkResponseSerializer,
     JoinByLinkSerializer,
@@ -28,6 +29,7 @@ from .services import (
     emit_added_to_group,
     emit_chat_removed,
     emit_group_deleted,
+    emit_group_invite_request,
     emit_member_joined,
     emit_member_left,
     emit_message_read,
@@ -58,6 +60,27 @@ def resolve_chat_and_participant(user, chat_identifier: str):
 
     target_slug = slugify(chat_id_str)
     participants = ChatParticipant.objects.select_related("chat").filter(user=user, is_active=True)
+    for participant in participants:
+        if slugify(participant.chat.title or "") == target_slug:
+            return participant.chat, participant
+
+    return None, None
+
+
+def resolve_chat_participant_any_status(user, chat_identifier: str):
+    chat_id_str = str(chat_identifier).strip()
+
+    if chat_id_str.isdigit():
+        try:
+            participant = ChatParticipant.objects.select_related("chat").get(
+                chat_id=int(chat_id_str), user=user
+            )
+            return participant.chat, participant
+        except ChatParticipant.DoesNotExist:
+            return None, None
+
+    target_slug = slugify(chat_id_str)
+    participants = ChatParticipant.objects.select_related("chat").filter(user=user)
     for participant in participants:
         if slugify(participant.chat.title or "") == target_slug:
             return participant.chat, participant
@@ -96,10 +119,28 @@ class GroupCreateView(APIView):
         serializer = GroupCreateSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         chat = serializer.save()
-        added_user_ids = list(
-            chat.participants.exclude(user_id=request.user.id).values_list("user_id", flat=True)
-        )
-        emit_added_to_group(chat, added_user_ids, added_by_id=request.user.id)
+        participant_ids = serializer.validated_data.get("participant_ids", [])
+        users_qs = User.objects.filter(id__in=participant_ids).exclude(id=request.user.id)
+
+        invited_user_ids = []
+        for user in users_qs:
+            participant, created = ChatParticipant.objects.get_or_create(
+                chat=chat,
+                user=user,
+                defaults={"is_active": False, "is_admin": False},
+            )
+            if created:
+                invited_user_ids.append(user.id)
+                continue
+
+            participant.is_active = False
+            participant.is_admin = False
+            participant.save(update_fields=["is_active", "is_admin"])
+            invited_user_ids.append(user.id)
+
+        if invited_user_ids:
+            emit_group_invite_request(chat, invited_user_ids, invited_by_id=request.user.id)
+
         return Response(ChatSummarySerializer(chat).data, status=201)
 
 
@@ -149,7 +190,7 @@ class GroupAddParticipantsView(APIView):
                 "GroupAddParticipantsResponse",
                 {
                     "chat": ChatSummarySerializer(),
-                    "added_user_ids": serializers.ListField(child=serializers.IntegerField()),
+                    "invited_user_ids": serializers.ListField(child=serializers.IntegerField()),
                 },
             ),
             400: ErrorDetailSerializer,
@@ -180,30 +221,64 @@ class GroupAddParticipantsView(APIView):
         if missing:
             return Response({"detail": f"Пользователи не найдены: {missing}"}, status=400)
 
-        added_user_ids: list[int] = []
+        invited_user_ids: list[int] = []
         for user in users_qs:
             participant, created = ChatParticipant.objects.get_or_create(
                 chat=chat,
                 user=user,
-                defaults={"is_active": True, "is_admin": False},
+                defaults={"is_active": False, "is_admin": False},
             )
-            if created:
-                added_user_ids.append(user.id)
+            if participant.is_active:
                 continue
 
-            if not participant.is_active:
-                participant.is_active = True
-                participant.save(update_fields=["is_active"])
-                added_user_ids.append(user.id)
+            participant.is_active = False
+            participant.is_admin = False
+            participant.save(update_fields=["is_active", "is_admin"])
+            invited_user_ids.append(user.id)
 
-        if added_user_ids:
-            emit_added_to_group(chat, added_user_ids, added_by_id=request.user.id)
-            for user_id in added_user_ids:
-                emit_member_joined(chat, user_id)
+        if invited_user_ids:
+            emit_group_invite_request(chat, invited_user_ids, invited_by_id=request.user.id)
 
         return Response(
-            {"chat": ChatSummarySerializer(chat).data, "added_user_ids": added_user_ids}
+            {"chat": ChatSummarySerializer(chat).data, "invited_user_ids": invited_user_ids}
         )
+
+
+class GroupInviteDecisionView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        tags=["chat"],
+        request=GroupInviteDecisionSerializer,
+        responses={
+            200: ChatSummarySerializer,
+            204: None,
+            400: ErrorDetailSerializer,
+            404: ErrorDetailSerializer,
+        },
+    )
+    def post(self, request, chat_id: str):
+        chat, participant = resolve_chat_participant_any_status(request.user, chat_id)
+        if not chat or not participant:
+            return Response({"detail": "Приглашение не найдено."}, status=404)
+        if chat.chat_type != Chat.ChatType.GROUP:
+            return Response({"detail": "Приглашение доступно только для группы."}, status=400)
+        if participant.is_active:
+            return Response({"detail": "Вы уже состоите в этой группе."}, status=400)
+
+        serializer = GroupInviteDecisionSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        action = serializer.validated_data["action"]
+
+        if action == "accept":
+            participant.is_active = True
+            participant.save(update_fields=["is_active"])
+            emit_added_to_group(chat, [request.user.id], added_by_id=None)
+            emit_member_joined(chat, request.user.id)
+            return Response(ChatSummarySerializer(chat).data, status=200)
+
+        participant.delete()
+        return Response(status=204)
 
 
 class GroupLeaveView(APIView):

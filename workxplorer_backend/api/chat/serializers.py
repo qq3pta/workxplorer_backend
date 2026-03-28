@@ -151,6 +151,7 @@ class ChatInfoSerializer(serializers.ModelSerializer):
     members = serializers.SerializerMethodField()
     display_title = serializers.SerializerMethodField()
     chat_avatar = serializers.SerializerMethodField()
+    company_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Chat
@@ -160,6 +161,7 @@ class ChatInfoSerializer(serializers.ModelSerializer):
             "title",
             "display_title",
             "chat_avatar",
+            "company_name",
             "participants_count",
             "members",
             "created_at",
@@ -209,6 +211,13 @@ class ChatInfoSerializer(serializers.ModelSerializer):
         if not other_user:
             return None
         return build_user_avatar_url(other_user, request=self.context.get("request"))
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_company_name(self, obj):
+        other_user = self._other_user(obj)
+        if not other_user:
+            return None
+        return (other_user.company_name or "").strip() or None
 
 
 class MessageSerializer(serializers.ModelSerializer):
@@ -264,6 +273,7 @@ class ChatListItemSerializer(serializers.ModelSerializer):
     last_message = serializers.SerializerMethodField()
     display_title = serializers.SerializerMethodField()
     chat_avatar = serializers.SerializerMethodField()
+    company_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Chat
@@ -273,6 +283,7 @@ class ChatListItemSerializer(serializers.ModelSerializer):
             "title",
             "display_title",
             "chat_avatar",
+            "company_name",
             "participants_count",
             "unread_count",
             "last_message",
@@ -351,6 +362,13 @@ class ChatListItemSerializer(serializers.ModelSerializer):
         if not other_user:
             return None
         return build_user_avatar_url(other_user, request=self.context.get("request"))
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_company_name(self, obj):
+        other_user = self._get_other_user(obj)
+        if not other_user:
+            return None
+        return (other_user.company_name or "").strip() or None
 
 
 class OpenPersonalChatSerializer(serializers.Serializer):

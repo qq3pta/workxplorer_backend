@@ -170,6 +170,14 @@ class Order(models.Model):
         related_name="invited_orders",
         help_text="Перевозчик, приглашённый вручную по ID",
     )
+    chat = models.OneToOneField(
+        "chat.Chat",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="order",
+        editable=False,
+    )
 
     class Meta:
         ordering = ["-created_at"]
@@ -196,6 +204,64 @@ class Order(models.Model):
 
     def __str__(self) -> str:
         return f"Order#{self.pk} cargo={self.cargo_id} carrier={self.carrier_id or '—'}"
+
+    def _order_chat_title(self) -> str:
+        return f"Заказ #{self.pk}"
+
+    def _order_chat_user_ids(self) -> set[int]:
+        return {
+            user_id
+            for user_id in (
+                self.customer_id,
+                self.carrier_id,
+                self.logistic_id,
+                self.created_by_id,
+                self.invited_carrier_id,
+            )
+            if user_id
+        }
+
+    def sync_order_chat(self) -> None:
+        if not self.pk:
+            return
+
+        from api.chat.models import Chat, ChatParticipant
+        from api.chat.services import emit_added_to_group, emit_member_joined
+
+        chat = self.chat
+        if not chat:
+            chat = Chat.objects.create(
+                chat_type=Chat.ChatType.GROUP,
+                title=self._order_chat_title(),
+                created_by_id=self.created_by_id or self.customer_id,
+            )
+            Order.objects.filter(pk=self.pk, chat__isnull=True).update(chat=chat)
+            self.chat = chat
+        elif chat.title != self._order_chat_title():
+            chat.title = self._order_chat_title()
+            chat.save(update_fields=["title"])
+
+        added_user_ids: list[int] = []
+        for user_id in self._order_chat_user_ids():
+            participant, created = ChatParticipant.objects.get_or_create(
+                chat=chat,
+                user_id=user_id,
+                defaults={"is_active": True, "is_admin": False},
+            )
+            if created:
+                added_user_ids.append(user_id)
+                continue
+            if not participant.is_active:
+                participant.is_active = True
+                participant.save(update_fields=["is_active"])
+                added_user_ids.append(user_id)
+
+        if added_user_ids:
+            emit_added_to_group(
+                chat, added_user_ids, added_by_id=self.created_by_id or self.customer_id
+            )
+            for user_id in added_user_ids:
+                emit_member_joined(chat, user_id)
 
     def notify_created(self):
         payload = {"order_id": self.id}
@@ -293,6 +359,8 @@ class Order(models.Model):
             old_status = Order.objects.filter(pk=self.pk).values_list("status", flat=True).first()
 
         super().save(*args, **kwargs)
+
+        transaction.on_commit(lambda: self.sync_order_chat())
 
         if is_new:
             transaction.on_commit(lambda: self.notify_created())

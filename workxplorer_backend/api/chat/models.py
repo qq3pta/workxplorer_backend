@@ -1,5 +1,6 @@
 import uuid
 from datetime import timedelta
+from pathlib import Path
 
 from django.conf import settings
 from django.db import models
@@ -92,6 +93,10 @@ class Message(models.Model):
         related_name="sent_chat_messages",
     )
     text = models.TextField()
+    attachment = models.FileField(upload_to="chat_attachments/%Y/%m/%d/", null=True, blank=True)
+    attachment_name = models.CharField(max_length=255, blank=True, default="")
+    attachment_size = models.BigIntegerField(null=True, blank=True)
+    attachment_content_type = models.CharField(max_length=255, blank=True, default="")
     is_edited = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -108,6 +113,9 @@ class Message(models.Model):
 
         if not is_new:
             old_text = Message.objects.filter(pk=self.pk).values_list("text", flat=True).first()
+
+        if self.attachment and not self.attachment_name:
+            self.attachment_name = Path(self.attachment.name).name
 
         super().save(*args, **kwargs)
 

@@ -61,12 +61,23 @@ def _message_payload(message: Message) -> dict:
             or f"User#{message.sender_id}"
         )
 
+    attachment_url = None
+    if message.attachment:
+        try:
+            attachment_url = message.attachment.url
+        except Exception:
+            attachment_url = None
+
     return {
         "id": message.id,
         "chat": message.chat_id,
         "sender": message.sender_id,
         "sender_name": sender_name,
         "text": message.text,
+        "attachment_url": attachment_url,
+        "attachment_name": message.attachment_name,
+        "attachment_size": message.attachment_size,
+        "attachment_content_type": message.attachment_content_type,
         "is_edited": message.is_edited,
         "created_at": message.created_at,
         "updated_at": message.updated_at,
@@ -275,3 +286,15 @@ def emit_group_invite_request(chat: Chat, user_ids: list[int], invited_by_id: in
                 "invited_by_id": invited_by_id,
             },
         )
+
+
+def emit_message_deleted(chat_id: int, message_id: int, deleted_by_id: int) -> None:
+    _ws_send(
+        ws_chat_group(chat_id),
+        {
+            "event": "message_deleted",
+            "chat_id": chat_id,
+            "message_id": message_id,
+            "deleted_by_id": deleted_by_id,
+        },
+    )

@@ -1,4 +1,5 @@
 from datetime import timedelta
+from pathlib import Path
 
 from django.contrib.auth import get_user_model
 from django.db import transaction
@@ -183,6 +184,7 @@ class ChatInfoSerializer(serializers.ModelSerializer):
     user_last_seen = serializers.SerializerMethodField()
     user_is_online = serializers.SerializerMethodField()
     creator = serializers.SerializerMethodField()
+    is_muted = serializers.SerializerMethodField()
 
     class Meta:
         model = Chat
@@ -195,6 +197,7 @@ class ChatInfoSerializer(serializers.ModelSerializer):
             "company_name",
             "user_last_seen",
             "user_is_online",
+            "is_muted",
             "participants_count",
             "members",
             "creator",
@@ -217,6 +220,17 @@ class ChatInfoSerializer(serializers.ModelSerializer):
         if not request or not request.user or not request.user.is_authenticated:
             return None
         return request.user.id
+
+    def _viewer_participant(self, obj):
+        participant = getattr(obj, "_viewer_participant", None)
+        if participant is not None:
+            return participant
+        user_id = self._viewer_user_id()
+        if not user_id:
+            return None
+        return (
+            obj.participants.filter(user_id=user_id, is_active=True).only("id", "is_muted").first()
+        )
 
     def _other_user(self, obj):
         viewer_user_id = self._viewer_user_id()
@@ -267,6 +281,13 @@ class ChatInfoSerializer(serializers.ModelSerializer):
             return False
         return build_user_is_online(other_user)
 
+    @extend_schema_field(serializers.BooleanField())
+    def get_is_muted(self, obj):
+        participant = self._viewer_participant(obj)
+        if not participant:
+            return False
+        return bool(participant.is_muted)
+
     @extend_schema_field(ChatMemberSerializer(allow_null=True))
     def get_creator(self, obj):
         if obj.chat_type != Chat.ChatType.GROUP or not obj.created_by:
@@ -276,6 +297,7 @@ class ChatInfoSerializer(serializers.ModelSerializer):
 
 class MessageSerializer(serializers.ModelSerializer):
     sender_name = serializers.SerializerMethodField()
+    attachment_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Message
@@ -285,6 +307,10 @@ class MessageSerializer(serializers.ModelSerializer):
             "sender",
             "sender_name",
             "text",
+            "attachment_url",
+            "attachment_name",
+            "attachment_size",
+            "attachment_content_type",
             "is_edited",
             "created_at",
             "updated_at",
@@ -295,6 +321,9 @@ class MessageSerializer(serializers.ModelSerializer):
             "sender",
             "sender_name",
             "is_edited",
+            "attachment_name",
+            "attachment_size",
+            "attachment_content_type",
             "created_at",
             "updated_at",
         ]
@@ -305,20 +334,56 @@ class MessageSerializer(serializers.ModelSerializer):
             return "Удаленный пользователь"
         return build_user_display_name(obj.sender)
 
+    @extend_schema_field(serializers.URLField(allow_null=True))
+    def get_attachment_url(self, obj):
+        if not obj.attachment:
+            return None
+        try:
+            url = obj.attachment.url
+        except Exception:
+            return None
+        request = self.context.get("request")
+        if request:
+            return request.build_absolute_uri(url)
+        return url
+
 
 class MessageCreateSerializer(serializers.Serializer):
-    text = serializers.CharField(max_length=5000)
+    text = serializers.CharField(max_length=5000, required=False, allow_blank=True)
+    file = serializers.FileField(required=False, allow_null=True, write_only=True)
 
     def validate_text(self, value):
-        text = value.strip()
-        if not text:
-            raise serializers.ValidationError("Сообщение не может быть пустым.")
-        return text
+        return value.strip()
+
+    def validate(self, attrs):
+        text = (attrs.get("text") or "").strip()
+        file_obj = attrs.get("file")
+        if not text and not file_obj:
+            raise serializers.ValidationError("Нужно передать текст или файл.")
+        attrs["text"] = text
+        return attrs
 
     def create(self, validated_data):
         chat = self.context["chat"]
         user = self.context["request"].user
-        return Message.objects.create(chat=chat, sender=user, text=validated_data["text"])
+        file_obj = validated_data.get("file")
+        attachment_name = ""
+        attachment_size = None
+        attachment_content_type = ""
+        if file_obj:
+            attachment_name = Path(file_obj.name).name
+            attachment_size = getattr(file_obj, "size", None)
+            attachment_content_type = getattr(file_obj, "content_type", "") or ""
+
+        return Message.objects.create(
+            chat=chat,
+            sender=user,
+            text=validated_data.get("text", ""),
+            attachment=file_obj,
+            attachment_name=attachment_name,
+            attachment_size=attachment_size,
+            attachment_content_type=attachment_content_type,
+        )
 
 
 class ChatListItemSerializer(serializers.ModelSerializer):
@@ -330,6 +395,7 @@ class ChatListItemSerializer(serializers.ModelSerializer):
     company_name = serializers.SerializerMethodField()
     user_last_seen = serializers.SerializerMethodField()
     user_is_online = serializers.SerializerMethodField()
+    is_muted = serializers.SerializerMethodField()
 
     class Meta:
         model = Chat
@@ -342,6 +408,7 @@ class ChatListItemSerializer(serializers.ModelSerializer):
             "company_name",
             "user_last_seen",
             "user_is_online",
+            "is_muted",
             "participants_count",
             "unread_count",
             "last_message",
@@ -388,6 +455,8 @@ class ChatListItemSerializer(serializers.ModelSerializer):
                 "text": serializers.CharField(),
                 "sender_id": serializers.IntegerField(allow_null=True),
                 "sender_name": serializers.CharField(),
+                "attachment_url": serializers.URLField(allow_null=True),
+                "attachment_name": serializers.CharField(allow_blank=True),
                 "created_at": serializers.DateTimeField(),
             },
         )
@@ -396,12 +465,14 @@ class ChatListItemSerializer(serializers.ModelSerializer):
         msg = obj.messages.select_related("sender").order_by("-created_at").first()
         if not msg:
             return None
-        msg_data = MessageSerializer(instance=msg).data
+        msg_data = MessageSerializer(instance=msg, context=self.context).data
         return {
             "id": msg.id,
             "text": msg.text,
             "sender_id": msg.sender_id,
             "sender_name": msg_data["sender_name"],
+            "attachment_url": msg_data["attachment_url"],
+            "attachment_name": msg_data["attachment_name"],
             "created_at": msg.created_at,
         }
 
@@ -442,9 +513,20 @@ class ChatListItemSerializer(serializers.ModelSerializer):
             return False
         return build_user_is_online(other_user)
 
+    @extend_schema_field(serializers.BooleanField())
+    def get_is_muted(self, obj):
+        participant = self._get_participant(obj)
+        if not participant:
+            return False
+        return bool(participant.is_muted)
+
 
 class OpenPersonalChatSerializer(serializers.Serializer):
     user_id = serializers.IntegerField(min_value=1)
+
+
+class ChatMuteSerializer(serializers.Serializer):
+    is_muted = serializers.BooleanField()
 
 
 class MarkReadSerializer(serializers.Serializer):

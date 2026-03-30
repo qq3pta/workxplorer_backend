@@ -309,3 +309,15 @@ def emit_message_deleted(chat_id: int, message_id: int, deleted_by_id: int) -> N
             "deleted_by_id": deleted_by_id,
         },
     )
+
+
+def emit_member_kicked(chat_id: int, user_id: int, kicked_by_id: int) -> None:
+    _ws_send(
+        ws_chat_group(chat_id),
+        {
+            "event": "member_kicked",
+            "chat_id": chat_id,
+            "user_id": user_id,
+            "kicked_by_id": kicked_by_id,
+        },
+    )

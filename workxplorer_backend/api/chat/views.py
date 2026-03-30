@@ -33,6 +33,7 @@ from .services import (
     emit_group_deleted,
     emit_group_invite_request,
     emit_member_joined,
+    emit_member_kicked,
     emit_member_left,
     emit_message_deleted,
     emit_message_read,
@@ -269,6 +270,44 @@ class GroupAddParticipantsView(APIView):
         return Response(
             {"chat": ChatSummarySerializer(chat).data, "invited_user_ids": invited_user_ids}
         )
+
+
+class GroupKickMemberView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        tags=["chat"],
+        responses={
+            204: None,
+            400: ErrorDetailSerializer,
+            403: ErrorDetailSerializer,
+            404: ErrorDetailSerializer,
+        },
+    )
+    def delete(self, request, chat_id: str, user_id: int):
+        chat, _participant = resolve_chat_and_participant(request.user, chat_id)
+        if not chat:
+            return Response({"detail": "Чат не найден."}, status=404)
+        if chat.chat_type != Chat.ChatType.GROUP:
+            return Response({"detail": "Кик доступен только в групповом чате."}, status=400)
+        if not user_can_manage_group(chat, request.user.id):
+            return Response({"detail": "Недостаточно прав для управления участниками."}, status=403)
+        if user_id == request.user.id:
+            return Response({"detail": "Нельзя кикнуть самого себя."}, status=400)
+        if chat.created_by_id == user_id:
+            return Response({"detail": "Нельзя кикнуть владельца группы."}, status=400)
+
+        target = ChatParticipant.objects.filter(chat=chat, user_id=user_id, is_active=True).first()
+        if not target:
+            return Response({"detail": "Участник не найден."}, status=404)
+
+        target.is_active = False
+        target.is_admin = False
+        target.save(update_fields=["is_active", "is_admin"])
+
+        emit_member_kicked(chat.id, user_id=user_id, kicked_by_id=request.user.id)
+        emit_chat_removed(user_id, chat.id, reason="kicked_from_group")
+        return Response(status=204)
 
 
 class GroupInviteDecisionView(APIView):

@@ -14,6 +14,7 @@ from .views import (
     GroupInviteAcceptDirectView,
     GroupInviteDecisionView,
     GroupInviteLinkView,
+    GroupKickMemberView,
     GroupLeaveView,
     JoinByLinkView,
     OpenPersonalChatView,
@@ -28,6 +29,11 @@ urlpatterns = [
         "groups/<str:chat_id>/participants/",
         GroupAddParticipantsView.as_view(),
         name="chat-group-add-participants",
+    ),
+    path(
+        "groups/<str:chat_id>/participants/<int:user_id>/",
+        GroupKickMemberView.as_view(),
+        name="chat-group-kick-member",
     ),
     path(
         "groups/<str:chat_id>/invite-link/", GroupInviteLinkView.as_view(), name="chat-invite-link"

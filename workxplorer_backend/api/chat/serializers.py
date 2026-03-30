@@ -98,10 +98,6 @@ class GroupCreateSerializer(serializers.Serializer):
             chat.refresh_invite()
 
         ChatParticipant.objects.create(chat=chat, user=user, is_admin=True)
-        ChatParticipant.objects.bulk_create(
-            [ChatParticipant(chat=chat, user=member) for member in users_qs],
-            ignore_conflicts=True,
-        )
         return chat
 
 
@@ -140,12 +136,21 @@ class UserPreviewSerializer(serializers.ModelSerializer):
     avatar = serializers.SerializerMethodField()
     full_name = serializers.SerializerMethodField()
     user_role = serializers.CharField(source="role", read_only=True)
+    company_name = serializers.SerializerMethodField()
     last_seen = serializers.DateTimeField(read_only=True)
     is_online = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ["id", "full_name", "avatar", "user_role", "last_seen", "is_online"]
+        fields = [
+            "id",
+            "full_name",
+            "avatar",
+            "user_role",
+            "company_name",
+            "last_seen",
+            "is_online",
+        ]
 
     @extend_schema_field(serializers.CharField())
     def get_full_name(self, obj):
@@ -155,6 +160,10 @@ class UserPreviewSerializer(serializers.ModelSerializer):
     def get_avatar(self, obj):
         return build_user_avatar_url(obj, request=self.context.get("request"))
 
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_company_name(self, obj):
+        return (obj.company_name or "").strip() or None
+
     @extend_schema_field(serializers.BooleanField())
     def get_is_online(self, obj):
         return build_user_is_online(obj)
@@ -162,6 +171,23 @@ class UserPreviewSerializer(serializers.ModelSerializer):
 
 class UserSearchResultSerializer(UserPreviewSerializer):
     pass
+
+
+class ChatInvitationItemSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    chat_type = serializers.CharField(default="invitation")
+    title = serializers.CharField()
+    display_title = serializers.CharField()
+    participants_count = serializers.IntegerField()
+    unread_count = serializers.IntegerField(default=0)
+    last_message = serializers.JSONField(allow_null=True)
+    last_message_at = serializers.DateTimeField(allow_null=True)
+    created_at = serializers.DateTimeField()
+    invitation_group_id = serializers.IntegerField()
+    invitation_group_title = serializers.CharField()
+    invitation_participants_count = serializers.IntegerField()
+    invited_by = UserPreviewSerializer(allow_null=True)
+    invited_at = serializers.DateTimeField(allow_null=True)
 
 
 class ChatMemberSerializer(UserPreviewSerializer):

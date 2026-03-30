@@ -136,12 +136,21 @@ class UserPreviewSerializer(serializers.ModelSerializer):
     avatar = serializers.SerializerMethodField()
     full_name = serializers.SerializerMethodField()
     user_role = serializers.CharField(source="role", read_only=True)
+    company_name = serializers.SerializerMethodField()
     last_seen = serializers.DateTimeField(read_only=True)
     is_online = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ["id", "full_name", "avatar", "user_role", "last_seen", "is_online"]
+        fields = [
+            "id",
+            "full_name",
+            "avatar",
+            "user_role",
+            "company_name",
+            "last_seen",
+            "is_online",
+        ]
 
     @extend_schema_field(serializers.CharField())
     def get_full_name(self, obj):
@@ -150,6 +159,10 @@ class UserPreviewSerializer(serializers.ModelSerializer):
     @extend_schema_field(serializers.URLField(allow_null=True))
     def get_avatar(self, obj):
         return build_user_avatar_url(obj, request=self.context.get("request"))
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_company_name(self, obj):
+        return (obj.company_name or "").strip() or None
 
     @extend_schema_field(serializers.BooleanField())
     def get_is_online(self, obj):

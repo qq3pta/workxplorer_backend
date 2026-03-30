@@ -184,6 +184,7 @@ class ChatInfoSerializer(serializers.ModelSerializer):
     user_last_seen = serializers.SerializerMethodField()
     user_is_online = serializers.SerializerMethodField()
     creator = serializers.SerializerMethodField()
+    is_muted = serializers.SerializerMethodField()
 
     class Meta:
         model = Chat
@@ -196,6 +197,7 @@ class ChatInfoSerializer(serializers.ModelSerializer):
             "company_name",
             "user_last_seen",
             "user_is_online",
+            "is_muted",
             "participants_count",
             "members",
             "creator",
@@ -218,6 +220,17 @@ class ChatInfoSerializer(serializers.ModelSerializer):
         if not request or not request.user or not request.user.is_authenticated:
             return None
         return request.user.id
+
+    def _viewer_participant(self, obj):
+        participant = getattr(obj, "_viewer_participant", None)
+        if participant is not None:
+            return participant
+        user_id = self._viewer_user_id()
+        if not user_id:
+            return None
+        return (
+            obj.participants.filter(user_id=user_id, is_active=True).only("id", "is_muted").first()
+        )
 
     def _other_user(self, obj):
         viewer_user_id = self._viewer_user_id()
@@ -267,6 +280,13 @@ class ChatInfoSerializer(serializers.ModelSerializer):
         if not other_user:
             return False
         return build_user_is_online(other_user)
+
+    @extend_schema_field(serializers.BooleanField())
+    def get_is_muted(self, obj):
+        participant = self._viewer_participant(obj)
+        if not participant:
+            return False
+        return bool(participant.is_muted)
 
     @extend_schema_field(ChatMemberSerializer(allow_null=True))
     def get_creator(self, obj):
@@ -375,6 +395,7 @@ class ChatListItemSerializer(serializers.ModelSerializer):
     company_name = serializers.SerializerMethodField()
     user_last_seen = serializers.SerializerMethodField()
     user_is_online = serializers.SerializerMethodField()
+    is_muted = serializers.SerializerMethodField()
 
     class Meta:
         model = Chat
@@ -387,6 +408,7 @@ class ChatListItemSerializer(serializers.ModelSerializer):
             "company_name",
             "user_last_seen",
             "user_is_online",
+            "is_muted",
             "participants_count",
             "unread_count",
             "last_message",
@@ -491,9 +513,20 @@ class ChatListItemSerializer(serializers.ModelSerializer):
             return False
         return build_user_is_online(other_user)
 
+    @extend_schema_field(serializers.BooleanField())
+    def get_is_muted(self, obj):
+        participant = self._get_participant(obj)
+        if not participant:
+            return False
+        return bool(participant.is_muted)
+
 
 class OpenPersonalChatSerializer(serializers.Serializer):
     user_id = serializers.IntegerField(min_value=1)
+
+
+class ChatMuteSerializer(serializers.Serializer):
+    is_muted = serializers.BooleanField()
 
 
 class MarkReadSerializer(serializers.Serializer):

@@ -12,6 +12,7 @@ from .models import Chat, ChatParticipant
 from .serializers import (
     ChatInfoSerializer,
     ChatListItemSerializer,
+    ChatMuteSerializer,
     ChatSummarySerializer,
     GroupAddParticipantsSerializer,
     GroupCreateSerializer,
@@ -568,10 +569,37 @@ class ChatInfoView(APIView):
         responses={200: ChatInfoSerializer, 404: ErrorDetailSerializer},
     )
     def get(self, request, chat_id: str):
-        chat, _participant = resolve_chat_and_participant(request.user, chat_id)
+        chat, participant = resolve_chat_and_participant(request.user, chat_id)
         if not chat:
             return Response({"detail": "Чат не найден или нет доступа."}, status=404)
+        chat._viewer_participant = participant
         return Response(ChatInfoSerializer(chat, context={"request": request}).data)
+
+
+class ChatMuteView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        tags=["chat"],
+        request=ChatMuteSerializer,
+        responses={
+            200: inline_serializer(
+                "ChatMuteResponse",
+                {"chat_id": serializers.IntegerField(), "is_muted": serializers.BooleanField()},
+            ),
+            404: ErrorDetailSerializer,
+        },
+    )
+    def post(self, request, chat_id: str):
+        _chat, participant = resolve_chat_and_participant(request.user, chat_id)
+        if not participant:
+            return Response({"detail": "Чат не найден или нет доступа."}, status=404)
+
+        serializer = ChatMuteSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        participant.is_muted = serializer.validated_data["is_muted"]
+        participant.save(update_fields=["is_muted"])
+        return Response({"chat_id": participant.chat_id, "is_muted": participant.is_muted})
 
 
 class ChatReadView(APIView):

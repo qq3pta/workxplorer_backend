@@ -539,7 +539,7 @@ class ChatMessagesView(APIView):
         messages = chat.messages.select_related("sender").order_by("created_at")
         participant.last_read_at = timezone.now()
         participant.save(update_fields=["last_read_at"])
-        return Response(MessageSerializer(messages, many=True).data)
+        return Response(MessageSerializer(messages, many=True, context={"request": request}).data)
 
     @extend_schema(
         tags=["chat"],
@@ -557,7 +557,7 @@ class ChatMessagesView(APIView):
         serializer.is_valid(raise_exception=True)
         msg = serializer.save()
         emit_new_message(msg)
-        return Response(MessageSerializer(msg).data, status=201)
+        return Response(MessageSerializer(msg, context={"request": request}).data, status=201)
 
 
 class ChatInfoView(APIView):

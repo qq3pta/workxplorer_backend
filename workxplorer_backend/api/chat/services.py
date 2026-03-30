@@ -61,12 +61,23 @@ def _message_payload(message: Message) -> dict:
             or f"User#{message.sender_id}"
         )
 
+    attachment_url = None
+    if message.attachment:
+        try:
+            attachment_url = message.attachment.url
+        except Exception:
+            attachment_url = None
+
     return {
         "id": message.id,
         "chat": message.chat_id,
         "sender": message.sender_id,
         "sender_name": sender_name,
         "text": message.text,
+        "attachment_url": attachment_url,
+        "attachment_name": message.attachment_name,
+        "attachment_size": message.attachment_size,
+        "attachment_content_type": message.attachment_content_type,
         "is_edited": message.is_edited,
         "created_at": message.created_at,
         "updated_at": message.updated_at,

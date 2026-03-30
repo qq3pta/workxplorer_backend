@@ -1,4 +1,5 @@
 from datetime import timedelta
+from pathlib import Path
 
 from django.contrib.auth import get_user_model
 from django.db import transaction
@@ -276,6 +277,7 @@ class ChatInfoSerializer(serializers.ModelSerializer):
 
 class MessageSerializer(serializers.ModelSerializer):
     sender_name = serializers.SerializerMethodField()
+    attachment_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Message
@@ -285,6 +287,10 @@ class MessageSerializer(serializers.ModelSerializer):
             "sender",
             "sender_name",
             "text",
+            "attachment_url",
+            "attachment_name",
+            "attachment_size",
+            "attachment_content_type",
             "is_edited",
             "created_at",
             "updated_at",
@@ -295,6 +301,9 @@ class MessageSerializer(serializers.ModelSerializer):
             "sender",
             "sender_name",
             "is_edited",
+            "attachment_name",
+            "attachment_size",
+            "attachment_content_type",
             "created_at",
             "updated_at",
         ]
@@ -305,20 +314,56 @@ class MessageSerializer(serializers.ModelSerializer):
             return "Удаленный пользователь"
         return build_user_display_name(obj.sender)
 
+    @extend_schema_field(serializers.URLField(allow_null=True))
+    def get_attachment_url(self, obj):
+        if not obj.attachment:
+            return None
+        try:
+            url = obj.attachment.url
+        except Exception:
+            return None
+        request = self.context.get("request")
+        if request:
+            return request.build_absolute_uri(url)
+        return url
+
 
 class MessageCreateSerializer(serializers.Serializer):
-    text = serializers.CharField(max_length=5000)
+    text = serializers.CharField(max_length=5000, required=False, allow_blank=True)
+    file = serializers.FileField(required=False, allow_null=True, write_only=True)
 
     def validate_text(self, value):
-        text = value.strip()
-        if not text:
-            raise serializers.ValidationError("Сообщение не может быть пустым.")
-        return text
+        return value.strip()
+
+    def validate(self, attrs):
+        text = (attrs.get("text") or "").strip()
+        file_obj = attrs.get("file")
+        if not text and not file_obj:
+            raise serializers.ValidationError("Нужно передать текст или файл.")
+        attrs["text"] = text
+        return attrs
 
     def create(self, validated_data):
         chat = self.context["chat"]
         user = self.context["request"].user
-        return Message.objects.create(chat=chat, sender=user, text=validated_data["text"])
+        file_obj = validated_data.get("file")
+        attachment_name = ""
+        attachment_size = None
+        attachment_content_type = ""
+        if file_obj:
+            attachment_name = Path(file_obj.name).name
+            attachment_size = getattr(file_obj, "size", None)
+            attachment_content_type = getattr(file_obj, "content_type", "") or ""
+
+        return Message.objects.create(
+            chat=chat,
+            sender=user,
+            text=validated_data.get("text", ""),
+            attachment=file_obj,
+            attachment_name=attachment_name,
+            attachment_size=attachment_size,
+            attachment_content_type=attachment_content_type,
+        )
 
 
 class ChatListItemSerializer(serializers.ModelSerializer):
@@ -388,6 +433,8 @@ class ChatListItemSerializer(serializers.ModelSerializer):
                 "text": serializers.CharField(),
                 "sender_id": serializers.IntegerField(allow_null=True),
                 "sender_name": serializers.CharField(),
+                "attachment_url": serializers.URLField(allow_null=True),
+                "attachment_name": serializers.CharField(allow_blank=True),
                 "created_at": serializers.DateTimeField(),
             },
         )
@@ -396,12 +443,14 @@ class ChatListItemSerializer(serializers.ModelSerializer):
         msg = obj.messages.select_related("sender").order_by("-created_at").first()
         if not msg:
             return None
-        msg_data = MessageSerializer(instance=msg).data
+        msg_data = MessageSerializer(instance=msg, context=self.context).data
         return {
             "id": msg.id,
             "text": msg.text,
             "sender_id": msg.sender_id,
             "sender_name": msg_data["sender_name"],
+            "attachment_url": msg_data["attachment_url"],
+            "attachment_name": msg_data["attachment_name"],
             "created_at": msg.created_at,
         }
 

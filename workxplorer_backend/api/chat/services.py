@@ -205,6 +205,27 @@ def emit_new_message(message: Message) -> None:
                 },
             )
 
+            # Additional notification channel for /ws/loads.
+            # Skip muted chats so frontend can avoid sound notifications.
+            if not participant.is_muted:
+                channel_layer = get_channel_layer()
+                async_to_sync(channel_layer.group_send)(
+                    f"user_{participant.user_id}",
+                    to_ws_safe(
+                        {
+                            "type": "notify",
+                            "data": {
+                                "event": "chat_message_received",
+                                "chat_id": message.chat_id,
+                                "message_id": message.id,
+                                "sender_id": message.sender_id,
+                                "sender_name": payload["sender_name"],
+                                "unread_count": unread_count,
+                            },
+                        }
+                    ),
+                )
+
 
 def emit_added_to_group(chat: Chat, user_ids: list[int], added_by_id: int | None = None) -> None:
     for user_id in user_ids:

@@ -11,6 +11,7 @@ from rest_framework.views import APIView
 from .models import Chat, ChatParticipant, Message
 from .serializers import (
     ChatInfoSerializer,
+    ChatInvitationItemSerializer,
     ChatListItemSerializer,
     ChatMuteSerializer,
     ChatSummarySerializer,
@@ -129,7 +130,12 @@ class GroupCreateView(APIView):
             participant, created = ChatParticipant.objects.get_or_create(
                 chat=chat,
                 user=user,
-                defaults={"is_active": False, "is_admin": False},
+                defaults={
+                    "is_active": False,
+                    "is_admin": False,
+                    "invited_by": request.user,
+                    "invited_at": timezone.now(),
+                },
             )
             if created:
                 invited_user_ids.append(user.id)
@@ -137,11 +143,18 @@ class GroupCreateView(APIView):
 
             participant.is_active = False
             participant.is_admin = False
-            participant.save(update_fields=["is_active", "is_admin"])
+            participant.invited_by = request.user
+            participant.invited_at = timezone.now()
+            participant.save(update_fields=["is_active", "is_admin", "invited_by", "invited_at"])
             invited_user_ids.append(user.id)
 
         if invited_user_ids:
-            emit_group_invite_request(chat, invited_user_ids, invited_by_id=request.user.id)
+            emit_group_invite_request(
+                chat,
+                invited_user_ids,
+                invited_by_id=request.user.id,
+                invited_by_name=request.user.get_full_name() or request.user.username or "",
+            )
 
         return Response(ChatSummarySerializer(chat).data, status=201)
 
@@ -228,18 +241,30 @@ class GroupAddParticipantsView(APIView):
             participant, created = ChatParticipant.objects.get_or_create(
                 chat=chat,
                 user=user,
-                defaults={"is_active": False, "is_admin": False},
+                defaults={
+                    "is_active": False,
+                    "is_admin": False,
+                    "invited_by": request.user,
+                    "invited_at": timezone.now(),
+                },
             )
             if participant.is_active:
                 continue
 
             participant.is_active = False
             participant.is_admin = False
-            participant.save(update_fields=["is_active", "is_admin"])
+            participant.invited_by = request.user
+            participant.invited_at = timezone.now()
+            participant.save(update_fields=["is_active", "is_admin", "invited_by", "invited_at"])
             invited_user_ids.append(user.id)
 
         if invited_user_ids:
-            emit_group_invite_request(chat, invited_user_ids, invited_by_id=request.user.id)
+            emit_group_invite_request(
+                chat,
+                invited_user_ids,
+                invited_by_id=request.user.id,
+                invited_by_name=request.user.get_full_name() or request.user.username or "",
+            )
 
         return Response(
             {"chat": ChatSummarySerializer(chat).data, "invited_user_ids": invited_user_ids}
@@ -274,13 +299,37 @@ class GroupInviteDecisionView(APIView):
 
         if action == "accept":
             participant.is_active = True
-            participant.save(update_fields=["is_active"])
+            participant.invited_by = None
+            participant.invited_at = None
+            participant.save(update_fields=["is_active", "invited_by", "invited_at"])
             emit_added_to_group(chat, [request.user.id], added_by_id=None)
             emit_member_joined(chat, request.user.id)
             return Response(ChatSummarySerializer(chat).data, status=200)
 
         participant.delete()
         return Response(status=204)
+
+
+class GroupInviteAcceptDirectView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        tags=["chat"],
+        responses={200: ChatSummarySerializer, 404: ErrorDetailSerializer},
+    )
+    def post(self, request, chat_id: str):
+        chat, participant = resolve_chat_participant_any_status(request.user, chat_id)
+        if not chat or not participant or participant.is_active:
+            return Response({"detail": "Приглашение не найдено."}, status=404)
+
+        participant.is_active = True
+        participant.invited_by = None
+        participant.invited_at = None
+        participant.save(update_fields=["is_active", "invited_by", "invited_at"])
+
+        emit_added_to_group(chat, [request.user.id], added_by_id=None)
+        emit_member_joined(chat, request.user.id)
+        return Response(ChatSummarySerializer(chat).data, status=200)
 
 
 class GroupLeaveView(APIView):
@@ -509,21 +558,79 @@ class ChatListView(APIView):
 
     @extend_schema(
         tags=["chat"],
-        responses={200: ChatListItemSerializer(many=True)},
+        responses={
+            200: inline_serializer(
+                "ChatFeedResponseItem",
+                {
+                    "id": serializers.IntegerField(),
+                    "chat_type": serializers.CharField(),
+                    "title": serializers.CharField(required=False, allow_blank=True),
+                    "display_title": serializers.CharField(required=False, allow_blank=True),
+                    "participants_count": serializers.IntegerField(required=False),
+                    "unread_count": serializers.IntegerField(required=False),
+                    "last_message": serializers.JSONField(required=False, allow_null=True),
+                    "last_message_at": serializers.DateTimeField(required=False, allow_null=True),
+                    "created_at": serializers.DateTimeField(required=False),
+                    "invitation_group_id": serializers.IntegerField(required=False),
+                    "invitation_group_title": serializers.CharField(
+                        required=False, allow_blank=True
+                    ),
+                    "invitation_participants_count": serializers.IntegerField(required=False),
+                    "invited_by": serializers.JSONField(required=False, allow_null=True),
+                    "invited_at": serializers.DateTimeField(required=False, allow_null=True),
+                },
+                many=True,
+            )
+        },
     )
     def get(self, request):
         sync_user_default_role_chat(request.user, emit_events=True)
-        participant_qs = (
+        active_participants = (
             ChatParticipant.objects.filter(user=request.user, is_active=True)
             .select_related("chat")
             .order_by("-chat__last_message_at")
         )
         chats = []
-        for participant in participant_qs:
+        for participant in active_participants:
             chat = participant.chat
             chat._viewer_participant = participant
             chats.append(chat)
-        return Response(ChatListItemSerializer(chats, many=True, context={"request": request}).data)
+        feed = ChatListItemSerializer(chats, many=True, context={"request": request}).data
+
+        pending_participants = (
+            ChatParticipant.objects.filter(
+                user=request.user, is_active=False, chat__chat_type=Chat.ChatType.GROUP
+            )
+            .select_related("chat", "invited_by")
+            .order_by("-invited_at", "-chat__updated_at")
+        )
+        for participant in pending_participants:
+            invitation_item = ChatInvitationItemSerializer(
+                {
+                    "id": participant.chat_id,
+                    "chat_type": "invitation",
+                    "title": participant.chat.title,
+                    "display_title": participant.chat.title,
+                    "participants_count": participant.chat.participants.filter(
+                        is_active=True
+                    ).count(),
+                    "unread_count": 0,
+                    "last_message": None,
+                    "last_message_at": None,
+                    "created_at": participant.chat.created_at,
+                    "invitation_group_id": participant.chat_id,
+                    "invitation_group_title": participant.chat.title,
+                    "invitation_participants_count": participant.chat.participants.filter(
+                        is_active=True
+                    ).count(),
+                    "invited_by": participant.invited_by,
+                    "invited_at": participant.invited_at,
+                },
+                context={"request": request},
+            ).data
+            feed.append(invitation_item)
+
+        return Response(feed)
 
 
 class ChatMessagesView(APIView):

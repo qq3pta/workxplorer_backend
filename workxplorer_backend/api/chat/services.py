@@ -276,14 +276,25 @@ def emit_group_deleted(user_ids: list[int], chat_id: int, title: str, deleted_by
         )
 
 
-def emit_group_invite_request(chat: Chat, user_ids: list[int], invited_by_id: int) -> None:
+def emit_group_invite_request(
+    chat: Chat,
+    user_ids: list[int],
+    invited_by_id: int,
+    invited_by_name: str = "",
+) -> None:
+    participants_count = ChatParticipant.objects.filter(chat=chat, is_active=True).count()
     for user_id in user_ids:
         _ws_send(
             ws_user_group(user_id),
             {
                 "event": "group_invite_request",
-                "chat": _chat_payload(chat),
+                "chat_type": "invitation",
+                "group_id": chat.id,
+                "group_title": chat.title,
+                "participants_count": participants_count,
                 "invited_by_id": invited_by_id,
+                "invited_by_name": invited_by_name,
+                "chat": _chat_payload(chat),
             },
         )
 

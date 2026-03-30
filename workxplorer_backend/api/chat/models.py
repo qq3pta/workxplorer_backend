@@ -63,6 +63,14 @@ class ChatParticipant(models.Model):
         on_delete=models.CASCADE,
         related_name="chat_participations",
     )
+    invited_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="sent_chat_invites",
+    )
+    invited_at = models.DateTimeField(null=True, blank=True)
     joined_at = models.DateTimeField(auto_now_add=True)
     last_read_at = models.DateTimeField(null=True, blank=True)
     is_muted = models.BooleanField(default=False)

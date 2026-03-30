@@ -98,10 +98,6 @@ class GroupCreateSerializer(serializers.Serializer):
             chat.refresh_invite()
 
         ChatParticipant.objects.create(chat=chat, user=user, is_admin=True)
-        ChatParticipant.objects.bulk_create(
-            [ChatParticipant(chat=chat, user=member) for member in users_qs],
-            ignore_conflicts=True,
-        )
         return chat
 
 
@@ -162,6 +158,23 @@ class UserPreviewSerializer(serializers.ModelSerializer):
 
 class UserSearchResultSerializer(UserPreviewSerializer):
     pass
+
+
+class ChatInvitationItemSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    chat_type = serializers.CharField(default="invitation")
+    title = serializers.CharField()
+    display_title = serializers.CharField()
+    participants_count = serializers.IntegerField()
+    unread_count = serializers.IntegerField(default=0)
+    last_message = serializers.JSONField(allow_null=True)
+    last_message_at = serializers.DateTimeField(allow_null=True)
+    created_at = serializers.DateTimeField()
+    invitation_group_id = serializers.IntegerField()
+    invitation_group_title = serializers.CharField()
+    invitation_participants_count = serializers.IntegerField()
+    invited_by = UserPreviewSerializer(allow_null=True)
+    invited_at = serializers.DateTimeField(allow_null=True)
 
 
 class ChatMemberSerializer(UserPreviewSerializer):

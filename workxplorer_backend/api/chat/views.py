@@ -8,7 +8,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Chat, ChatParticipant
+from .models import Chat, ChatParticipant, Message
 from .serializers import (
     ChatInfoSerializer,
     ChatListItemSerializer,
@@ -33,6 +33,7 @@ from .services import (
     emit_group_invite_request,
     emit_member_joined,
     emit_member_left,
+    emit_message_deleted,
     emit_message_read,
     emit_new_message,
     sync_user_default_role_chat,
@@ -559,6 +560,33 @@ class ChatMessagesView(APIView):
         msg = serializer.save()
         emit_new_message(msg)
         return Response(MessageSerializer(msg, context={"request": request}).data, status=201)
+
+
+class ChatMessageDeleteView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        tags=["chat"],
+        responses={204: None, 403: ErrorDetailSerializer, 404: ErrorDetailSerializer},
+    )
+    def delete(self, request, chat_id: str, message_id: int):
+        chat, _participant = resolve_chat_and_participant(request.user, chat_id)
+        if not chat:
+            return Response({"detail": "Чат не найден или нет доступа."}, status=404)
+        if chat.chat_type != Chat.ChatType.GROUP:
+            return Response(
+                {"detail": "Удаление сообщений доступно только в групповых чатах."}, status=403
+            )
+        if not user_can_manage_group(chat, request.user.id):
+            return Response({"detail": "Недостаточно прав для удаления сообщения."}, status=403)
+
+        message = Message.objects.filter(chat=chat, id=message_id).first()
+        if not message:
+            return Response({"detail": "Сообщение не найдено."}, status=404)
+
+        message.delete()
+        emit_message_deleted(chat.id, message_id=message_id, deleted_by_id=request.user.id)
+        return Response(status=204)
 
 
 class ChatInfoView(APIView):

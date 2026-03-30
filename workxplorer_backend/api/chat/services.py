@@ -286,3 +286,15 @@ def emit_group_invite_request(chat: Chat, user_ids: list[int], invited_by_id: in
                 "invited_by_id": invited_by_id,
             },
         )
+
+
+def emit_message_deleted(chat_id: int, message_id: int, deleted_by_id: int) -> None:
+    _ws_send(
+        ws_chat_group(chat_id),
+        {
+            "event": "message_deleted",
+            "chat_id": chat_id,
+            "message_id": message_id,
+            "deleted_by_id": deleted_by_id,
+        },
+    )

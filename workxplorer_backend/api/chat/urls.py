@@ -18,6 +18,7 @@ from .views import (
     GroupLeaveView,
     JoinByLinkView,
     OpenPersonalChatView,
+    OrderChatView,
     PersonalChatDeleteView,
     UserSearchView,
 )
@@ -68,4 +69,5 @@ urlpatterns = [
     ),
     path("chats/<str:chat_id>/mute/", ChatMuteView.as_view(), name="chat-mute"),
     path("chats/<str:chat_id>/read/", ChatReadView.as_view(), name="chat-read"),
+    path("orders/<int:order_id>/chat/", OrderChatView.as_view(), name="chat-order-chat"),
 ]

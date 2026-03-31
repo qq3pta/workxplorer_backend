@@ -111,6 +111,67 @@ class ChatPingView(APIView):
         return Response({"status": "ok", "service": "chat"})
 
 
+class OrderChatView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        tags=["chat"],
+        responses={200: ChatInfoSerializer, 403: ErrorDetailSerializer, 404: ErrorDetailSerializer},
+    )
+    def get(self, request, order_id: int):
+        from api.orders.models import Order
+
+        order = (
+            Order.objects.select_related("chat")
+            .filter(id=order_id)
+            .only(
+                "id",
+                "chat_id",
+                "customer_id",
+                "carrier_id",
+                "logistic_id",
+                "created_by_id",
+                "invited_carrier_id",
+            )
+            .first()
+        )
+        if not order:
+            return Response({"detail": "Заказ не найден."}, status=404)
+
+        allowed_user_ids = {
+            user_id
+            for user_id in (
+                order.customer_id,
+                order.carrier_id,
+                order.logistic_id,
+                order.created_by_id,
+                order.invited_carrier_id,
+            )
+            if user_id
+        }
+        if request.user.id not in allowed_user_ids:
+            return Response({"detail": "Нет доступа к чату заказа."}, status=403)
+
+        if not order.chat_id:
+            return Response({"detail": "Чат заказа ещё не создан."}, status=404)
+
+        participant = (
+            ChatParticipant.objects.filter(
+                chat_id=order.chat_id,
+                user=request.user,
+                is_active=True,
+            )
+            .select_related("chat")
+            .first()
+        )
+        if not participant:
+            return Response({"detail": "Нет доступа к чату заказа."}, status=403)
+
+        chat = participant.chat
+        chat._viewer_participant = participant
+        return Response(ChatInfoSerializer(chat, context={"request": request}).data)
+
+
 class GroupCreateView(APIView):
     permission_classes = [IsAuthenticated]
 

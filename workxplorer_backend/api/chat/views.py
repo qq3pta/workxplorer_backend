@@ -111,6 +111,67 @@ class ChatPingView(APIView):
         return Response({"status": "ok", "service": "chat"})
 
 
+class OrderChatView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        tags=["chat"],
+        responses={200: ChatInfoSerializer, 403: ErrorDetailSerializer, 404: ErrorDetailSerializer},
+    )
+    def get(self, request, order_id: int):
+        from api.orders.models import Order
+
+        order = (
+            Order.objects.select_related("chat")
+            .filter(id=order_id)
+            .only(
+                "id",
+                "chat_id",
+                "customer_id",
+                "carrier_id",
+                "logistic_id",
+                "created_by_id",
+                "invited_carrier_id",
+            )
+            .first()
+        )
+        if not order:
+            return Response({"detail": "Заказ не найден."}, status=404)
+
+        allowed_user_ids = {
+            user_id
+            for user_id in (
+                order.customer_id,
+                order.carrier_id,
+                order.logistic_id,
+                order.created_by_id,
+                order.invited_carrier_id,
+            )
+            if user_id
+        }
+        if request.user.id not in allowed_user_ids:
+            return Response({"detail": "Нет доступа к чату заказа."}, status=403)
+
+        if not order.chat_id:
+            return Response({"detail": "Чат заказа ещё не создан."}, status=404)
+
+        participant = (
+            ChatParticipant.objects.filter(
+                chat_id=order.chat_id,
+                user=request.user,
+                is_active=True,
+            )
+            .select_related("chat")
+            .first()
+        )
+        if not participant:
+            return Response({"detail": "Нет доступа к чату заказа."}, status=403)
+
+        chat = participant.chat
+        chat._viewer_participant = participant
+        return Response(ChatInfoSerializer(chat, context={"request": request}).data)
+
+
 class GroupCreateView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -303,7 +364,9 @@ class GroupKickMemberView(APIView):
 
         target.is_active = False
         target.is_admin = False
-        target.save(update_fields=["is_active", "is_admin"])
+        target.invited_by = None
+        target.invited_at = None
+        target.save(update_fields=["is_active", "is_admin", "invited_by", "invited_at"])
 
         emit_member_kicked(chat.id, user_id=user_id, kicked_by_id=request.user.id)
         emit_chat_removed(user_id, chat.id, reason="kicked_from_group")
@@ -329,8 +392,8 @@ class GroupInviteDecisionView(APIView):
             return Response({"detail": "Приглашение не найдено."}, status=404)
         if chat.chat_type != Chat.ChatType.GROUP:
             return Response({"detail": "Приглашение доступно только для группы."}, status=400)
-        if participant.is_active:
-            return Response({"detail": "Вы уже состоите в этой группе."}, status=400)
+        if participant.is_active or not participant.invited_by_id:
+            return Response({"detail": "Приглашение не найдено."}, status=404)
 
         serializer = GroupInviteDecisionSerializer(data=request.data or {})
         serializer.is_valid(raise_exception=True)
@@ -358,7 +421,7 @@ class GroupInviteAcceptDirectView(APIView):
     )
     def post(self, request, chat_id: str):
         chat, participant = resolve_chat_participant_any_status(request.user, chat_id)
-        if not chat or not participant or participant.is_active:
+        if not chat or not participant or participant.is_active or not participant.invited_by_id:
             return Response({"detail": "Приглашение не найдено."}, status=404)
 
         participant.is_active = True
@@ -391,7 +454,9 @@ class GroupLeaveView(APIView):
 
         participant.is_active = False
         participant.is_admin = False
-        participant.save(update_fields=["is_active", "is_admin"])
+        participant.invited_by = None
+        participant.invited_at = None
+        participant.save(update_fields=["is_active", "is_admin", "invited_by", "invited_at"])
 
         emit_member_left(chat.id, request.user.id)
         emit_chat_removed(request.user.id, chat.id, reason="left_group")
@@ -638,7 +703,10 @@ class ChatListView(APIView):
 
         pending_participants = (
             ChatParticipant.objects.filter(
-                user=request.user, is_active=False, chat__chat_type=Chat.ChatType.GROUP
+                user=request.user,
+                is_active=False,
+                invited_by__isnull=False,
+                chat__chat_type=Chat.ChatType.GROUP,
             )
             .select_related("chat", "invited_by")
             .order_by("-invited_at", "-chat__updated_at")

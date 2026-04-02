@@ -94,6 +94,31 @@ def _chat_payload(chat: Chat) -> dict:
     }
 
 
+def _chat_unread_count_for_participant(participant: ChatParticipant) -> int:
+    queryset = Message.objects.filter(chat_id=participant.chat_id).exclude(
+        sender_id=participant.user_id
+    )
+    if participant.last_read_at:
+        queryset = queryset.filter(created_at__gt=participant.last_read_at)
+    return queryset.count()
+
+
+def _total_unread_count_for_user(*, user_id: int, exclude_muted: bool = False) -> int:
+    participants = ChatParticipant.objects.filter(user_id=user_id, is_active=True).only(
+        "chat_id",
+        "last_read_at",
+        "user_id",
+        "is_muted",
+    )
+    if exclude_muted:
+        participants = participants.filter(is_muted=False)
+
+    total = 0
+    for participant in participants:
+        total += _chat_unread_count_for_participant(participant)
+    return total
+
+
 def _get_or_create_default_role_chat(role: str) -> Chat | None:
     title = ROLE_DEFAULT_GROUP_TITLES.get(role)
     if not title:
@@ -173,15 +198,7 @@ def emit_new_message(message: Message) -> None:
 
     participants = ChatParticipant.objects.filter(chat_id=message.chat_id, is_active=True)
     for participant in participants:
-        unread_count = (
-            Message.objects.filter(chat_id=message.chat_id, created_at__gt=participant.last_read_at)
-            .exclude(sender_id=participant.user_id)
-            .count()
-            if participant.last_read_at
-            else Message.objects.filter(chat_id=message.chat_id)
-            .exclude(sender_id=participant.user_id)
-            .count()
-        )
+        unread_count = _chat_unread_count_for_participant(participant)
 
         _ws_send(
             ws_user_group(participant.user_id),
@@ -208,6 +225,10 @@ def emit_new_message(message: Message) -> None:
             # Additional notification channel for /ws/loads.
             # Skip muted chats so frontend can avoid sound notifications.
             if not participant.is_muted:
+                total_unread_count = _total_unread_count_for_user(
+                    user_id=participant.user_id,
+                    exclude_muted=True,
+                )
                 channel_layer = get_channel_layer()
                 async_to_sync(channel_layer.group_send)(
                     f"user_{participant.user_id}",
@@ -220,7 +241,8 @@ def emit_new_message(message: Message) -> None:
                                 "message_id": message.id,
                                 "sender_id": message.sender_id,
                                 "sender_name": payload["sender_name"],
-                                "unread_count": unread_count,
+                                "unread_count": total_unread_count,
+                                "chat_unread_count": unread_count,
                             },
                         }
                     ),

@@ -192,6 +192,7 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
 
         gp = self._smart_find_place(country, city)
         if gp:
+            attrs["origin_region"] = gp.region
             return gp.point
 
         try:
@@ -210,6 +211,7 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
 
         gp = self._smart_find_place(country, city)
         if gp:
+            attrs["destination_region"] = gp.region
             return gp.point
 
         try:
@@ -407,6 +409,8 @@ class CargoListSerializer(RouteKmMixin, serializers.ModelSerializer):
     price_per_km = serializers.SerializerMethodField()
     origin_lat = serializers.SerializerMethodField()
     origin_lng = serializers.SerializerMethodField()
+    origin_region = serializers.CharField(read_only=True)
+    destination_region = serializers.CharField(read_only=True)
     dest_lat = serializers.SerializerMethodField()
     dest_lng = serializers.SerializerMethodField()
     is_hidden = serializers.BooleanField(read_only=True)
@@ -441,9 +445,11 @@ class CargoListSerializer(RouteKmMixin, serializers.ModelSerializer):
             "description",
             "origin_country",
             "origin_city",
+            "origin_region",
             "origin_address",
             "destination_country",
             "destination_city",
+            "destination_region",
             "destination_address",
             "load_date",
             "delivery_date",

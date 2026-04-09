@@ -313,6 +313,20 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
         dest_lat = validated_data.pop("dest_lat", None)
         dest_lng = validated_data.pop("dest_lng", None)
 
+        origin_gp = self._smart_find_place(
+            validated_data.get("origin_country", ""),
+            validated_data.get("origin_city", ""),
+        )
+        if origin_gp:
+            validated_data["origin_region"] = origin_gp.region
+
+        dest_gp = self._smart_find_place(
+            validated_data.get("destination_country", ""),
+            validated_data.get("destination_city", ""),
+        )
+        if dest_gp:
+            validated_data["destination_region"] = dest_gp.region
+
         if origin_lat is not None and origin_lng is not None:
             origin_point = Point(float(origin_lng), float(origin_lat), srid=4326)
         else:

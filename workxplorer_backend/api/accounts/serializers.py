@@ -504,21 +504,6 @@ class RoleChangeSerializer(serializers.Serializer):
         return {"detail": "Роль обновлена", "role": user.role}
 
 
-class AnalyticsSerializer(serializers.Serializer):
-    successful_deliveries = serializers.IntegerField()
-    successful_deliveries_change = serializers.FloatField()
-    registered_since = serializers.DateField()
-    days_since_registered = serializers.IntegerField()
-    rating = serializers.FloatField()
-    distance_km = serializers.FloatField()
-    deals_count = serializers.IntegerField()
-    average_price_per_km = serializers.FloatField()
-    average_price_per_km_change = serializers.FloatField()
-
-    bar_chart = serializers.DictField()
-    pie_chart = serializers.DictField()
-
-
 class SendEmailVerifyFromProfileSerializer(serializers.Serializer):
     email = serializers.EmailField()
 

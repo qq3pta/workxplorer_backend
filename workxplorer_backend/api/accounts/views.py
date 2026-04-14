@@ -2,8 +2,6 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.db.models import Q, Sum
-from django.db.models.functions import TruncMonth
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import generics, serializers
@@ -21,12 +19,10 @@ from rest_framework_simplejwt.tokens import (
     RefreshToken,
 )
 
-from api.orders.models import Order
 
-from .models import Profile, UserRole
+from .models import Profile
 from .permissions import IsAuthenticatedAndVerified
 from .serializers import (
-    AnalyticsSerializer,
     ForgotPasswordSerializer,
     LoginSerializer,
     MeSerializer,
@@ -396,175 +392,6 @@ class ChangePasswordView(APIView):
         )
         serializer.is_valid(raise_exception=True)
         return Response(serializer.save())
-
-
-@extend_schema(
-    tags=["auth"],
-    responses=AnalyticsSerializer,
-)
-class AnalyticsView(APIView):
-    permission_classes = [IsAuthenticatedAndVerified]
-
-    def get(self, request):
-        user = request.user
-        now = timezone.now()
-        completed_statuses = [Order.OrderStatus.DELIVERED, Order.OrderStatus.PAID]
-
-        qs = Order.objects.filter(status__in=completed_statuses)
-
-        role = getattr(user, "role", None)
-        if role == UserRole.LOGISTIC:
-            qs = qs.filter(customer=user)
-        elif role == UserRole.CARRIER:
-            qs = qs.filter(carrier=user)
-        else:
-            qs = qs.filter(Q(customer=user) | Q(carrier=user))
-        rating = user.avg_rating
-
-        days = 30
-        current_start = now - timedelta(days=days)
-        prev_start = now - timedelta(days=days * 2)
-
-        current_qs = qs.filter(created_at__gte=current_start)
-        prev_qs = qs.filter(created_at__gte=prev_start, created_at__lt=current_start)
-
-        current_cnt = current_qs.count()
-        prev_cnt = prev_qs.count()
-
-        if prev_cnt > 0:
-            successful_change = (current_cnt - prev_cnt) / prev_cnt
-        else:
-            successful_change = 1.0 if current_cnt > 0 else 0.0
-
-        registered_since = getattr(user, "date_joined", now).date()
-        days_since_registered = (now.date() - registered_since).days
-
-        agg = qs.aggregate(total_km=Sum("route_distance_km"))
-        distance_km = float(agg["total_km"] or 0)
-        deals_count = qs.count()
-
-        current_agg = current_qs.aggregate(
-            total_price=Sum("price_total"), total_km=Sum("route_distance_km")
-        )
-        prev_agg = prev_qs.aggregate(
-            total_price=Sum("price_total"), total_km=Sum("route_distance_km")
-        )
-
-        current_total_price = float(current_agg["total_price"] or 0)
-        current_total_km = float(current_agg["total_km"] or 0)
-        prev_total_price = float(prev_agg["total_price"] or 0)
-        prev_total_km = float(prev_agg["total_km"] or 0)
-
-        avg_price_per_km = current_total_price / current_total_km if current_total_km > 0 else 0.0
-        prev_avg_price_per_km = prev_total_price / prev_total_km if prev_total_km > 0 else 0.0
-
-        if prev_avg_price_per_km > 0:
-            avg_price_per_km_change = (
-                avg_price_per_km - prev_avg_price_per_km
-            ) / prev_avg_price_per_km
-        else:
-            avg_price_per_km_change = 1.0 if avg_price_per_km > 0 else 0.0
-
-        # ---------- BAR CHART ----------
-        year = int(request.query_params.get("year", now.year))
-        half = request.query_params.get("half", "1")
-
-        months = range(1, 7) if half == "1" else range(7, 13)
-
-        def month_label(m):
-            return [
-                "",
-                "Янв",
-                "Фев",
-                "Мар",
-                "Апр",
-                "Май",
-                "Июн",
-                "Июл",
-                "Авг",
-                "Сен",
-                "Окт",
-                "Ноя",
-                "Дек",
-            ][m]
-
-        base_qs = Order.objects.filter(
-            created_at__year=year,
-            created_at__month__in=months,
-            status__in=completed_statuses,
-        )
-
-        by_month = base_qs.annotate(m=TruncMonth("created_at")).values("m")
-
-        def sums(qs):
-            return {r["m"].month: float(r["s"] or 0) for r in qs.annotate(s=Sum("price_total"))}
-
-        given_map = sums(by_month.filter(customer=user))
-        received_map = sums(by_month.filter(carrier=user))
-        earned_map = sums(by_month.filter(logistic=user))
-
-        bar_chart = {
-            "labels": [month_label(m) for m in months],
-            "given": [given_map.get(m, 0) for m in months],
-            "received": [received_map.get(m, 0) for m in months],
-            "earned": [earned_map.get(m, 0) for m in months],
-        }
-
-        orders_qs = Order.objects.all()
-
-        if role == UserRole.LOGISTIC:
-            orders_qs = orders_qs.filter(customer=user)
-        elif role == UserRole.CARRIER:
-            orders_qs = orders_qs.filter(carrier=user)
-        else:
-            orders_qs = orders_qs.filter(Q(customer=user) | Q(carrier=user))
-
-        in_search = orders_qs.filter(status=Order.OrderStatus.NO_DRIVER).count()
-
-        in_process = orders_qs.filter(
-            status__in=[
-                Order.OrderStatus.PENDING,
-                Order.OrderStatus.EN_ROUTE,
-            ]
-        ).count()
-
-        successful = orders_qs.filter(status__in=completed_statuses).count()
-
-        cancelled = orders_qs.exclude(
-            status__in=[
-                Order.OrderStatus.NO_DRIVER,
-                Order.OrderStatus.PENDING,
-                Order.OrderStatus.EN_ROUTE,
-                *completed_statuses,
-            ]
-        ).count()
-
-        pie_chart = {
-            "in_search": in_search,
-            "in_process": in_process,
-            "successful": successful,
-            "cancelled": cancelled,
-            "total": in_search + in_process + successful + cancelled,
-        }
-
-        # ---------- RESPONSE ----------
-        data = {
-            "successful_deliveries": current_cnt,
-            "successful_deliveries_change": round(successful_change, 3),
-            "registered_since": registered_since,
-            "days_since_registered": days_since_registered,
-            "rating": float(rating or 0),
-            "distance_km": distance_km,
-            "deals_count": deals_count,
-            "average_price_per_km": round(avg_price_per_km, 2),
-            "average_price_per_km_change": round(avg_price_per_km_change, 3),
-            "bar_chart": bar_chart,
-            "pie_chart": pie_chart,
-        }
-
-        ser = AnalyticsSerializer(data=data)
-        ser.is_valid(raise_exception=True)
-        return Response(ser.data)
 
 
 @extend_schema(

@@ -1,0 +1,287 @@
+from datetime import timedelta
+
+from django.contrib.auth import get_user_model
+from django.db.models import Q, Sum, Count, Avg, F, ExpressionWrapper, DurationField
+from django.db.models.functions import TruncMonth
+from django.utils import timezone
+from drf_spectacular.utils import extend_schema
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+from api.accounts.models import UserRole
+from api.accounts.permissions import IsAuthenticatedAndVerified
+from api.orders.models import Order
+from .serializers import AnalyticsSerializer
+
+User = get_user_model()
+
+
+class BaseAnalyticsMixin:
+    completed_statuses = [Order.OrderStatus.DELIVERED]
+
+    def month_label(self, m):
+        return [
+            "",
+            "Янв",
+            "Фев",
+            "Мар",
+            "Апр",
+            "Май",
+            "Июн",
+            "Июл",
+            "Авг",
+            "Сен",
+            "Окт",
+            "Ноя",
+            "Дек",
+        ][m]
+
+    def apply_filters(self, request, qs):
+        date_from = request.query_params.get("date_from")
+        date_to = request.query_params.get("date_to")
+        origin_region = request.query_params.get("origin_region")
+        destination_region = request.query_params.get("destination_region")
+        transport_type = request.query_params.get("transport_type")
+        category = request.query_params.get("category")
+        payment_method = request.query_params.get("payment_method")
+        currency = request.query_params.get("currency")
+
+        if date_from:
+            qs = qs.filter(cargo__load_date__gte=date_from)
+
+        if date_to:
+            qs = qs.filter(cargo__delivery_date__lte=date_to)
+
+        if origin_region:
+            qs = qs.filter(cargo__origin_region__iexact=origin_region)
+
+        if destination_region:
+            qs = qs.filter(cargo__destination_region__iexact=destination_region)
+
+        if transport_type:
+            qs = qs.filter(cargo__transport_type=transport_type)
+
+        if category:
+            qs = qs.filter(cargo__cargo_category=category)
+
+        if payment_method:
+            qs = qs.filter(cargo__payment_method=payment_method)
+
+        if currency:
+            qs = qs.filter(currency=currency)
+
+        return qs
+
+    def build_directions(self, qs):
+        directions_agg = (
+            qs.select_related("cargo")
+            .values(
+                "cargo__origin_region",
+                "cargo__destination_region",
+                "cargo__load_date",
+                "cargo__delivery_date",
+            )
+            .annotate(
+                shipments=Count("id"),
+                avg_price=Avg("price_total"),
+                avg_weight=Avg("cargo__weight_kg"),
+                avg_duration=Avg(
+                    ExpressionWrapper(
+                        F("unloading_datetime") - F("loading_datetime"),
+                        output_field=DurationField(),
+                    )
+                ),
+            )
+            .order_by("-shipments")[:10]
+        )
+
+        directions_data = []
+        for d in directions_agg:
+            duration = d["avg_duration"]
+            hours = duration.total_seconds() / 3600 if duration else 0
+
+            directions_data.append(
+                {
+                    "origin": d["cargo__origin_region"] or "—",
+                    "destination": d["cargo__destination_region"] or "—",
+                    "load_date": d["cargo__load_date"],
+                    "delivery_date": d["cargo__delivery_date"],
+                    "price": float(d["avg_price"] or 0),
+                    "shipments": d["shipments"],
+                    "weight": float(d["avg_weight"] or 0),
+                    "time": round(hours, 1),
+                }
+            )
+        return directions_data
+
+    def build_response_data(self, request, qs, rating_value=0):
+        now = timezone.now()
+
+        days = 30
+        current_start = now - timedelta(days=days)
+        prev_start = now - timedelta(days=days * 2)
+
+        current_qs = qs.filter(created_at__gte=current_start)
+        prev_qs = qs.filter(created_at__gte=prev_start, created_at__lt=current_start)
+
+        current_cnt = current_qs.count()
+        prev_cnt = prev_qs.count()
+
+        if prev_cnt > 0:
+            successful_change = (current_cnt - prev_cnt) / prev_cnt
+        else:
+            successful_change = 1.0 if current_cnt > 0 else 0.0
+
+        registered_since = getattr(request.user, "date_joined", now).date()
+        days_since_registered = (now.date() - registered_since).days
+
+        agg = qs.aggregate(total_km=Sum("route_distance_km"))
+        distance_km = float(agg["total_km"] or 0)
+        deals_count = qs.count()
+
+        current_agg = current_qs.aggregate(
+            total_price=Sum("price_total"),
+            total_km=Sum("route_distance_km"),
+        )
+        prev_agg = prev_qs.aggregate(
+            total_price=Sum("price_total"),
+            total_km=Sum("route_distance_km"),
+        )
+
+        current_total_price = float(current_agg["total_price"] or 0)
+        current_total_km = float(current_agg["total_km"] or 0)
+        prev_total_price = float(prev_agg["total_price"] or 0)
+        prev_total_km = float(prev_agg["total_km"] or 0)
+
+        avg_price_per_km = current_total_price / current_total_km if current_total_km > 0 else 0.0
+        prev_avg_price_per_km = prev_total_price / prev_total_km if prev_total_km > 0 else 0.0
+
+        if prev_avg_price_per_km > 0:
+            avg_price_per_km_change = (
+                avg_price_per_km - prev_avg_price_per_km
+            ) / prev_avg_price_per_km
+        else:
+            avg_price_per_km_change = 1.0 if avg_price_per_km > 0 else 0.0
+
+        year = int(request.query_params.get("year", now.year))
+        half = request.query_params.get("half", "1")
+        months = range(1, 7) if half == "1" else range(7, 13)
+
+        base_qs = qs.filter(
+            created_at__year=year,
+            created_at__month__in=months,
+        )
+
+        by_month = base_qs.annotate(m=TruncMonth("created_at")).values("m")
+
+        def sums(month_qs):
+            return {
+                r["m"].month: float(r["s"] or 0) for r in month_qs.annotate(s=Sum("price_total"))
+            }
+
+        user = request.user
+        role = getattr(user, "role", None)
+
+        if hasattr(request, "_analytics_scope") and request._analytics_scope == "global":
+            given_map = sums(by_month)
+            received_map = sums(by_month)
+            earned_map = sums(by_month)
+        else:
+            given_map = sums(by_month.filter(customer=user))
+            received_map = sums(by_month.filter(carrier=user))
+            earned_map = sums(by_month.filter(logistic=user))
+
+        bar_chart = {
+            "labels": [self.month_label(m) for m in months],
+            "given": [given_map.get(m, 0) for m in months],
+            "received": [received_map.get(m, 0) for m in months],
+            "earned": [earned_map.get(m, 0) for m in months],
+        }
+
+        if hasattr(request, "_analytics_scope") and request._analytics_scope == "global":
+            orders_qs = Order.objects.all()
+        else:
+            orders_qs = Order.objects.all()
+            if role == UserRole.LOGISTIC:
+                orders_qs = orders_qs.filter(customer=user)
+            elif role == UserRole.CARRIER:
+                orders_qs = orders_qs.filter(carrier=user)
+            else:
+                orders_qs = orders_qs.filter(Q(customer=user) | Q(carrier=user))
+
+        in_search = orders_qs.filter(status=Order.OrderStatus.NO_DRIVER).count()
+        in_process = orders_qs.filter(
+            status__in=[Order.OrderStatus.PENDING, Order.OrderStatus.EN_ROUTE]
+        ).count()
+        successful = orders_qs.filter(status__in=self.completed_statuses).count()
+        cancelled = orders_qs.exclude(
+            status__in=[
+                Order.OrderStatus.NO_DRIVER,
+                Order.OrderStatus.PENDING,
+                Order.OrderStatus.EN_ROUTE,
+                *self.completed_statuses,
+            ]
+        ).count()
+
+        pie_chart = {
+            "in_search": in_search,
+            "in_process": in_process,
+            "successful": successful,
+            "cancelled": cancelled,
+            "total": in_search + in_process + successful + cancelled,
+        }
+
+        directions_data = self.build_directions(qs)
+
+        return {
+            "successful_deliveries": current_cnt,
+            "successful_deliveries_change": round(successful_change, 3),
+            "registered_since": registered_since,
+            "days_since_registered": days_since_registered,
+            "rating": float(rating_value or 0),
+            "distance_km": distance_km,
+            "deals_count": deals_count,
+            "average_price_per_km": round(avg_price_per_km, 2),
+            "average_price_per_km_change": round(avg_price_per_km_change, 3),
+            "directions": directions_data,
+            "bar_chart": bar_chart,
+            "pie_chart": pie_chart,
+        }
+
+
+@extend_schema(tags=["analytics"], responses=AnalyticsSerializer)
+class MyAnalyticsView(BaseAnalyticsMixin, APIView):
+    permission_classes = [IsAuthenticatedAndVerified]
+
+    def get(self, request):
+        user = request.user
+        qs = Order.objects.filter(status__in=self.completed_statuses)
+        qs = self.apply_filters(request, qs)
+
+        role = getattr(user, "role", None)
+        if role == UserRole.LOGISTIC:
+            qs = qs.filter(customer=user)
+        elif role == UserRole.CARRIER:
+            qs = qs.filter(carrier=user)
+        else:
+            qs = qs.filter(Q(customer=user) | Q(carrier=user))
+
+        data = self.build_response_data(request, qs, rating_value=user.avg_rating)
+        ser = AnalyticsSerializer(data=data)
+        ser.is_valid(raise_exception=True)
+        return Response(ser.data)
+
+
+@extend_schema(tags=["analytics"], responses=AnalyticsSerializer)
+class GlobalAnalyticsView(BaseAnalyticsMixin, APIView):
+    permission_classes = [IsAuthenticatedAndVerified]
+
+    def get(self, request):
+        qs = Order.objects.filter(status__in=self.completed_statuses)
+        qs = self.apply_filters(request, qs)
+        request._analytics_scope = "global"
+
+        data = self.build_response_data(request, qs, rating_value=0)
+        ser = AnalyticsSerializer(data=data)
+        ser.is_valid(raise_exception=True)
+        return Response(ser.data)

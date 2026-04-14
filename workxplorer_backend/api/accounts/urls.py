@@ -2,7 +2,6 @@ from django.urls import path
 
 
 from .views import (
-    AnalyticsView,
     ChangeRoleView,
     ForgotPasswordView,
     LoginView,
@@ -36,7 +35,6 @@ urlpatterns = [
     # Profile
     path("me/", MeView.as_view()),
     path("me/update/", UpdateMeView.as_view()),
-    path("me/analytics/", AnalyticsView.as_view()),
     # Roles
     path("change-role/", ChangeRoleView.as_view()),
     # Password reset

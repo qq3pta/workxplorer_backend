@@ -23,6 +23,7 @@ urlpatterns = [
     path("api/agreements/", include("api.agreements.urls")),
     path("api/support/", include("api.support.urls")),
     path("api/chat/", include("api.chat.urls")),
+    path("api/analytics/", include("api.analytics.urls")),
     # Health
     path("health/", health),
 ]

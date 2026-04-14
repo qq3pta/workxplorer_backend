@@ -180,7 +180,6 @@ class BaseAnalyticsMixin:
             }
 
         user = request.user
-        role = getattr(user, "role", None)
 
         if hasattr(request, "_analytics_scope") and request._analytics_scope == "global":
             given_map = sums(by_month)

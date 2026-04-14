@@ -68,7 +68,7 @@ class BaseAnalyticsMixin:
             qs = qs.filter(cargo__payment_method=payment_method)
 
         if currency:
-            qs = qs.filter(currency=currency)
+            qs = qs.filter(cargo__price_currency=currency)
 
         return qs
 
@@ -83,7 +83,7 @@ class BaseAnalyticsMixin:
             )
             .annotate(
                 shipments=Count("id"),
-                avg_price=Avg("price_total"),
+                avg_price=Avg("cargo__price_uzs"),
                 avg_weight=Avg("cargo__weight_kg"),
                 avg_duration=Avg(
                     ExpressionWrapper(
@@ -106,7 +106,8 @@ class BaseAnalyticsMixin:
                     "destination": d["cargo__destination_region"] or "—",
                     "load_date": d["cargo__load_date"],
                     "delivery_date": d["cargo__delivery_date"],
-                    "price": float(d["avg_price"] or 0),
+                    "price_value": float(d["avg_price"] or 0),
+                    "price_currency": "UZS",
                     "shipments": d["shipments"],
                     "weight": float(d["avg_weight"] or 0),
                     "time": round(hours, 1),
@@ -144,11 +145,11 @@ class BaseAnalyticsMixin:
         deals_count = qs.count()
 
         current_agg = current_qs.aggregate(
-            total_price=Sum("price_total"),
+            total_price=Sum("cargo__price_uzs"),
             total_km=Sum("route_distance_km"),
         )
         prev_agg = prev_qs.aggregate(
-            total_price=Sum("price_total"),
+            total_price=Sum("cargo__price_uzs"),
             total_km=Sum("route_distance_km"),
         )
 
@@ -180,7 +181,8 @@ class BaseAnalyticsMixin:
 
         def sums(month_qs):
             return {
-                r["m"].month: float(r["s"] or 0) for r in month_qs.annotate(s=Sum("price_total"))
+                r["m"].month: float(r["s"] or 0)
+                for r in month_qs.annotate(s=Sum("cargo__price_uzs"))
             }
 
         user = request.user

@@ -2,9 +2,9 @@ from decimal import Decimal
 
 RATES = {
     "UZS": Decimal("1"),
-    "USD": Decimal("12700"),
-    "EUR": Decimal("13500"),
-    "RUB": Decimal("140"),
+    "USD": Decimal("12152"),
+    "EUR": Decimal("14330"),
+    "RUB": Decimal("159"),
     "KZT": Decimal("25"),
 }
 

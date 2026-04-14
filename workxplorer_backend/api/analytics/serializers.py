@@ -12,12 +12,9 @@ class DirectionSerializer(serializers.Serializer):
     time = serializers.FloatField()
 
 
-class AnalyticsSerializer(serializers.Serializer):
+class BaseAnalyticsSerializer(serializers.Serializer):
     successful_deliveries = serializers.IntegerField()
     successful_deliveries_change = serializers.FloatField()
-    registered_since = serializers.DateField()
-    days_since_registered = serializers.IntegerField()
-    rating = serializers.FloatField()
     distance_km = serializers.FloatField()
     deals_count = serializers.IntegerField()
     average_price_per_km = serializers.FloatField()
@@ -25,3 +22,13 @@ class AnalyticsSerializer(serializers.Serializer):
     directions = DirectionSerializer(many=True)
     bar_chart = serializers.DictField()
     pie_chart = serializers.DictField()
+
+
+class MyAnalyticsSerializer(BaseAnalyticsSerializer):
+    registered_since = serializers.DateField()
+    days_since_registered = serializers.IntegerField()
+    rating = serializers.FloatField()
+
+
+class GlobalAnalyticsSerializer(BaseAnalyticsSerializer):
+    pass

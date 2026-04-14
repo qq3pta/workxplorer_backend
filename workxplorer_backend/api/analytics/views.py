@@ -11,7 +11,7 @@ from rest_framework.views import APIView
 from api.accounts.models import UserRole
 from api.accounts.permissions import IsAuthenticatedAndVerified
 from api.orders.models import Order
-from .serializers import AnalyticsSerializer
+from .serializers import MyAnalyticsSerializer, GlobalAnalyticsSerializer
 
 User = get_user_model()
 
@@ -227,12 +227,9 @@ class BaseAnalyticsMixin:
 
         directions_data = self.build_directions(qs)
 
-        return {
+        data = {
             "successful_deliveries": current_cnt,
             "successful_deliveries_change": round(successful_change, 3),
-            "registered_since": registered_since,
-            "days_since_registered": days_since_registered,
-            "rating": float(rating_value or 0),
             "distance_km": distance_km,
             "deals_count": deals_count,
             "average_price_per_km": round(avg_price_per_km, 2),
@@ -242,8 +239,15 @@ class BaseAnalyticsMixin:
             "pie_chart": pie_chart,
         }
 
+        if not (hasattr(request, "_analytics_scope") and request._analytics_scope == "global"):
+            data["registered_since"] = registered_since
+            data["days_since_registered"] = days_since_registered
+            data["rating"] = float(rating_value or 0)
 
-@extend_schema(tags=["analytics"], responses=AnalyticsSerializer)
+        return data
+
+
+@extend_schema(responses=MyAnalyticsSerializer)
 class MyAnalyticsView(BaseAnalyticsMixin, APIView):
     permission_classes = [IsAuthenticatedAndVerified]
 
@@ -262,12 +266,12 @@ class MyAnalyticsView(BaseAnalyticsMixin, APIView):
         qs = self.apply_filters(request, qs)
 
         data = self.build_response_data(request, qs, rating_value=user.avg_rating)
-        ser = AnalyticsSerializer(data=data)
+        ser = MyAnalyticsSerializer(data=data)
         ser.is_valid(raise_exception=True)
         return Response(ser.data)
 
 
-@extend_schema(tags=["analytics"], responses=AnalyticsSerializer)
+@extend_schema(responses=GlobalAnalyticsSerializer)
 class GlobalAnalyticsView(BaseAnalyticsMixin, APIView):
     permission_classes = [IsAuthenticatedAndVerified]
 
@@ -277,6 +281,6 @@ class GlobalAnalyticsView(BaseAnalyticsMixin, APIView):
         request._analytics_scope = "global"
 
         data = self.build_response_data(request, qs, rating_value=0)
-        ser = AnalyticsSerializer(data=data)
+        ser = GlobalAnalyticsSerializer(data=data)
         ser.is_valid(raise_exception=True)
         return Response(ser.data)

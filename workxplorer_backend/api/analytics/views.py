@@ -198,16 +198,7 @@ class BaseAnalyticsMixin:
             "earned": [earned_map.get(m, 0) for m in months],
         }
 
-        if hasattr(request, "_analytics_scope") and request._analytics_scope == "global":
-            orders_qs = Order.objects.all()
-        else:
-            orders_qs = Order.objects.all()
-            if role == UserRole.LOGISTIC:
-                orders_qs = orders_qs.filter(customer=user)
-            elif role == UserRole.CARRIER:
-                orders_qs = orders_qs.filter(carrier=user)
-            else:
-                orders_qs = orders_qs.filter(Q(customer=user) | Q(carrier=user))
+        orders_qs = qs
 
         in_search = orders_qs.filter(status=Order.OrderStatus.NO_DRIVER).count()
         in_process = orders_qs.filter(
@@ -256,7 +247,6 @@ class MyAnalyticsView(BaseAnalyticsMixin, APIView):
     def get(self, request):
         user = request.user
         qs = Order.objects.filter(status__in=self.completed_statuses)
-        qs = self.apply_filters(request, qs)
 
         role = getattr(user, "role", None)
         if role == UserRole.LOGISTIC:
@@ -265,6 +255,8 @@ class MyAnalyticsView(BaseAnalyticsMixin, APIView):
             qs = qs.filter(carrier=user)
         else:
             qs = qs.filter(Q(customer=user) | Q(carrier=user))
+
+        qs = self.apply_filters(request, qs)
 
         data = self.build_response_data(request, qs, rating_value=user.avg_rating)
         ser = AnalyticsSerializer(data=data)

@@ -132,8 +132,12 @@ class BaseAnalyticsMixin:
         else:
             successful_change = 1.0 if current_cnt > 0 else 0.0
 
-        registered_since = getattr(request.user, "date_joined", now).date()
-        days_since_registered = (now.date() - registered_since).days
+        if hasattr(request, "_analytics_scope") and request._analytics_scope == "global":
+            registered_since = None
+            days_since_registered = None
+        else:
+            registered_since = getattr(request.user, "date_joined", now).date()
+            days_since_registered = (now.date() - registered_since).days
 
         agg = qs.aggregate(total_km=Sum("route_distance_km"))
         distance_km = float(agg["total_km"] or 0)

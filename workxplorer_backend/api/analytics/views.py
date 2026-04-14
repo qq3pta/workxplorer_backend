@@ -17,7 +17,7 @@ User = get_user_model()
 
 
 class BaseAnalyticsMixin:
-    completed_statuses = [Order.OrderStatus.DELIVERED]
+    completed_statuses = [Order.OrderStatus.DELIVERED, Order.OrderStatus.PAID]
 
     def month_label(self, m):
         return [

@@ -11,6 +11,7 @@ from rest_framework.views import APIView
 
 from api.accounts.models import UserRole
 from api.accounts.permissions import IsAuthenticatedAndVerified
+from api.loads.choices import CargoCategory
 from api.orders.models import Order
 from .serializers import MyAnalyticsSerializer, GlobalAnalyticsSerializer
 
@@ -19,6 +20,25 @@ User = get_user_model()
 
 class BaseAnalyticsMixin:
     completed_statuses = [Order.OrderStatus.DELIVERED, Order.OrderStatus.PAID]
+
+    def normalize_cargo_category(self, value: str | None) -> str | None:
+        if not value:
+            return None
+
+        raw = value.strip()
+        if not raw:
+            return None
+
+        allowed = {c.value for c in CargoCategory}
+        if raw in allowed:
+            return raw
+
+        upper = raw.upper()
+        if upper in allowed:
+            return upper
+
+        by_label = {c.label.lower(): c.value for c in CargoCategory}
+        return by_label.get(raw.lower(), raw)
 
     def month_label(self, m):
         return [
@@ -43,7 +63,9 @@ class BaseAnalyticsMixin:
         origin_region = request.query_params.get("origin_region")
         destination_region = request.query_params.get("destination_region")
         transport_type = request.query_params.get("transport_type")
-        category = request.query_params.get("category")
+        category = request.query_params.get("cargo_category") or request.query_params.get(
+            "category"
+        )
         payment_method = request.query_params.get("payment_method")
         currency = request.query_params.get("currency")
 
@@ -63,7 +85,7 @@ class BaseAnalyticsMixin:
             qs = qs.filter(cargo__transport_type=transport_type)
 
         if category:
-            qs = qs.filter(cargo__cargo_category=category)
+            qs = qs.filter(cargo__cargo_category=self.normalize_cargo_category(category))
 
         if payment_method:
             qs = qs.filter(cargo__payment_method=payment_method)

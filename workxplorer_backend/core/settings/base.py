@@ -46,6 +46,7 @@ CSRF_TRUSTED_ORIGINS = _csv("CSRF_TRUSTED_ORIGINS") or [
     "http://127.0.0.1:3000",
     "http://95.182.119.148:3000",
     "http://95.182.119.148",
+    "http://192.168.0.139:3000",
 ]
 
 INSTALLED_APPS = [
@@ -235,6 +236,7 @@ CORS_ALLOWED_ORIGINS = _csv("CORS_ALLOWED_ORIGINS") or [
     "http://127.0.0.1:3000",
     "http://95.182.119.148:3000",
     "http://95.182.119.148",
+    "http://192.168.0.139:3000",
 ]
 CORS_ALLOW_CREDENTIALS = True
 CORS_PREFLIGHT_MAX_AGE = 86400

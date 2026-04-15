@@ -22,12 +22,22 @@ User = get_user_model()
 class BaseAnalyticsMixin:
     completed_statuses = [Order.OrderStatus.DELIVERED, Order.OrderStatus.PAID]
 
+    @staticmethod
+    def _qp_first(request, *keys: str) -> str | None:
+        for key in keys:
+            value = request.query_params.get(key)
+            if value is not None:
+                return value
+        return None
+
     def normalize_cargo_category(self, value: str | None) -> str | None:
         if not value:
             return None
 
         raw = value.strip()
         if not raw:
+            return None
+        if raw.lower() in {"all", "все"}:
             return None
 
         allowed = {c.value for c in CargoCategory}
@@ -59,15 +69,13 @@ class BaseAnalyticsMixin:
         ][m]
 
     def apply_filters(self, request, qs):
-        date_from = request.query_params.get("date_from")
-        date_to = request.query_params.get("date_to")
+        date_from = self._qp_first(request, "date_from", "dateFrom")
+        date_to = self._qp_first(request, "date_to", "dateTo")
         origin_region = request.query_params.get("origin_region")
         destination_region = request.query_params.get("destination_region")
-        transport_type = request.query_params.get("transport_type")
-        category = request.query_params.get("cargo_category") or request.query_params.get(
-            "category"
-        )
-        payment_method = request.query_params.get("payment_method")
+        transport_type = self._qp_first(request, "transport_type", "transportType", "type")
+        category = self._qp_first(request, "cargo_category", "cargoCategory", "category")
+        payment_method = self._qp_first(request, "payment_method", "paymentMethod")
         currency = request.query_params.get("currency")
 
         if date_from:
@@ -86,7 +94,9 @@ class BaseAnalyticsMixin:
             qs = qs.filter(cargo__transport_type=transport_type)
 
         if category:
-            qs = qs.filter(cargo__cargo_category=self.normalize_cargo_category(category))
+            normalized_category = self.normalize_cargo_category(category)
+            if normalized_category:
+                qs = qs.filter(cargo__cargo_category=normalized_category)
 
         if payment_method:
             qs = qs.filter(cargo__payment_method=payment_method)

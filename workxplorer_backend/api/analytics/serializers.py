@@ -14,6 +14,21 @@ class DirectionSerializer(serializers.Serializer):
     time = serializers.FloatField()
 
 
+class BarChartSerializer(serializers.Serializer):
+    labels = serializers.ListField(child=serializers.CharField())
+    given = serializers.ListField(child=serializers.FloatField())
+    received = serializers.ListField(child=serializers.FloatField())
+    earned = serializers.ListField(child=serializers.FloatField())
+
+
+class PieChartSerializer(serializers.Serializer):
+    in_search = serializers.IntegerField()
+    in_process = serializers.IntegerField()
+    successful = serializers.IntegerField()
+    cancelled = serializers.IntegerField()
+    total = serializers.IntegerField()
+
+
 class DirectionDetailSerializer(serializers.Serializer):
     id = serializers.CharField()
     origin_region = serializers.CharField()
@@ -22,8 +37,8 @@ class DirectionDetailSerializer(serializers.Serializer):
     weight = serializers.FloatField()
     price_value = serializers.FloatField()
     price_currency = serializers.CharField()
-    bar_chart = serializers.DictField()
-    pie_chart = serializers.DictField()
+    bar_chart = BarChartSerializer()
+    pie_chart = PieChartSerializer()
 
 
 class BaseAnalyticsSerializer(serializers.Serializer):
@@ -34,8 +49,8 @@ class BaseAnalyticsSerializer(serializers.Serializer):
     average_price_per_km = serializers.FloatField()
     average_price_per_km_change = serializers.FloatField()
     directions = DirectionSerializer(many=True)
-    bar_chart = serializers.DictField()
-    pie_chart = serializers.DictField()
+    bar_chart = BarChartSerializer()
+    pie_chart = PieChartSerializer()
 
 
 class MyAnalyticsSerializer(BaseAnalyticsSerializer):

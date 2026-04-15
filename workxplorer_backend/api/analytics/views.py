@@ -2,7 +2,7 @@ import hashlib
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
-from django.db.models import Q, Sum, Count, Avg, F, ExpressionWrapper, DurationField
+from django.db.models import Avg, Count, DurationField, ExpressionWrapper, F, Q, Sum
 from django.db.models.functions import TruncMonth
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema
@@ -11,14 +11,35 @@ from rest_framework.views import APIView
 
 from api.accounts.models import UserRole
 from api.accounts.permissions import IsAuthenticatedAndVerified
+from api.loads.choices import CargoCategory
 from api.orders.models import Order
-from .serializers import MyAnalyticsSerializer, GlobalAnalyticsSerializer
+
+from .serializers import DirectionDetailSerializer, GlobalAnalyticsSerializer, MyAnalyticsSerializer
 
 User = get_user_model()
 
 
 class BaseAnalyticsMixin:
     completed_statuses = [Order.OrderStatus.DELIVERED, Order.OrderStatus.PAID]
+
+    def normalize_cargo_category(self, value: str | None) -> str | None:
+        if not value:
+            return None
+
+        raw = value.strip()
+        if not raw:
+            return None
+
+        allowed = {c.value for c in CargoCategory}
+        if raw in allowed:
+            return raw
+
+        upper = raw.upper()
+        if upper in allowed:
+            return upper
+
+        by_label = {c.label.lower(): c.value for c in CargoCategory}
+        return by_label.get(raw.lower(), raw)
 
     def month_label(self, m):
         return [
@@ -43,7 +64,9 @@ class BaseAnalyticsMixin:
         origin_region = request.query_params.get("origin_region")
         destination_region = request.query_params.get("destination_region")
         transport_type = request.query_params.get("transport_type")
-        category = request.query_params.get("category")
+        category = request.query_params.get("cargo_category") or request.query_params.get(
+            "category"
+        )
         payment_method = request.query_params.get("payment_method")
         currency = request.query_params.get("currency")
 
@@ -63,7 +86,7 @@ class BaseAnalyticsMixin:
             qs = qs.filter(cargo__transport_type=transport_type)
 
         if category:
-            qs = qs.filter(cargo__cargo_category=category)
+            qs = qs.filter(cargo__cargo_category=self.normalize_cargo_category(category))
 
         if payment_method:
             qs = qs.filter(cargo__payment_method=payment_method)
@@ -85,7 +108,7 @@ class BaseAnalyticsMixin:
             .annotate(
                 shipments=Count("id"),
                 avg_price=Avg("cargo__price_uzs"),
-                avg_weight=Avg("cargo__weight_kg"),
+                total_weight=Sum("cargo__weight_kg"),
                 avg_duration=Avg(
                     ExpressionWrapper(
                         F("unloading_datetime") - F("loading_datetime"),
@@ -116,7 +139,7 @@ class BaseAnalyticsMixin:
                     "price_value": float(d["avg_price"] or 0),
                     "price_currency": "UZS",
                     "shipments": d["shipments"],
-                    "weight": float(d["avg_weight"] or 0),
+                    "weight": float(d["total_weight"] or 0),
                     "time": round(hours, 1),
                 }
             )
@@ -295,7 +318,8 @@ class GlobalAnalyticsView(BaseAnalyticsMixin, APIView):
         return Response(ser.data)
 
 
-class DirectionDetailView(APIView):
+@extend_schema(responses=DirectionDetailSerializer)
+class DirectionDetailView(BaseAnalyticsMixin, APIView):
     permission_classes = [IsAuthenticatedAndVerified]
 
     def get(self, request, direction_id):
@@ -336,6 +360,46 @@ class DirectionDetailView(APIView):
             avg_price=Avg("cargo__price_uzs"),
         )
 
+        now = timezone.now()
+        year = int(request.query_params.get("year", now.year))
+        half = request.query_params.get("half", "1")
+        months = range(1, 7) if half == "1" else range(7, 13)
+
+        by_month = (
+            qs.filter(created_at__year=year, created_at__month__in=months)
+            .annotate(m=TruncMonth("created_at"))
+            .values("m")
+            .annotate(s=Sum("cargo__price_uzs"))
+        )
+        month_price_map = {r["m"].month: float(r["s"] or 0) for r in by_month}
+        bar_chart = {
+            "labels": [self.month_label(m) for m in months],
+            "given": [month_price_map.get(m, 0) for m in months],
+            "received": [month_price_map.get(m, 0) for m in months],
+            "earned": [month_price_map.get(m, 0) for m in months],
+        }
+
+        in_search = qs.filter(status=Order.OrderStatus.NO_DRIVER).count()
+        in_process = qs.filter(
+            status__in=[Order.OrderStatus.PENDING, Order.OrderStatus.EN_ROUTE]
+        ).count()
+        successful = qs.filter(status__in=self.completed_statuses).count()
+        cancelled = qs.exclude(
+            status__in=[
+                Order.OrderStatus.NO_DRIVER,
+                Order.OrderStatus.PENDING,
+                Order.OrderStatus.EN_ROUTE,
+                *self.completed_statuses,
+            ]
+        ).count()
+        pie_chart = {
+            "in_search": in_search,
+            "in_process": in_process,
+            "successful": successful,
+            "cancelled": cancelled,
+            "total": in_search + in_process + successful + cancelled,
+        }
+
         return Response(
             {
                 "id": direction_id,
@@ -345,5 +409,7 @@ class DirectionDetailView(APIView):
                 "weight": float(data["weight"] or 0),
                 "price_value": float(data["avg_price"] or 0),
                 "price_currency": "UZS",
+                "bar_chart": bar_chart,
+                "pie_chart": pie_chart,
             }
         )

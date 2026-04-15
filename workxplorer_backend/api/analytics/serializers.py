@@ -46,3 +46,14 @@ class MyAnalyticsSerializer(BaseAnalyticsSerializer):
 
 class GlobalAnalyticsSerializer(BaseAnalyticsSerializer):
     pass
+
+
+class PartnerInfoSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    full_name = serializers.CharField(allow_blank=True)
+    company_name = serializers.CharField(allow_blank=True)
+    photo = serializers.CharField(allow_blank=True)
+
+
+class PartnerAnalyticsSerializer(BaseAnalyticsSerializer):
+    partner = PartnerInfoSerializer()

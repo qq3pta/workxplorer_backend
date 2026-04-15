@@ -102,8 +102,6 @@ class BaseAnalyticsMixin:
             .values(
                 "cargo__origin_region",
                 "cargo__destination_region",
-                "cargo__load_date",
-                "cargo__delivery_date",
             )
             .annotate(
                 shipments=Count("id"),
@@ -134,8 +132,8 @@ class BaseAnalyticsMixin:
                     "id": direction_id,
                     "origin": d["cargo__origin_region"] or "—",
                     "destination": d["cargo__destination_region"] or "—",
-                    "load_date": d["cargo__load_date"],
-                    "delivery_date": d["cargo__delivery_date"],
+                    "load_date": d.get("cargo__load_date"),
+                    "delivery_date": d.get("cargo__delivery_date"),
                     "price_value": float(d["avg_price"] or 0),
                     "price_currency": "UZS",
                     "shipments": d["shipments"],

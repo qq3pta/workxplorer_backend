@@ -14,6 +14,18 @@ class DirectionSerializer(serializers.Serializer):
     time = serializers.FloatField()
 
 
+class DirectionDetailSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    origin_region = serializers.CharField()
+    destination_region = serializers.CharField()
+    shipments = serializers.IntegerField()
+    weight = serializers.FloatField()
+    price_value = serializers.FloatField()
+    price_currency = serializers.CharField()
+    bar_chart = serializers.DictField()
+    pie_chart = serializers.DictField()
+
+
 class BaseAnalyticsSerializer(serializers.Serializer):
     successful_deliveries = serializers.IntegerField()
     successful_deliveries_change = serializers.FloatField()

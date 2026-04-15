@@ -14,7 +14,12 @@ from api.accounts.permissions import IsAuthenticatedAndVerified
 from api.loads.choices import CargoCategory
 from api.orders.models import Order
 
-from .serializers import DirectionDetailSerializer, GlobalAnalyticsSerializer, MyAnalyticsSerializer
+from .serializers import (
+    DirectionDetailSerializer,
+    GlobalAnalyticsSerializer,
+    MyAnalyticsSerializer,
+    PartnerAnalyticsSerializer,
+)
 
 User = get_user_model()
 
@@ -356,7 +361,7 @@ class DirectionDetailView(BaseAnalyticsMixin, APIView):
                 matched_destination = destination
                 break
 
-        if not matched_origin:
+        if matched_origin is None:
             return Response({"detail": "Not found"}, status=404)
 
         qs = qs.filter(
@@ -423,3 +428,40 @@ class DirectionDetailView(BaseAnalyticsMixin, APIView):
                 "pie_chart": pie_chart,
             }
         )
+
+
+@extend_schema(responses=PartnerAnalyticsSerializer)
+class PartnerAnalyticsView(BaseAnalyticsMixin, APIView):
+    permission_classes = [IsAuthenticatedAndVerified]
+
+    def get(self, request, partner_id):
+        qs = Order.objects.filter(status__in=self.completed_statuses).filter(
+            Q(customer_id=partner_id) | Q(carrier_id=partner_id)
+        )
+
+        qs = self.apply_filters(request, qs)
+        request._analytics_scope = "global"
+
+        data = self.build_response_data(request, qs, rating_value=0)
+
+        partner = (
+            User.objects.filter(id=partner_id)
+            .values("id", "first_name", "last_name", "company_name", "photo")
+            .first()
+        )
+
+        if not partner:
+            return Response({"detail": "Partner not found"}, status=404)
+
+        full_name = f"{partner.get('first_name', '')} {partner.get('last_name', '')}".strip()
+
+        data["partner"] = {
+            "id": partner["id"],
+            "full_name": full_name or "",
+            "company_name": partner.get("company_name") or "",
+            "photo": str(partner.get("photo") or ""),
+        }
+
+        ser = PartnerAnalyticsSerializer(data=data)
+        ser.is_valid(raise_exception=True)
+        return Response(ser.data)

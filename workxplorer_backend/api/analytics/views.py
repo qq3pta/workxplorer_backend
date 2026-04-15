@@ -85,7 +85,7 @@ class BaseAnalyticsMixin:
             .annotate(
                 shipments=Count("id"),
                 avg_price=Avg("cargo__price_uzs"),
-                avg_weight=Avg("cargo__weight_kg"),
+                total_weight=Sum("cargo__weight_kg"),
                 avg_duration=Avg(
                     ExpressionWrapper(
                         F("unloading_datetime") - F("loading_datetime"),
@@ -116,7 +116,7 @@ class BaseAnalyticsMixin:
                     "price_value": float(d["avg_price"] or 0),
                     "price_currency": "UZS",
                     "shipments": d["shipments"],
-                    "weight": float(d["avg_weight"] or 0),
+                    "weight": float(d["total_weight"] or 0),
                     "time": round(hours, 1),
                 }
             )

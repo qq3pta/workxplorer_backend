@@ -1,3 +1,4 @@
+import hashlib
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
@@ -97,11 +98,17 @@ class BaseAnalyticsMixin:
 
         directions_data = []
         for d in directions_agg:
+            origin = d["cargo__origin_region"] or ""
+            destination = d["cargo__destination_region"] or ""
+
+            raw = f"{origin}:{destination}"
+            direction_id = hashlib.md5(raw.encode()).hexdigest()
             duration = d["avg_duration"]
             hours = duration.total_seconds() / 3600 if duration else 0
 
             directions_data.append(
                 {
+                    "id": direction_id,
                     "origin": d["cargo__origin_region"] or "—",
                     "destination": d["cargo__destination_region"] or "—",
                     "load_date": d["cargo__load_date"],
@@ -286,3 +293,57 @@ class GlobalAnalyticsView(BaseAnalyticsMixin, APIView):
         ser = GlobalAnalyticsSerializer(data=data)
         ser.is_valid(raise_exception=True)
         return Response(ser.data)
+
+
+class DirectionDetailView(APIView):
+    permission_classes = [IsAuthenticatedAndVerified]
+
+    def get(self, request, direction_id):
+        import hashlib
+
+        qs = Order.objects.filter(
+            status__in=[Order.OrderStatus.DELIVERED, Order.OrderStatus.PAID]
+        ).select_related("cargo")
+
+        matched_origin = None
+        matched_destination = None
+
+        pairs = qs.values("cargo__origin_region", "cargo__destination_region").distinct()
+
+        for pair in pairs:
+            origin = pair["cargo__origin_region"] or ""
+            destination = pair["cargo__destination_region"] or ""
+
+            raw = f"{origin}:{destination}"
+            current_id = hashlib.md5(raw.encode()).hexdigest()
+
+            if current_id == direction_id:
+                matched_origin = origin
+                matched_destination = destination
+                break
+
+        if not matched_origin:
+            return Response({"detail": "Not found"}, status=404)
+
+        qs = qs.filter(
+            cargo__origin_region=matched_origin,
+            cargo__destination_region=matched_destination,
+        )
+
+        data = qs.aggregate(
+            shipments=Count("id"),
+            weight=Sum("cargo__weight_kg"),
+            avg_price=Avg("cargo__price_uzs"),
+        )
+
+        return Response(
+            {
+                "id": direction_id,
+                "origin_region": matched_origin,
+                "destination_region": matched_destination,
+                "shipments": data["shipments"] or 0,
+                "weight": float(data["weight"] or 0),
+                "price_value": float(data["avg_price"] or 0),
+                "price_currency": "UZS",
+            }
+        )

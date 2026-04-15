@@ -2,6 +2,7 @@ from rest_framework import serializers
 
 
 class DirectionSerializer(serializers.Serializer):
+    id = serializers.CharField()
     origin = serializers.CharField()
     destination = serializers.CharField()
     load_date = serializers.DateField(allow_null=True)

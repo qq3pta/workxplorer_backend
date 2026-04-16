@@ -1,5 +1,11 @@
 from django.urls import path
-from .views import MyAnalyticsView, GlobalAnalyticsView, DirectionDetailView, PartnerAnalyticsView
+from .views import (
+    CountryDirectionDetailView,
+    DirectionDetailView,
+    GlobalAnalyticsView,
+    MyAnalyticsView,
+    PartnerAnalyticsView,
+)
 
 urlpatterns = [
     path("me/", MyAnalyticsView.as_view(), name="analytics-me"),
@@ -13,5 +19,10 @@ urlpatterns = [
         "directions/<str:direction_id>/",
         DirectionDetailView.as_view(),
         name="analytics-direction-detail",
+    ),
+    path(
+        "directions-countries/<str:direction_id>/",
+        CountryDirectionDetailView.as_view(),
+        name="analytics-direction-country-detail",
     ),
 ]

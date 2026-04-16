@@ -17,6 +17,7 @@ from api.orders.models import Order
 from common.utils import RATES, convert_to_uzs
 
 from .serializers import (
+    CountryDirectionDetailSerializer,
     DirectionDetailSerializer,
     GlobalAnalyticsSerializer,
     MyAnalyticsSerializer,
@@ -100,7 +101,9 @@ class BaseAnalyticsMixin:
             return "prices"
         return "shipments"
 
-    def _convert_amount(self, amount, source_currency: str | None, target_currency: str) -> float | None:
+    def _convert_amount(
+        self, amount, source_currency: str | None, target_currency: str
+    ) -> float | None:
         if amount is None:
             return None
 
@@ -251,9 +254,7 @@ class BaseAnalyticsMixin:
                 else self._empty_price_curve()
             ),
             "carrier_earnings": (
-                curve(prices_carrier_earnings)
-                if mode == "prices"
-                else self._empty_price_curve()
+                curve(prices_carrier_earnings) if mode == "prices" else self._empty_price_curve()
             ),
         }
 
@@ -531,6 +532,68 @@ class DirectionDetailView(BaseAnalyticsMixin, APIView):
                 "id": direction_id,
                 "origin_region": matched_origin,
                 "destination_region": matched_destination,
+                "shipments": data["shipments"] or 0,
+                "weight": float(data["weight"] or 0),
+                "price_value": float(data["avg_price"] or 0),
+                "price_currency": "UZS",
+                "pie_charts": pie_charts,
+                "season_chart": season_chart,
+            }
+        )
+
+
+@extend_schema(responses=CountryDirectionDetailSerializer)
+class CountryDirectionDetailView(BaseAnalyticsMixin, APIView):
+    permission_classes = [IsAuthenticatedAndVerified]
+
+    def get(self, request, direction_id):
+        import hashlib
+
+        qs = Order.objects.filter(
+            status__in=[Order.OrderStatus.DELIVERED, Order.OrderStatus.PAID]
+        ).select_related("cargo")
+
+        matched_origin = None
+        matched_destination = None
+
+        pairs = qs.values("cargo__origin_country", "cargo__destination_country").distinct()
+
+        for pair in pairs:
+            origin = pair["cargo__origin_country"] or ""
+            destination = pair["cargo__destination_country"] or ""
+
+            raw = f"{origin}:{destination}"
+            current_id = hashlib.md5(raw.encode()).hexdigest()
+
+            if current_id == direction_id:
+                matched_origin = origin
+                matched_destination = destination
+                break
+
+        if matched_origin is None:
+            return Response({"detail": "Not found"}, status=404)
+
+        qs = qs.filter(
+            cargo__origin_country=matched_origin,
+            cargo__destination_country=matched_destination,
+        )
+
+        data = qs.aggregate(
+            shipments=Count("id"),
+            weight=Sum("cargo__weight_kg"),
+            avg_price=Avg("cargo__price_uzs"),
+        )
+
+        now = timezone.now()
+        year = int(request.query_params.get("year", now.year))
+        pie_charts = self._build_pie_charts(qs, year)
+        season_chart = self._build_season_chart(request, qs, year)
+
+        return Response(
+            {
+                "id": direction_id,
+                "origin_country": matched_origin,
+                "destination_country": matched_destination,
                 "shipments": data["shipments"] or 0,
                 "weight": float(data["weight"] or 0),
                 "price_value": float(data["avg_price"] or 0),

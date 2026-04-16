@@ -75,6 +75,18 @@ class DirectionDetailSerializer(serializers.Serializer):
     season_chart = SeasonChartSerializer()
 
 
+class CountryDirectionDetailSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    origin_country = serializers.CharField()
+    destination_country = serializers.CharField()
+    shipments = serializers.IntegerField()
+    weight = serializers.FloatField()
+    price_value = serializers.FloatField()
+    price_currency = serializers.CharField()
+    pie_charts = PieChartsSerializer()
+    season_chart = SeasonChartSerializer()
+
+
 class BaseAnalyticsSerializer(serializers.Serializer):
     successful_deliveries = serializers.IntegerField()
     successful_deliveries_change = serializers.FloatField()

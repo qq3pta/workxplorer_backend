@@ -7,7 +7,11 @@ from rest_framework.views import APIView
 from unidecode import unidecode
 
 from .models import GeoPlace
-from .serializers import CitySuggestResponseSerializer, CountrySuggestResponseSerializer
+from .serializers import (
+    CitySuggestResponseSerializer,
+    CountrySuggestResponseSerializer,
+    RegionSuggestResponseSerializer,
+)
 
 
 class SuggestThrottle(AnonRateThrottle):
@@ -232,3 +236,55 @@ class CitySuggestView(APIView):
                 break
 
         return Response(CitySuggestResponseSerializer({"results": results}).data)
+
+
+class RegionSuggestView(APIView):
+    permission_classes = [AllowAny]
+    throttle_classes = [SuggestThrottle]
+
+    @extend_schema(
+        summary="Подсказки по регионам",
+        parameters=[
+            OpenApiParameter(
+                "q",
+                description="Часть названия региона",
+                required=False,
+                type=OpenApiTypes.STR,
+                location="query",
+            ),
+            OpenApiParameter(
+                "country_code",
+                description="ISO-2 код страны, например UZ, KZ",
+                required=False,
+                type=OpenApiTypes.STR,
+                location="query",
+            ),
+            OpenApiParameter(
+                "limit",
+                description="Максимум результатов (1..50, по умолчанию 50)",
+                required=False,
+                type=OpenApiTypes.INT,
+                location="query",
+            ),
+        ],
+        responses={200: RegionSuggestResponseSerializer},
+        tags=["Geo"],
+    )
+    def get(self, request):
+        q = (request.query_params.get("q") or "").strip()
+        limit = max(1, min(50, int(request.query_params.get("limit") or 50)))
+        country_code = (request.query_params.get("country_code") or "").strip().upper()
+
+        qs = GeoPlace.objects.exclude(region__isnull=True).exclude(region="")
+
+        if country_code:
+            qs = qs.filter(country_code=country_code)
+
+        if q:
+            qs = qs.filter(region__icontains=q)
+
+        regions = qs.values_list("region", flat=True).distinct().order_by("region")[:limit]
+
+        return Response(
+            RegionSuggestResponseSerializer({"results": [{"name": r} for r in regions]}).data
+        )

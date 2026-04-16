@@ -18,3 +18,11 @@ class CitySerializer(serializers.Serializer):
 
 class CitySuggestResponseSerializer(serializers.Serializer):
     results = CitySerializer(many=True)
+
+
+class RegionSerializer(serializers.Serializer):
+    name = serializers.CharField()
+
+
+class RegionSuggestResponseSerializer(serializers.Serializer):
+    results = RegionSerializer(many=True)

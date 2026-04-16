@@ -1,5 +1,6 @@
 import hashlib
 from datetime import timedelta
+from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.db.models import Avg, Count, DurationField, ExpressionWrapper, F, Q, Sum
@@ -11,8 +12,9 @@ from rest_framework.views import APIView
 
 from api.accounts.models import UserRole
 from api.accounts.permissions import IsAuthenticatedAndVerified
-from api.loads.choices import CargoCategory
+from api.loads.choices import CargoCategory, Currency, TransportType
 from api.orders.models import Order
+from common.utils import RATES, convert_to_uzs
 
 from .serializers import (
     DirectionDetailSerializer,
@@ -56,6 +58,213 @@ class BaseAnalyticsMixin:
         by_label = {c.label.lower(): c.value for c in CargoCategory}
         return by_label.get(raw.lower(), raw)
 
+    def normalize_transport_type(self, value: str | None) -> str | None:
+        if not value:
+            return None
+
+        raw = value.strip()
+        if not raw:
+            return None
+        if raw.lower() in {"all", "все"}:
+            return None
+
+        allowed = {c.value for c in TransportType}
+        if raw in allowed:
+            return raw
+
+        upper = raw.upper()
+        if upper in allowed:
+            return upper
+
+        by_label = {c.label.lower(): c.value for c in TransportType}
+        return by_label.get(raw.lower(), raw)
+
+    def normalize_currency(self, value: str | None) -> str:
+        if not value:
+            return Currency.USD
+
+        normalized = value.strip().upper()
+        if normalized in RATES:
+            return normalized
+        return Currency.USD
+
+    @staticmethod
+    def normalize_chart_mode(value: str | None) -> str:
+        if not value:
+            return "shipments"
+
+        normalized = value.strip().lower()
+        if normalized in {"shipments", "transportations", "перевозки"}:
+            return "shipments"
+        if normalized in {"prices", "price", "цены", "стоимость"}:
+            return "prices"
+        return "shipments"
+
+    def _convert_amount(self, amount, source_currency: str | None, target_currency: str) -> float | None:
+        if amount is None:
+            return None
+
+        src = (source_currency or "").upper().strip() or Currency.UZS
+        if src not in RATES:
+            return None
+        if target_currency not in RATES:
+            return None
+
+        amount_uzs = convert_to_uzs(Decimal(amount), src)
+        return float(amount_uzs / RATES[target_currency])
+
+    def _empty_price_curve(self):
+        return {
+            "avg": [0.0] * 12,
+            "min": [0.0] * 12,
+            "max": [0.0] * 12,
+        }
+
+    def _build_pie_charts(self, qs, year: int):
+        year_qs = qs.filter(created_at__year=year).select_related("cargo")
+        total = year_qs.count()
+
+        category_label_map = {c.value: c.label for c in CargoCategory}
+        transport_label_map = {t.value: t.label for t in TransportType}
+
+        category_rows = (
+            year_qs.values("cargo__cargo_category")
+            .annotate(shipments=Count("id"))
+            .order_by("-shipments")
+        )
+        transport_rows = (
+            year_qs.values("cargo__transport_type")
+            .annotate(shipments=Count("id"))
+            .order_by("-shipments")
+        )
+
+        def to_slices(rows, field_name, labels):
+            result = []
+            for row in rows:
+                raw_value = row[field_name] or "OTHER"
+                shipments = int(row["shipments"] or 0)
+                percent = (shipments / total * 100.0) if total > 0 else 0.0
+                result.append(
+                    {
+                        "value": raw_value,
+                        "label": labels.get(raw_value, raw_value),
+                        "shipments": shipments,
+                        "percent": round(percent, 2),
+                    }
+                )
+            return result
+
+        return {
+            "year": year,
+            "total_shipments": total,
+            "by_cargo_category": to_slices(
+                category_rows, "cargo__cargo_category", category_label_map
+            ),
+            "by_transport_type": to_slices(
+                transport_rows, "cargo__transport_type", transport_label_map
+            ),
+        }
+
+    def _apply_seasonal_filters(self, request, qs):
+        transport_type = self._qp_first(request, "transport_type", "transportType", "type")
+        category = self._qp_first(request, "cargo_category", "cargoCategory", "category")
+
+        normalized_transport = self.normalize_transport_type(transport_type)
+        if normalized_transport:
+            qs = qs.filter(cargo__transport_type=normalized_transport)
+
+        normalized_category = self.normalize_cargo_category(category)
+        if normalized_category:
+            qs = qs.filter(cargo__cargo_category=normalized_category)
+
+        return qs
+
+    def _build_season_chart(self, request, qs, year: int):
+        mode = self.normalize_chart_mode(
+            self._qp_first(request, "mode", "metric", "chart_type", "chartType")
+        )
+        currency = self.normalize_currency(request.query_params.get("currency"))
+        labels = [self.month_label(m) for m in range(1, 13)]
+
+        chart_qs = self._apply_seasonal_filters(request, qs).filter(created_at__year=year)
+        month_counts = {
+            row["m"].month: int(row["shipments"] or 0)
+            for row in chart_qs.annotate(m=TruncMonth("created_at"))
+            .values("m")
+            .annotate(shipments=Count("id"))
+        }
+        shipments = [month_counts.get(m, 0) for m in range(1, 13)]
+
+        prices_customer_to_intermediary = [[] for _ in range(12)]
+        prices_carrier_earnings = [[] for _ in range(12)]
+
+        if mode == "prices":
+            rows = chart_qs.values(
+                "created_at",
+                "logistic_id",
+                "price_total",
+                "currency",
+                "driver_price",
+                "driver_currency",
+            )
+
+            for row in rows:
+                month_index = row["created_at"].month - 1
+
+                if row["logistic_id"] and row["price_total"] is not None:
+                    converted_customer = self._convert_amount(
+                        row["price_total"], row["currency"], currency
+                    )
+                    if converted_customer is not None:
+                        prices_customer_to_intermediary[month_index].append(converted_customer)
+
+                carrier_amount = row["driver_price"]
+                carrier_currency = row["driver_currency"] or row["currency"]
+                if carrier_amount is None:
+                    carrier_amount = row["price_total"]
+
+                converted_carrier = self._convert_amount(carrier_amount, carrier_currency, currency)
+                if converted_carrier is not None:
+                    prices_carrier_earnings[month_index].append(converted_carrier)
+
+        def curve(values_by_month):
+            avg = []
+            min_values = []
+            max_values = []
+            for values in values_by_month:
+                if not values:
+                    avg.append(0.0)
+                    min_values.append(0.0)
+                    max_values.append(0.0)
+                    continue
+
+                avg.append(round(sum(values) / len(values), 2))
+                min_values.append(round(min(values), 2))
+                max_values.append(round(max(values), 2))
+            return {"avg": avg, "min": min_values, "max": max_values}
+
+        prices = {
+            "currency": currency,
+            "customer_to_intermediary": (
+                curve(prices_customer_to_intermediary)
+                if mode == "prices"
+                else self._empty_price_curve()
+            ),
+            "carrier_earnings": (
+                curve(prices_carrier_earnings)
+                if mode == "prices"
+                else self._empty_price_curve()
+            ),
+        }
+
+        return {
+            "mode": mode,
+            "year": year,
+            "labels": labels,
+            "shipments": shipments,
+            "prices": prices,
+        }
+
     def month_label(self, m):
         return [
             "",
@@ -81,7 +290,6 @@ class BaseAnalyticsMixin:
         transport_type = self._qp_first(request, "transport_type", "transportType", "type")
         category = self._qp_first(request, "cargo_category", "cargoCategory", "category")
         payment_method = self._qp_first(request, "payment_method", "paymentMethod")
-        currency = request.query_params.get("currency")
 
         if date_from:
             qs = qs.filter(cargo__load_date__gte=date_from)
@@ -105,9 +313,6 @@ class BaseAnalyticsMixin:
 
         if payment_method:
             qs = qs.filter(cargo__payment_method=payment_method)
-
-        if currency:
-            qs = qs.filter(cargo__price_currency=currency)
 
         return qs
 
@@ -160,13 +365,14 @@ class BaseAnalyticsMixin:
 
     def build_response_data(self, request, qs, rating_value=0):
         now = timezone.now()
+        summary_qs = self.apply_filters(request, qs)
 
         days = 30
         current_start = now - timedelta(days=days)
         prev_start = now - timedelta(days=days * 2)
 
-        current_qs = qs.filter(created_at__gte=current_start)
-        prev_qs = qs.filter(created_at__gte=prev_start, created_at__lt=current_start)
+        current_qs = summary_qs.filter(created_at__gte=current_start)
+        prev_qs = summary_qs.filter(created_at__gte=prev_start, created_at__lt=current_start)
 
         current_cnt = current_qs.count()
         prev_cnt = prev_qs.count()
@@ -183,9 +389,9 @@ class BaseAnalyticsMixin:
             registered_since = getattr(request.user, "date_joined", now).date()
             days_since_registered = (now.date() - registered_since).days
 
-        agg = qs.aggregate(total_km=Sum("route_distance_km"))
+        agg = summary_qs.aggregate(total_km=Sum("route_distance_km"))
         distance_km = float(agg["total_km"] or 0)
-        deals_count = qs.count()
+        deals_count = summary_qs.count()
 
         current_agg = current_qs.aggregate(
             total_price=Sum("cargo__price_uzs"),
@@ -212,65 +418,10 @@ class BaseAnalyticsMixin:
             avg_price_per_km_change = 1.0 if avg_price_per_km > 0 else 0.0
 
         year = int(request.query_params.get("year", now.year))
-        half = request.query_params.get("half", "1")
-        months = range(1, 7) if half == "1" else range(7, 13)
+        pie_charts = self._build_pie_charts(qs, year)
+        season_chart = self._build_season_chart(request, qs, year)
 
-        base_qs = qs.filter(
-            created_at__year=year,
-            created_at__month__in=months,
-        )
-
-        by_month = base_qs.annotate(m=TruncMonth("created_at")).values("m")
-
-        def sums(month_qs):
-            return {
-                r["m"].month: float(r["s"] or 0)
-                for r in month_qs.annotate(s=Sum("cargo__price_uzs"))
-            }
-
-        user = request.user
-
-        if hasattr(request, "_analytics_scope") and request._analytics_scope == "global":
-            given_map = sums(by_month)
-            received_map = sums(by_month)
-            earned_map = sums(by_month)
-        else:
-            given_map = sums(by_month.filter(customer=user))
-            received_map = sums(by_month.filter(carrier=user))
-            earned_map = sums(by_month.filter(logistic=user))
-
-        bar_chart = {
-            "labels": [self.month_label(m) for m in months],
-            "given": [given_map.get(m, 0) for m in months],
-            "received": [received_map.get(m, 0) for m in months],
-            "earned": [earned_map.get(m, 0) for m in months],
-        }
-
-        orders_qs = qs
-
-        in_search = orders_qs.filter(status=Order.OrderStatus.NO_DRIVER).count()
-        in_process = orders_qs.filter(
-            status__in=[Order.OrderStatus.PENDING, Order.OrderStatus.EN_ROUTE]
-        ).count()
-        successful = orders_qs.filter(status__in=self.completed_statuses).count()
-        cancelled = orders_qs.exclude(
-            status__in=[
-                Order.OrderStatus.NO_DRIVER,
-                Order.OrderStatus.PENDING,
-                Order.OrderStatus.EN_ROUTE,
-                *self.completed_statuses,
-            ]
-        ).count()
-
-        pie_chart = {
-            "in_search": in_search,
-            "in_process": in_process,
-            "successful": successful,
-            "cancelled": cancelled,
-            "total": in_search + in_process + successful + cancelled,
-        }
-
-        directions_data = self.build_directions(qs)
+        directions_data = self.build_directions(summary_qs)
 
         data = {
             "successful_deliveries": current_cnt,
@@ -280,8 +431,8 @@ class BaseAnalyticsMixin:
             "average_price_per_km": round(avg_price_per_km, 2),
             "average_price_per_km_change": round(avg_price_per_km_change, 3),
             "directions": directions_data,
-            "bar_chart": bar_chart,
-            "pie_chart": pie_chart,
+            "pie_charts": pie_charts,
+            "season_chart": season_chart,
         }
 
         if not (hasattr(request, "_analytics_scope") and request._analytics_scope == "global"):
@@ -308,8 +459,6 @@ class MyAnalyticsView(BaseAnalyticsMixin, APIView):
         else:
             qs = qs.filter(Q(customer=user) | Q(carrier=user))
 
-        qs = self.apply_filters(request, qs)
-
         data = self.build_response_data(request, qs, rating_value=user.avg_rating)
         ser = MyAnalyticsSerializer(data=data)
         ser.is_valid(raise_exception=True)
@@ -322,7 +471,6 @@ class GlobalAnalyticsView(BaseAnalyticsMixin, APIView):
 
     def get(self, request):
         qs = Order.objects.filter(status__in=self.completed_statuses)
-        qs = self.apply_filters(request, qs)
         request._analytics_scope = "global"
 
         data = self.build_response_data(request, qs, rating_value=0)
@@ -375,43 +523,8 @@ class DirectionDetailView(BaseAnalyticsMixin, APIView):
 
         now = timezone.now()
         year = int(request.query_params.get("year", now.year))
-        half = request.query_params.get("half", "1")
-        months = range(1, 7) if half == "1" else range(7, 13)
-
-        by_month = (
-            qs.filter(created_at__year=year, created_at__month__in=months)
-            .annotate(m=TruncMonth("created_at"))
-            .values("m")
-            .annotate(s=Sum("cargo__price_uzs"))
-        )
-        month_price_map = {r["m"].month: float(r["s"] or 0) for r in by_month}
-        bar_chart = {
-            "labels": [self.month_label(m) for m in months],
-            "given": [month_price_map.get(m, 0) for m in months],
-            "received": [month_price_map.get(m, 0) for m in months],
-            "earned": [month_price_map.get(m, 0) for m in months],
-        }
-
-        in_search = qs.filter(status=Order.OrderStatus.NO_DRIVER).count()
-        in_process = qs.filter(
-            status__in=[Order.OrderStatus.PENDING, Order.OrderStatus.EN_ROUTE]
-        ).count()
-        successful = qs.filter(status__in=self.completed_statuses).count()
-        cancelled = qs.exclude(
-            status__in=[
-                Order.OrderStatus.NO_DRIVER,
-                Order.OrderStatus.PENDING,
-                Order.OrderStatus.EN_ROUTE,
-                *self.completed_statuses,
-            ]
-        ).count()
-        pie_chart = {
-            "in_search": in_search,
-            "in_process": in_process,
-            "successful": successful,
-            "cancelled": cancelled,
-            "total": in_search + in_process + successful + cancelled,
-        }
+        pie_charts = self._build_pie_charts(qs, year)
+        season_chart = self._build_season_chart(request, qs, year)
 
         return Response(
             {
@@ -422,8 +535,8 @@ class DirectionDetailView(BaseAnalyticsMixin, APIView):
                 "weight": float(data["weight"] or 0),
                 "price_value": float(data["avg_price"] or 0),
                 "price_currency": "UZS",
-                "bar_chart": bar_chart,
-                "pie_chart": pie_chart,
+                "pie_charts": pie_charts,
+                "season_chart": season_chart,
             }
         )
 
@@ -437,7 +550,6 @@ class PartnerAnalyticsView(BaseAnalyticsMixin, APIView):
             Q(customer_id=partner_id) | Q(carrier_id=partner_id)
         )
 
-        qs = self.apply_filters(request, qs)
         request._analytics_scope = "global"
 
         data = self.build_response_data(request, qs, rating_value=0)

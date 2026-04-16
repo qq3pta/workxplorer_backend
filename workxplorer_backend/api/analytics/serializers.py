@@ -29,6 +29,40 @@ class PieChartSerializer(serializers.Serializer):
     total = serializers.IntegerField()
 
 
+class PieSliceSerializer(serializers.Serializer):
+    value = serializers.CharField()
+    label = serializers.CharField()
+    shipments = serializers.IntegerField()
+    percent = serializers.FloatField()
+
+
+class PieChartsSerializer(serializers.Serializer):
+    year = serializers.IntegerField()
+    total_shipments = serializers.IntegerField()
+    by_cargo_category = PieSliceSerializer(many=True)
+    by_transport_type = PieSliceSerializer(many=True)
+
+
+class PriceCurveSerializer(serializers.Serializer):
+    avg = serializers.ListField(child=serializers.FloatField())
+    min = serializers.ListField(child=serializers.FloatField())
+    max = serializers.ListField(child=serializers.FloatField())
+
+
+class PricesChartSerializer(serializers.Serializer):
+    currency = serializers.CharField()
+    customer_to_intermediary = PriceCurveSerializer()
+    carrier_earnings = PriceCurveSerializer()
+
+
+class SeasonChartSerializer(serializers.Serializer):
+    mode = serializers.ChoiceField(choices=["shipments", "prices"])
+    year = serializers.IntegerField()
+    labels = serializers.ListField(child=serializers.CharField())
+    shipments = serializers.ListField(child=serializers.IntegerField())
+    prices = PricesChartSerializer()
+
+
 class DirectionDetailSerializer(serializers.Serializer):
     id = serializers.CharField()
     origin_region = serializers.CharField()
@@ -37,8 +71,8 @@ class DirectionDetailSerializer(serializers.Serializer):
     weight = serializers.FloatField()
     price_value = serializers.FloatField()
     price_currency = serializers.CharField()
-    bar_chart = BarChartSerializer()
-    pie_chart = PieChartSerializer()
+    pie_charts = PieChartsSerializer()
+    season_chart = SeasonChartSerializer()
 
 
 class BaseAnalyticsSerializer(serializers.Serializer):
@@ -49,8 +83,8 @@ class BaseAnalyticsSerializer(serializers.Serializer):
     average_price_per_km = serializers.FloatField()
     average_price_per_km_change = serializers.FloatField()
     directions = DirectionSerializer(many=True)
-    bar_chart = BarChartSerializer()
-    pie_chart = PieChartSerializer()
+    pie_charts = PieChartsSerializer()
+    season_chart = SeasonChartSerializer()
 
 
 class MyAnalyticsSerializer(BaseAnalyticsSerializer):

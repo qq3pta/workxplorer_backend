@@ -341,6 +341,8 @@ class BaseAnalyticsMixin:
             .annotate(
                 shipments=Count("id"),
                 avg_price=Avg("cargo__price_uzs"),
+                min_price=Min("cargo__price_uzs"),
+                max_price=Max("cargo__price_uzs"),
                 total_weight=Sum("cargo__weight_kg"),
                 avg_duration=Avg(
                     ExpressionWrapper(
@@ -370,6 +372,8 @@ class BaseAnalyticsMixin:
                     "load_date": d.get("cargo__load_date"),
                     "delivery_date": d.get("cargo__delivery_date"),
                     "price_value": float(d["avg_price"] or 0),
+                    "min_price": float(d["min_price"] or 0),
+                    "max_price": float(d["max_price"] or 0),
                     "price_currency": "UZS",
                     "shipments": d["shipments"],
                     "weight": float(d["total_weight"] or 0),

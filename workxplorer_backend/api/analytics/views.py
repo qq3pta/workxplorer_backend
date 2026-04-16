@@ -38,6 +38,26 @@ class BaseAnalyticsMixin:
                 return value
         return None
 
+    def use_global_scope(self, request) -> bool:
+        raw = self._qp_first(request, "global", "is_global")
+        if raw is None:
+            return True
+        return str(raw).strip().lower() in {"1", "true", "yes", "y", "да"}
+
+    def scoped_completed_orders_qs(self, request):
+        qs = Order.objects.filter(status__in=self.completed_statuses).select_related("cargo")
+        if self.use_global_scope(request):
+            request._analytics_scope = "global"
+            return qs
+
+        user = request.user
+        role = getattr(user, "role", None)
+        if role == UserRole.LOGISTIC:
+            return qs.filter(customer=user)
+        if role == UserRole.CARRIER:
+            return qs.filter(carrier=user)
+        return qs.filter(Q(customer=user) | Q(carrier=user))
+
     def normalize_cargo_category(self, value: str | None) -> str | None:
         if not value:
             return None
@@ -487,9 +507,7 @@ class DirectionDetailView(BaseAnalyticsMixin, APIView):
     def get(self, request, direction_id):
         import hashlib
 
-        qs = Order.objects.filter(
-            status__in=[Order.OrderStatus.DELIVERED, Order.OrderStatus.PAID]
-        ).select_related("cargo")
+        qs = self.scoped_completed_orders_qs(request)
 
         matched_origin = None
         matched_destination = None
@@ -549,9 +567,7 @@ class CountryDirectionDetailView(BaseAnalyticsMixin, APIView):
     def get(self, request, direction_id):
         import hashlib
 
-        qs = Order.objects.filter(
-            status__in=[Order.OrderStatus.DELIVERED, Order.OrderStatus.PAID]
-        ).select_related("cargo")
+        qs = self.scoped_completed_orders_qs(request)
 
         matched_origin = None
         matched_destination = None

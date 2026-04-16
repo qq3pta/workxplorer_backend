@@ -8,6 +8,8 @@ class DirectionSerializer(serializers.Serializer):
     load_date = serializers.DateField(allow_null=True)
     delivery_date = serializers.DateField(allow_null=True)
     price_value = serializers.FloatField()
+    min_price = serializers.FloatField()
+    max_price = serializers.FloatField()
     price_currency = serializers.CharField()
     shipments = serializers.IntegerField()
     weight = serializers.FloatField()

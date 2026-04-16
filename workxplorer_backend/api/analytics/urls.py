@@ -1,6 +1,7 @@
 from django.urls import path
 from .views import (
     CountryDirectionDetailView,
+    CountryDirectionsListView,
     DirectionDetailView,
     GlobalAnalyticsView,
     MyAnalyticsView,
@@ -19,6 +20,11 @@ urlpatterns = [
         "directions/<str:direction_id>/",
         DirectionDetailView.as_view(),
         name="analytics-direction-detail",
+    ),
+    path(
+        "directions-countries/",
+        CountryDirectionsListView.as_view(),
+        name="analytics-directions-countries-list",
     ),
     path(
         "directions-countries/<str:direction_id>/",

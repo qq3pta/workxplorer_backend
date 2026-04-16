@@ -3,7 +3,7 @@ from datetime import timedelta
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
-from django.db.models import Avg, Count, DurationField, ExpressionWrapper, F, Q, Sum
+from django.db.models import Avg, Count, DurationField, ExpressionWrapper, F, Max, Min, Q, Sum
 from django.db.models.functions import TruncMonth
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema
@@ -18,6 +18,7 @@ from common.utils import RATES, convert_to_uzs
 
 from .serializers import (
     CountryDirectionDetailSerializer,
+    CountryDirectionSerializer,
     DirectionDetailSerializer,
     GlobalAnalyticsSerializer,
     MyAnalyticsSerializer,
@@ -221,34 +222,33 @@ class BaseAnalyticsMixin:
         prices_customer_to_intermediary = [[] for _ in range(12)]
         prices_carrier_earnings = [[] for _ in range(12)]
 
-        if mode == "prices":
-            rows = chart_qs.values(
-                "created_at",
-                "logistic_id",
-                "price_total",
-                "currency",
-                "driver_price",
-                "driver_currency",
-            )
+        rows = chart_qs.values(
+            "created_at",
+            "logistic_id",
+            "price_total",
+            "currency",
+            "driver_price",
+            "driver_currency",
+        )
 
-            for row in rows:
-                month_index = row["created_at"].month - 1
+        for row in rows:
+            month_index = row["created_at"].month - 1
 
-                if row["logistic_id"] and row["price_total"] is not None:
-                    converted_customer = self._convert_amount(
-                        row["price_total"], row["currency"], currency
-                    )
-                    if converted_customer is not None:
-                        prices_customer_to_intermediary[month_index].append(converted_customer)
+            if row["logistic_id"] and row["price_total"] is not None:
+                converted_customer = self._convert_amount(
+                    row["price_total"], row["currency"], currency
+                )
+                if converted_customer is not None:
+                    prices_customer_to_intermediary[month_index].append(converted_customer)
 
-                carrier_amount = row["driver_price"]
-                carrier_currency = row["driver_currency"] or row["currency"]
-                if carrier_amount is None:
-                    carrier_amount = row["price_total"]
+            carrier_amount = row["driver_price"]
+            carrier_currency = row["driver_currency"] or row["currency"]
+            if carrier_amount is None:
+                carrier_amount = row["price_total"]
 
-                converted_carrier = self._convert_amount(carrier_amount, carrier_currency, currency)
-                if converted_carrier is not None:
-                    prices_carrier_earnings[month_index].append(converted_carrier)
+            converted_carrier = self._convert_amount(carrier_amount, carrier_currency, currency)
+            if converted_carrier is not None:
+                prices_carrier_earnings[month_index].append(converted_carrier)
 
         def curve(values_by_month):
             avg = []
@@ -268,14 +268,8 @@ class BaseAnalyticsMixin:
 
         prices = {
             "currency": currency,
-            "customer_to_intermediary": (
-                curve(prices_customer_to_intermediary)
-                if mode == "prices"
-                else self._empty_price_curve()
-            ),
-            "carrier_earnings": (
-                curve(prices_carrier_earnings) if mode == "prices" else self._empty_price_curve()
-            ),
+            "customer_to_intermediary": curve(prices_customer_to_intermediary),
+            "carrier_earnings": curve(prices_carrier_earnings),
         }
 
         return {
@@ -410,8 +404,24 @@ class BaseAnalyticsMixin:
             registered_since = getattr(request.user, "date_joined", now).date()
             days_since_registered = (now.date() - registered_since).days
 
-        agg = summary_qs.aggregate(total_km=Sum("route_distance_km"))
+        agg = summary_qs.aggregate(
+            total_km=Sum("route_distance_km"),
+            avg_km=Avg("route_distance_km"),
+            total_weight=Sum("cargo__weight_kg"),
+            min_price=Min("cargo__price_uzs"),
+            max_price=Max("cargo__price_uzs"),
+        )
         distance_km = float(agg["total_km"] or 0)
+        avg_distance_km = float(agg["avg_km"] or 0)
+        total_weight_kg = float(agg["total_weight"] or 0)
+        min_price = float(agg["min_price"] or 0)
+        max_price = float(agg["max_price"] or 0)
+
+        directions_count = (
+            summary_qs.values("cargo__origin_region", "cargo__destination_region")
+            .distinct()
+            .count()
+        )
         deals_count = summary_qs.count()
 
         current_agg = current_qs.aggregate(
@@ -448,7 +458,13 @@ class BaseAnalyticsMixin:
             "successful_deliveries": current_cnt,
             "successful_deliveries_change": round(successful_change, 3),
             "distance_km": distance_km,
+            "avg_distance_km": round(avg_distance_km, 2),
             "deals_count": deals_count,
+            "directions_count": directions_count,
+            "total_weight_kg": total_weight_kg,
+            "min_price": min_price,
+            "max_price": max_price,
+            "price_currency": "UZS",
             "average_price_per_km": round(avg_price_per_km, 2),
             "average_price_per_km_change": round(avg_price_per_km_change, 3),
             "directions": directions_data,
@@ -618,6 +634,58 @@ class CountryDirectionDetailView(BaseAnalyticsMixin, APIView):
                 "season_chart": season_chart,
             }
         )
+
+
+@extend_schema(responses=CountryDirectionSerializer(many=True))
+class CountryDirectionsListView(BaseAnalyticsMixin, APIView):
+    permission_classes = [IsAuthenticatedAndVerified]
+
+    def get(self, request):
+        qs = self.scoped_completed_orders_qs(request)
+        qs = self.apply_filters(request, qs)
+
+        directions_agg = (
+            qs.select_related("cargo")
+            .values(
+                "cargo__origin_country",
+                "cargo__destination_country",
+            )
+            .annotate(
+                shipments=Count("id"),
+                avg_price=Avg("cargo__price_uzs"),
+                total_weight=Sum("cargo__weight_kg"),
+                avg_duration=Avg(
+                    ExpressionWrapper(
+                        F("unloading_datetime") - F("loading_datetime"),
+                        output_field=DurationField(),
+                    )
+                ),
+            )
+            .order_by("-shipments")
+        )
+
+        result = []
+        for d in directions_agg:
+            origin = d["cargo__origin_country"] or ""
+            destination = d["cargo__destination_country"] or ""
+            raw = f"{origin}:{destination}"
+            direction_id = hashlib.md5(raw.encode()).hexdigest()
+            duration = d["avg_duration"]
+            hours = duration.total_seconds() / 3600 if duration else 0
+            result.append(
+                {
+                    "id": direction_id,
+                    "origin": origin or "—",
+                    "destination": destination or "—",
+                    "price_value": float(d["avg_price"] or 0),
+                    "price_currency": "UZS",
+                    "shipments": d["shipments"],
+                    "weight": float(d["total_weight"] or 0),
+                    "time": round(hours, 1),
+                }
+            )
+
+        return Response(result)
 
 
 @extend_schema(responses=PartnerAnalyticsSerializer)

@@ -63,6 +63,17 @@ class SeasonChartSerializer(serializers.Serializer):
     prices = PricesChartSerializer()
 
 
+class CountryDirectionSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    origin = serializers.CharField()
+    destination = serializers.CharField()
+    price_value = serializers.FloatField()
+    price_currency = serializers.CharField()
+    shipments = serializers.IntegerField()
+    weight = serializers.FloatField()
+    time = serializers.FloatField()
+
+
 class DirectionDetailSerializer(serializers.Serializer):
     id = serializers.CharField()
     origin_region = serializers.CharField()
@@ -91,7 +102,13 @@ class BaseAnalyticsSerializer(serializers.Serializer):
     successful_deliveries = serializers.IntegerField()
     successful_deliveries_change = serializers.FloatField()
     distance_km = serializers.FloatField()
+    avg_distance_km = serializers.FloatField()
     deals_count = serializers.IntegerField()
+    directions_count = serializers.IntegerField()
+    total_weight_kg = serializers.FloatField()
+    min_price = serializers.FloatField()
+    max_price = serializers.FloatField()
+    price_currency = serializers.CharField()
     average_price_per_km = serializers.FloatField()
     average_price_per_km_change = serializers.FloatField()
     directions = DirectionSerializer(many=True)

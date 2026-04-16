@@ -411,8 +411,12 @@ class BaseAnalyticsMixin:
             registered_since = getattr(request.user, "date_joined", now).date()
             days_since_registered = (now.date() - registered_since).days
 
-        agg = summary_qs.aggregate(total_km=Sum("route_distance_km"))
+        agg = summary_qs.aggregate(
+            total_km=Sum("route_distance_km"),
+            total_weight=Sum("cargo__weight_kg"),
+        )
         distance_km = float(agg["total_km"] or 0)
+        total_weight_kg = float(agg["total_weight"] or 0)
         deals_count = summary_qs.count()
 
         current_agg = current_qs.aggregate(
@@ -450,6 +454,7 @@ class BaseAnalyticsMixin:
             "successful_deliveries_change": round(successful_change, 3),
             "distance_km": distance_km,
             "deals_count": deals_count,
+            "total_weight_kg": total_weight_kg,
             "average_price_per_km": round(avg_price_per_km, 2),
             "average_price_per_km_change": round(avg_price_per_km_change, 3),
             "directions": directions_data,

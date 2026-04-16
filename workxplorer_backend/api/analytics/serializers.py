@@ -103,6 +103,7 @@ class BaseAnalyticsSerializer(serializers.Serializer):
     successful_deliveries_change = serializers.FloatField()
     distance_km = serializers.FloatField()
     deals_count = serializers.IntegerField()
+    total_weight_kg = serializers.FloatField()
     average_price_per_km = serializers.FloatField()
     average_price_per_km_change = serializers.FloatField()
     directions = DirectionSerializer(many=True)

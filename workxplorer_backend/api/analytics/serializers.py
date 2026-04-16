@@ -63,6 +63,17 @@ class SeasonChartSerializer(serializers.Serializer):
     prices = PricesChartSerializer()
 
 
+class CountryDirectionSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    origin = serializers.CharField()
+    destination = serializers.CharField()
+    price_value = serializers.FloatField()
+    price_currency = serializers.CharField()
+    shipments = serializers.IntegerField()
+    weight = serializers.FloatField()
+    time = serializers.FloatField()
+
+
 class DirectionDetailSerializer(serializers.Serializer):
     id = serializers.CharField()
     origin_region = serializers.CharField()

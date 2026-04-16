@@ -18,6 +18,7 @@ from common.utils import RATES, convert_to_uzs
 
 from .serializers import (
     CountryDirectionDetailSerializer,
+    CountryDirectionSerializer,
     DirectionDetailSerializer,
     GlobalAnalyticsSerializer,
     MyAnalyticsSerializer,
@@ -618,6 +619,58 @@ class CountryDirectionDetailView(BaseAnalyticsMixin, APIView):
                 "season_chart": season_chart,
             }
         )
+
+
+@extend_schema(responses=CountryDirectionSerializer(many=True))
+class CountryDirectionsListView(BaseAnalyticsMixin, APIView):
+    permission_classes = [IsAuthenticatedAndVerified]
+
+    def get(self, request):
+        qs = self.scoped_completed_orders_qs(request)
+        qs = self.apply_filters(request, qs)
+
+        directions_agg = (
+            qs.select_related("cargo")
+            .values(
+                "cargo__origin_country",
+                "cargo__destination_country",
+            )
+            .annotate(
+                shipments=Count("id"),
+                avg_price=Avg("cargo__price_uzs"),
+                total_weight=Sum("cargo__weight_kg"),
+                avg_duration=Avg(
+                    ExpressionWrapper(
+                        F("unloading_datetime") - F("loading_datetime"),
+                        output_field=DurationField(),
+                    )
+                ),
+            )
+            .order_by("-shipments")
+        )
+
+        result = []
+        for d in directions_agg:
+            origin = d["cargo__origin_country"] or ""
+            destination = d["cargo__destination_country"] or ""
+            raw = f"{origin}:{destination}"
+            direction_id = hashlib.md5(raw.encode()).hexdigest()
+            duration = d["avg_duration"]
+            hours = duration.total_seconds() / 3600 if duration else 0
+            result.append(
+                {
+                    "id": direction_id,
+                    "origin": origin or "—",
+                    "destination": destination or "—",
+                    "price_value": float(d["avg_price"] or 0),
+                    "price_currency": "UZS",
+                    "shipments": d["shipments"],
+                    "weight": float(d["total_weight"] or 0),
+                    "time": round(hours, 1),
+                }
+            )
+
+        return Response(result)
 
 
 @extend_schema(responses=PartnerAnalyticsSerializer)

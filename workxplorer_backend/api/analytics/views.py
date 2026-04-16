@@ -300,8 +300,30 @@ class BaseAnalyticsMixin:
     def apply_filters(self, request, qs):
         date_from = self._qp_first(request, "date_from", "dateFrom")
         date_to = self._qp_first(request, "date_to", "dateTo")
-        origin_region = request.query_params.get("origin_region")
-        destination_region = request.query_params.get("destination_region")
+
+        origin_region = self._qp_first(
+            request,
+            "origin_region",
+            "originRegion",
+            "origin",
+            "from_region",
+            "fromRegion",
+            "from",
+            "original_region",
+            "originalRegion",
+        )
+        destination_region = self._qp_first(
+            request,
+            "destination_region",
+            "destinationRegion",
+            "destination",
+            "to_region",
+            "toRegion",
+            "to",
+            "target_region",
+            "targetRegion",
+        )
+
         transport_type = self._qp_first(request, "transport_type", "transportType", "type")
         category = self._qp_first(request, "cargo_category", "cargoCategory", "category")
         payment_method = self._qp_first(request, "payment_method", "paymentMethod")

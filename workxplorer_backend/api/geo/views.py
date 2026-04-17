@@ -124,28 +124,50 @@ class CountrySuggestView(APIView):
                 type=OpenApiTypes.INT,
                 location="query",
             ),
+            OpenApiParameter(
+                "lang",
+                description="Язык интерфейса: ru/en/uz",
+                required=False,
+                type=OpenApiTypes.STR,
+                location="query",
+            ),
         ],
         responses={200: CountrySuggestResponseSerializer},
         tags=["Geo"],
     )
     def get(self, request):
-        q = (request.query_params.get("q") or "").strip()
+        q = (request.query_params.get("q") or "").strip().lower()
         limit = max(1, min(50, int(request.query_params.get("limit") or 50)))
         country_code = (request.query_params.get("country_code") or "").strip().upper()
+        lang = get_lang(request)
 
         qs = GeoPlace.objects.exclude(country__isnull=True).exclude(country="")
 
         if country_code:
             qs = qs.filter(country_code=country_code)
 
-        if q:
-            qs = qs.filter(country__icontains=q)
+        raw_countries = qs.values_list("country", flat=True).distinct().order_by("country")
 
-        country = qs.values_list("country", flat=True).distinct().order_by("country")[:limit]
+        seen = set()
+        results = []
 
-        return Response(
-            CountrySuggestResponseSerializer({"results": [{"name": r} for r in country]}).data
-        )
+        for raw_country in raw_countries:
+            display_name = normalize_country(raw_country, lang)
+
+            if q and q not in raw_country.lower() and q not in display_name.lower():
+                continue
+
+            key = display_name.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+
+            results.append({"name": display_name})
+
+            if len(results) >= limit:
+                break
+
+        return Response(CountrySuggestResponseSerializer({"results": results}).data)
 
 
 class CitySuggestView(APIView):

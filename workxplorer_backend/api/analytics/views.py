@@ -324,6 +324,10 @@ class BaseAnalyticsMixin:
             "targetRegion",
         )
 
+        origin_country = self._qp_first(request, "origin_country", "originCountry")
+
+        destination_country = self._qp_first(request, "destination_country", "destinationCountry")
+
         transport_type = self._qp_first(request, "transport_type", "transportType", "type")
         category = self._qp_first(request, "cargo_category", "cargoCategory", "category")
         payment_method = self._qp_first(request, "payment_method", "paymentMethod")
@@ -333,6 +337,12 @@ class BaseAnalyticsMixin:
 
         if date_to:
             qs = qs.filter(cargo__delivery_date__lte=date_to)
+
+        if origin_country:
+            qs = qs.filter(cargo__origin_country__iexact=origin_country)
+
+        if destination_country:
+            qs = qs.filter(cargo__destination_country__iexact=destination_country)
 
         if origin_region:
             qs = qs.filter(cargo__origin_region__iexact=origin_region)

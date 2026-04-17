@@ -2,6 +2,7 @@ import hashlib
 from datetime import timedelta
 from decimal import Decimal
 
+from common.utils import RATES, convert_to_uzs
 from django.contrib.auth import get_user_model
 from django.db.models import Avg, Count, DurationField, ExpressionWrapper, F, Max, Min, Q, Sum
 from django.db.models.functions import TruncMonth
@@ -14,12 +15,10 @@ from api.accounts.models import UserRole
 from api.accounts.permissions import IsAuthenticatedAndVerified
 from api.loads.choices import CargoCategory, Currency, TransportType
 from api.orders.models import Order
-from common.utils import RATES, convert_to_uzs
 
 from .serializers import (
     CountryDirectionDetailSerializer,
     CountryDirectionsListResponseSerializer,
-    CountryDirectionSerializer,
     DirectionDetailSerializer,
     GlobalAnalyticsSerializer,
     MyAnalyticsSerializer,

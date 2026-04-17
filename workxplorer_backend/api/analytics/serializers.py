@@ -76,6 +76,16 @@ class CountryDirectionSerializer(serializers.Serializer):
     time = serializers.FloatField()
 
 
+class AnalyticsFilterOptionSerializer(serializers.Serializer):
+    value = serializers.CharField()
+    label = serializers.CharField()
+
+
+class AnalyticsFiltersSerializer(serializers.Serializer):
+    transport_types = AnalyticsFilterOptionSerializer(many=True)
+    cargo_categories = AnalyticsFilterOptionSerializer(many=True)
+
+
 class DirectionDetailSerializer(serializers.Serializer):
     id = serializers.CharField()
     origin_region = serializers.CharField()

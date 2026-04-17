@@ -1,5 +1,6 @@
 from django.urls import path
 from .views import (
+    AnalyticsFiltersView,
     CountryDirectionDetailView,
     CountryDirectionsListView,
     DirectionDetailView,
@@ -9,6 +10,7 @@ from .views import (
 )
 
 urlpatterns = [
+    path("filters/", AnalyticsFiltersView.as_view(), name="analytics-filters"),
     path("me/", MyAnalyticsView.as_view(), name="analytics-me"),
     path("global/", GlobalAnalyticsView.as_view(), name="analytics-global"),
     path(

@@ -17,6 +17,7 @@ from api.orders.models import Order
 from common.utils import RATES, convert_to_uzs
 
 from .serializers import (
+    AnalyticsFiltersSerializer,
     CountryDirectionDetailSerializer,
     CountryDirectionSerializer,
     DirectionDetailSerializer,
@@ -297,6 +298,18 @@ class BaseAnalyticsMixin:
             "Дек",
         ][m]
 
+    def analytics_filter_options(self):
+        transport_types = [
+            {"value": value, "label": label} for value, label in TransportType.choices
+        ]
+        cargo_categories = [
+            {"value": value, "label": label} for value, label in CargoCategory.choices
+        ]
+        return {
+            "transport_types": transport_types,
+            "cargo_categories": cargo_categories,
+        }
+
     def apply_filters(self, request, qs):
         date_from = self._qp_first(request, "date_from", "dateFrom")
         date_to = self._qp_first(request, "date_to", "dateTo")
@@ -538,6 +551,17 @@ class GlobalAnalyticsView(BaseAnalyticsMixin, APIView):
 
         data = self.build_response_data(request, qs, rating_value=0)
         ser = GlobalAnalyticsSerializer(data=data)
+        ser.is_valid(raise_exception=True)
+        return Response(ser.data)
+
+
+@extend_schema(responses=AnalyticsFiltersSerializer)
+class AnalyticsFiltersView(BaseAnalyticsMixin, APIView):
+    permission_classes = [IsAuthenticatedAndVerified]
+
+    def get(self, request):
+        data = self.analytics_filter_options()
+        ser = AnalyticsFiltersSerializer(data=data)
         ser.is_valid(raise_exception=True)
         return Response(ser.data)
 

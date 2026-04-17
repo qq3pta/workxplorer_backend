@@ -63,6 +63,7 @@ class TransportTypeItemSerializer(drf_serializers.Serializer):
 
 class CargoDictionaryResponseSerializer(drf_serializers.Serializer):
     default_cargo_category = drf_serializers.CharField()
+    cargo_categories = CargoCategoryItemSerializer(many=True)
     transport_types = TransportTypeItemSerializer(many=True)
 
 
@@ -128,6 +129,10 @@ class CargoDictionaryView(generics.GenericAPIView):
     serializer_class = CargoDictionaryResponseSerializer
 
     def get(self, request):
+        cargo_categories = [
+            {"value": value, "label": label} for value, label in CargoCategory.choices
+        ]
+
         transport_types = []
         for value, categories in TRANSPORT_TO_CARGO_CATEGORIES.items():
             transport_types.append(
@@ -149,6 +154,7 @@ class CargoDictionaryView(generics.GenericAPIView):
         return Response(
             {
                 "default_cargo_category": CargoCategory.OTHER,
+                "cargo_categories": cargo_categories,
                 "transport_types": transport_types,
             },
             status=status.HTTP_200_OK,

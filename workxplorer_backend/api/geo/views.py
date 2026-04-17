@@ -138,15 +138,14 @@ class CountrySuggestView(APIView):
         if q:
             qs = qs.filter(country__icontains=q)
 
-        countries = qs.values("country", "country_code").distinct().order_by("country")[:limit]
+        countries = qs.values_list("country", flat=True).distinct().order_by("country")[:limit]
 
         return Response(
             CountrySuggestResponseSerializer(
                 {
                     "results": [
                         {
-                            "name": normalize_country(c["country"], lang),
-                            "code": c["country_code"],
+                            "name": normalize_country(c, lang),
                         }
                         for c in countries
                     ]

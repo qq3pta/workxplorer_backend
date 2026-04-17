@@ -112,7 +112,7 @@ class CountrySuggestView(APIView):
             ),
             OpenApiParameter(
                 "limit",
-                description="Максимум результатов (1..50, по умолчанию 10)",
+                description="Максимум результатов (1..50, по умолчанию 50)",
                 required=False,
                 type=OpenApiTypes.INT,
                 location="query",
@@ -133,18 +133,26 @@ class CountrySuggestView(APIView):
         limit = max(1, min(50, int(request.query_params.get("limit") or 50)))
         lang = get_lang(request)
 
-        qs = GeoPlace.objects.values("country", "country_code").distinct()
+        qs = GeoPlace.objects.exclude(country__isnull=True).exclude(country="")
+
         if q:
             qs = qs.filter(country__icontains=q)
 
-        results = [
-            {
-                "name": normalize_country(x["country"], lang),
-                "code": x["country_code"],
-            }
-            for x in qs[:limit]
-        ]
-        return Response(CountrySuggestResponseSerializer({"results": results}).data)
+        countries = qs.values("country", "country_code").distinct().order_by("country")[:limit]
+
+        return Response(
+            CountrySuggestResponseSerializer(
+                {
+                    "results": [
+                        {
+                            "name": normalize_country(c["country"], lang),
+                            "code": c["country_code"],
+                        }
+                        for c in countries
+                    ]
+                }
+            ).data
+        )
 
 
 class CitySuggestView(APIView):

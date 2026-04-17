@@ -111,17 +111,17 @@ class CountrySuggestView(APIView):
                 location="query",
             ),
             OpenApiParameter(
+                "country_code",
+                description="ISO-2 код страны, например UZ, KZ",
+                required=False,
+                type=OpenApiTypes.STR,
+                location="query",
+            ),
+            OpenApiParameter(
                 "limit",
                 description="Максимум результатов (1..50, по умолчанию 50)",
                 required=False,
                 type=OpenApiTypes.INT,
-                location="query",
-            ),
-            OpenApiParameter(
-                "lang",
-                description="Язык интерфейса: ru/en/uz",
-                required=False,
-                type=OpenApiTypes.STR,
                 location="query",
             ),
         ],
@@ -131,26 +131,20 @@ class CountrySuggestView(APIView):
     def get(self, request):
         q = (request.query_params.get("q") or "").strip()
         limit = max(1, min(50, int(request.query_params.get("limit") or 50)))
-        lang = get_lang(request)
+        country_code = (request.query_params.get("country_code") or "").strip().upper()
 
         qs = GeoPlace.objects.exclude(country__isnull=True).exclude(country="")
+
+        if country_code:
+            qs = qs.filter(country_code=country_code)
 
         if q:
             qs = qs.filter(country__icontains=q)
 
-        countries = qs.values_list("country", flat=True).distinct().order_by("country")[:limit]
+        country = qs.values_list("country", flat=True).distinct().order_by("country")[:limit]
 
         return Response(
-            CountrySuggestResponseSerializer(
-                {
-                    "results": [
-                        {
-                            "name": normalize_country(c, lang),
-                        }
-                        for c in countries
-                    ]
-                }
-            ).data
+            CountrySuggestResponseSerializer({"results": [{"name": r} for r in country]}).data
         )
 
 

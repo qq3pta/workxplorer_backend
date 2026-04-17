@@ -2,6 +2,7 @@ import hashlib
 from datetime import timedelta
 from decimal import Decimal
 
+from common.utils import RATES, convert_to_uzs
 from django.contrib.auth import get_user_model
 from django.db.models import Avg, Count, DurationField, ExpressionWrapper, F, Max, Min, Q, Sum
 from django.db.models.functions import TruncMonth
@@ -14,11 +15,10 @@ from api.accounts.models import UserRole
 from api.accounts.permissions import IsAuthenticatedAndVerified
 from api.loads.choices import CargoCategory, Currency, TransportType
 from api.orders.models import Order
-from common.utils import RATES, convert_to_uzs
 
 from .serializers import (
     CountryDirectionDetailSerializer,
-    CountryDirectionSerializer,
+    CountryDirectionsListResponseSerializer,
     DirectionDetailSerializer,
     GlobalAnalyticsSerializer,
     MyAnalyticsSerializer,
@@ -672,13 +672,21 @@ class CountryDirectionDetailView(BaseAnalyticsMixin, APIView):
         )
 
 
-@extend_schema(responses=CountryDirectionSerializer(many=True))
+@extend_schema(responses=CountryDirectionsListResponseSerializer)
 class CountryDirectionsListView(BaseAnalyticsMixin, APIView):
     permission_classes = [IsAuthenticatedAndVerified]
 
     def get(self, request):
         qs = self.scoped_completed_orders_qs(request)
         qs = self.apply_filters(request, qs)
+        summary = qs.aggregate(
+            total_weight=Sum("cargo__weight_kg"),
+            avg_km=Avg("route_distance_km"),
+        )
+        deals_count = qs.count()
+        directions_count = (
+            qs.values("cargo__origin_country", "cargo__destination_country").distinct().count()
+        )
 
         directions_agg = (
             qs.select_related("cargo")
@@ -721,7 +729,15 @@ class CountryDirectionsListView(BaseAnalyticsMixin, APIView):
                 }
             )
 
-        return Response(result)
+        return Response(
+            {
+                "directions_count": directions_count,
+                "deals_count": deals_count,
+                "total_weight_kg": float(summary["total_weight"] or 0),
+                "avg_distance_km": round(float(summary["avg_km"] or 0), 2),
+                "directions": result,
+            }
+        )
 
 
 @extend_schema(responses=PartnerAnalyticsSerializer)

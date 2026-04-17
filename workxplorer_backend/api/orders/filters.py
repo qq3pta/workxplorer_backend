@@ -1,7 +1,8 @@
 from decimal import Decimal
+
 import django_filters
-from django.db import models
 from common.utils import convert_to_uzs
+from django.db import models
 
 from .models import Order
 

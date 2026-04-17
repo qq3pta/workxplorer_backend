@@ -1,6 +1,6 @@
-from rest_framework.pagination import PageNumberPagination
 from django.core.cache import cache
 from django.utils.encoding import force_str
+from rest_framework.pagination import PageNumberPagination
 
 
 class OptimizedLoadsPagination(PageNumberPagination):

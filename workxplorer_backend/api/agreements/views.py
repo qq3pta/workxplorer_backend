@@ -1,19 +1,19 @@
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
+from common.ws_utils import to_ws_safe
 from django.db import models
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.viewsets import ReadOnlyModelViewSet
-from channels.layers import get_channel_layer
-from asgiref.sync import async_to_sync
-from common.ws_utils import to_ws_safe
 
 from .models import Agreement
 from .permissions import IsAgreementParticipant
 from .serializers import (
     AgreementActionSerializer,
-    AgreementListSerializer,
     AgreementDetailSerializer,
+    AgreementListSerializer,
 )
 
 

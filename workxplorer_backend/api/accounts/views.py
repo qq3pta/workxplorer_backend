@@ -1,41 +1,41 @@
 from datetime import timedelta
 
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
+from common.ws_utils import to_ws_safe
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import generics, serializers
-from channels.layers import get_channel_layer
-from asgiref.sync import async_to_sync
-from common.ws_utils import to_ws_safe
+from rest_framework.decorators import api_view
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.decorators import api_view
-from api.loads.models import Cargo
 from rest_framework_simplejwt.tokens import (
     BlacklistedToken,
     OutstandingToken,
     RefreshToken,
 )
 
+from api.loads.models import Cargo
 
 from .models import Profile
 from .permissions import IsAuthenticatedAndVerified
 from .serializers import (
+    ChangePasswordSerializer,
     ForgotPasswordSerializer,
     LoginSerializer,
     MeSerializer,
     RegisterSerializer,
     ResendVerifySerializer,
-    ChangePasswordSerializer,
     RoleChangeSerializer,
+    SendEmailVerifyFromProfileSerializer,
     SendPhoneOTPSerializer,
     UpdateMeSerializer,
+    VerifyEmailFromProfileSerializer,
     VerifyEmailSerializer,
     VerifyPhoneOTPSerializer,
-    SendEmailVerifyFromProfileSerializer,
-    VerifyEmailFromProfileSerializer,
 )
 
 User = get_user_model()

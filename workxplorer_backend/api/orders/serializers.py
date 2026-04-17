@@ -4,9 +4,9 @@ from collections.abc import Iterable
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from api.payments.serializers import PaymentSerializer
 from api.loads.choices import Currency
 from api.payments.models import PaymentMethod
+from api.payments.serializers import PaymentSerializer
 
 from .models import Order, OrderDocument, OrderStatusHistory
 

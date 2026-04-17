@@ -1,10 +1,10 @@
+import logging
 from urllib.parse import parse_qs
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import AccessToken
-import logging
 
 logger = logging.getLogger(__name__)
 User = get_user_model()

@@ -3,15 +3,15 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any
 
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
+from common.ws_utils import to_ws_safe
 from django.contrib.auth import get_user_model
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
-from channels.layers import get_channel_layer
-from asgiref.sync import async_to_sync
 
 from api.loads.choices import Currency, ModerationStatus
 from api.loads.models import Cargo, CargoStatus
-from common.ws_utils import to_ws_safe
 
 from .models import Offer, OfferStatusLog
 

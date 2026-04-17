@@ -1,6 +1,10 @@
-from django.contrib.gis.db.models.functions import Distance
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
 from common.filters import apply_loads_filters
+from common.ws_utils import to_ws_safe
+from django.contrib.gis.db.models.functions import Distance
 from django.core.exceptions import ValidationError
+from django.db import transaction
 from django.db.models import (
     Avg,
     Count,
@@ -10,17 +14,12 @@ from django.db.models import (
     Q,
 )
 from django.db.models.functions import Coalesce
-from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import generics, status
 from rest_framework import serializers as drf_serializers
 from rest_framework.response import Response
-
-from asgiref.sync import async_to_sync
-from channels.layers import get_channel_layer
-from common.ws_utils import to_ws_safe
 
 from api.loads.models import LoadInvite
 from api.offers.models import Offer
@@ -31,13 +30,13 @@ from ..accounts.permissions import (
     IsCustomerOrLogistic,
 )
 from .choices import (
+    TRANSPORT_TO_CARGO_CATEGORIES,
     CargoCategory,
     ModerationStatus,
-    TRANSPORT_TO_CARGO_CATEGORIES,
 )
 from .models import Cargo, CargoStatus
+from .pagination import LoadsBoardPagination, OptimizedLoadsPagination
 from .serializers import CargoListSerializer, CargoPublishSerializer
-from .pagination import OptimizedLoadsPagination, LoadsBoardPagination
 
 INVITE_BASE_URL = "https://logistic-omega-eight.vercel.app/dashboard/desk/invite"
 

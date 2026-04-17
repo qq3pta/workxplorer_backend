@@ -1,5 +1,6 @@
 from django.contrib import admin
-from .models import SupportTicket, ConsultationRequest
+
+from .models import ConsultationRequest, SupportTicket
 
 
 @admin.register(SupportTicket)

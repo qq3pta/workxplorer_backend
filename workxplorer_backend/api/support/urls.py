@@ -1,5 +1,6 @@
 from django.urls import path
-from .views import SupportCreateView, ConsultationRequestView
+
+from .views import ConsultationRequestView, SupportCreateView
 
 app_name = "support"
 

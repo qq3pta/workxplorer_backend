@@ -1,6 +1,6 @@
 from rest_framework import serializers
-from .models import SupportTicket
-from .models import ConsultationRequest
+
+from .models import ConsultationRequest, SupportTicket
 
 
 class SupportTicketCreateSerializer(serializers.ModelSerializer):

@@ -1,8 +1,9 @@
+import logging
+import time
+from contextlib import contextmanager
+
 from django.db import connection
 from django.db.models import Prefetch
-from contextlib import contextmanager
-import time
-import logging
 
 logger = logging.getLogger(__name__)
 

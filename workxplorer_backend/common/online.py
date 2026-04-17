@@ -1,7 +1,8 @@
 from datetime import timedelta
-from django.utils import timezone
-from django.contrib.auth import get_user_model
+
 from channels.db import database_sync_to_async
+from django.contrib.auth import get_user_model
+from django.utils import timezone
 
 User = get_user_model()
 UPDATE_INTERVAL = timedelta(seconds=60)

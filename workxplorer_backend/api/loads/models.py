@@ -3,6 +3,8 @@ import uuid
 from datetime import timedelta
 from decimal import Decimal
 
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
 from django.conf import settings
 from django.contrib.gis.db import models as gis_models
 from django.core.exceptions import ValidationError
@@ -11,8 +13,6 @@ from django.db import models
 from django.db.models.manager import Manager as DjangoManager
 from django.utils import timezone
 from unidecode import unidecode
-from channels.layers import get_channel_layer
-from asgiref.sync import async_to_sync
 
 from api.notifications.services import notify
 

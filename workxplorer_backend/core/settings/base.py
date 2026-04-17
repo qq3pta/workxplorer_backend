@@ -1,13 +1,13 @@
-import sentry_sdk
-from sentry_sdk.integrations.django import DjangoIntegration
 from datetime import timedelta
 from os import getenv
 from pathlib import Path
 
 import firebase_admin
+import sentry_sdk
 from corsheaders.defaults import default_headers
 from dotenv import load_dotenv
 from firebase_admin import credentials
+from sentry_sdk.integrations.django import DjangoIntegration
 
 # Paths & env
 BASE_DIR = Path(__file__).resolve().parents[2]

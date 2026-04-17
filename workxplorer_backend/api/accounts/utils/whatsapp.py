@@ -1,6 +1,7 @@
-from twilio.rest import Client
-from django.conf import settings
 import logging
+
+from django.conf import settings
+from twilio.rest import Client
 
 log = logging.getLogger(__name__)
 

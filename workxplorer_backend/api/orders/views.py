@@ -1,42 +1,39 @@
 import uuid
-
+from datetime import timedelta
 from decimal import Decimal
-from django.db.models import Q, F
+
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
 from common.utils import convert_to_uzs
+from common.ws_utils import to_ws_safe
 from django.contrib.auth import get_user_model
 from django.contrib.gis.geos import Point
 from django.db import models
+from django.db.models import F, Q
 from django.utils import timezone
-from datetime import timedelta
-from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
+from drf_spectacular.utils import OpenApiExample, OpenApiParameter, extend_schema
 from rest_framework import status as http_status
 from rest_framework import viewsets
 from rest_framework.decorators import action
-from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.generics import RetrieveAPIView
-from rest_framework.permissions import AllowAny
-
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
-from channels.layers import get_channel_layer
-from asgiref.sync import async_to_sync
-from common.ws_utils import to_ws_safe
-
-
-from .models import Order, OrderStatusHistory, DriverLocation
 from api.offers.models import Offer
+
+from .models import DriverLocation, Order, OrderStatusHistory
 from .permissions import IsOrderParticipant
 from .serializers import (
+    GPSUpdateSerializer,
     InviteByIdSerializer,
+    InvitePreviewSerializer,
     OrderDetailSerializer,
     OrderDocumentSerializer,
     OrderDriverStatusUpdateSerializer,
     OrderListSerializer,
     OrderStatusHistorySerializer,
-    InvitePreviewSerializer,
     PrivacyToggleSerializer,
-    GPSUpdateSerializer,
 )
 
 User = get_user_model()

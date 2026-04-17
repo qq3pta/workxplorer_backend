@@ -1,7 +1,8 @@
-from twilio.rest import Client
+import logging
+
 from django.conf import settings
 from django.core.exceptions import ValidationError
-import logging
+from twilio.rest import Client
 
 log = logging.getLogger(__name__)
 

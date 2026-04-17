@@ -1,15 +1,14 @@
 from __future__ import annotations
 
 from decimal import ROUND_HALF_UP, Decimal
-from django.contrib.gis.geos import Point
 from typing import Any
 
+from django.contrib.gis.geos import Point
 from django.core.cache import cache
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 from unidecode import unidecode
-
 
 from api.geo.management.commands.import_cities import COUNTRY_NORMALIZATION
 from api.geo.models import GeoPlace

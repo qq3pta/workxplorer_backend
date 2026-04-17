@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from django.contrib.gis.db.models.functions import Distance
 from django.contrib.gis.geos import Point
-from django.db.models import Q, F
+from django.db.models import F, Q
 from django.utils import timezone
 
 from common.utils import convert_to_uzs

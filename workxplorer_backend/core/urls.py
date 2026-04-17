@@ -4,7 +4,6 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
 from core.health import health
 
-
 urlpatterns = [
     path("admin/", admin.site.urls),
     # OpenAPI/Swagger

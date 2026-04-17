@@ -76,6 +76,14 @@ class CountryDirectionSerializer(serializers.Serializer):
     time = serializers.FloatField()
 
 
+class CountryDirectionsListResponseSerializer(serializers.Serializer):
+    directions_count = serializers.IntegerField()
+    deals_count = serializers.IntegerField()
+    total_weight_kg = serializers.FloatField()
+    avg_distance_km = serializers.FloatField()
+    directions = CountryDirectionSerializer(many=True)
+
+
 class DirectionDetailSerializer(serializers.Serializer):
     id = serializers.CharField()
     origin_region = serializers.CharField()

@@ -159,7 +159,7 @@ class BaseAnalyticsMixin:
         }
 
     def _build_pie_charts(self, qs, year: int):
-        year_qs = qs.filter(created_at__year=year).select_related("cargo")
+        year_qs = qs.filter(cargo__load_date__year=year).select_related("cargo")
         total = year_qs.count()
 
         category_label_map = {c.value: c.label for c in CargoCategory}
@@ -224,10 +224,10 @@ class BaseAnalyticsMixin:
         currency = Currency.USD
         labels = [self.month_label(m) for m in range(1, 13)]
 
-        chart_qs = self._apply_seasonal_filters(request, qs).filter(created_at__year=year)
+        chart_qs = self._apply_seasonal_filters(request, qs).filter(cargo__load_date__year=year)
         month_counts = {
             row["m"].month: int(row["shipments"] or 0)
-            for row in chart_qs.annotate(m=TruncMonth("created_at"))
+            for row in chart_qs.annotate(m=TruncMonth("cargo__load_date"))
             .values("m")
             .annotate(shipments=Count("id"))
         }
@@ -237,7 +237,7 @@ class BaseAnalyticsMixin:
         prices_carrier_earnings = [[] for _ in range(12)]
 
         rows = chart_qs.values(
-            "created_at",
+            "cargo__load_date",
             "logistic_id",
             "price_total",
             "currency",
@@ -246,7 +246,10 @@ class BaseAnalyticsMixin:
         )
 
         for row in rows:
-            month_index = row["created_at"].month - 1
+            load_date = row["cargo__load_date"]
+            if not load_date:
+                continue
+            month_index = load_date.month - 1
 
             if row["logistic_id"] and row["price_total"] is not None:
                 converted_customer = self._convert_amount(

@@ -738,14 +738,14 @@ class CountryDirectionsListView(BaseAnalyticsMixin, APIView):
         )
         deals_count = qs.count()
         directions_count = (
-            qs.values("cargo__origin_country", "cargo__destination_country").distinct().count()
+            qs.values("cargo__origin_region", "cargo__destination_region").distinct().count()
         )
 
         directions_agg = (
             qs.select_related("cargo")
             .values(
-                "cargo__origin_country",
-                "cargo__destination_country",
+                "cargo__origin_region",
+                "cargo__destination_region",
             )
             .annotate(
                 shipments=Count("id"),
@@ -763,8 +763,8 @@ class CountryDirectionsListView(BaseAnalyticsMixin, APIView):
 
         result = []
         for d in directions_agg:
-            origin = d["cargo__origin_country"] or ""
-            destination = d["cargo__destination_country"] or ""
+            origin = d["cargo__origin_region"] or ""
+            destination = d["cargo__destination_region"] or ""
             raw = f"{origin}:{destination}"
             direction_id = hashlib.md5(raw.encode()).hexdigest()
             duration = d["avg_duration"]

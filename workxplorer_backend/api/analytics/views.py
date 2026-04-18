@@ -517,7 +517,7 @@ class BaseAnalyticsMixin:
 
         return data
 
-    def export_to_excel(self, data):
+    def export_to_excel(self, data, filename="analytics.xlsx"):
         wb = Workbook()
         ws = wb.active
         ws.title = "Analytics"
@@ -562,7 +562,7 @@ class BaseAnalyticsMixin:
         response = HttpResponse(
             content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
-        response["Content-Disposition"] = 'attachment; filename="analytics.xlsx"'
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
 
         wb.save(response)
         return response
@@ -836,3 +836,42 @@ class ExportAnalyticsView(BaseAnalyticsMixin, APIView):
         data = self.build_response_data(request, qs)
 
         return self.export_to_excel(data)
+
+
+class ExportDirectionAnalyticsView(BaseAnalyticsMixin, APIView):
+    permission_classes = [IsAuthenticatedAndVerified]
+
+    def get(self, request, direction_id):
+        qs = self.scoped_completed_orders_qs(request)
+        qs = self.apply_filters(request, qs)
+
+        matched_origin = None
+        matched_destination = None
+
+        pairs = qs.values("cargo__origin_region", "cargo__destination_region").distinct()
+
+        for pair in pairs:
+            origin = pair["cargo__origin_region"] or ""
+            destination = pair["cargo__destination_region"] or ""
+
+            raw = f"{origin}:{destination}"
+            current_id = hashlib.md5(raw.encode()).hexdigest()
+
+            if current_id == direction_id:
+                matched_origin = origin
+                matched_destination = destination
+                break
+
+        if matched_origin is None:
+            return Response({"detail": "Not found"}, status=404)
+
+        qs = qs.filter(
+            cargo__origin_region=matched_origin,
+            cargo__destination_region=matched_destination,
+        )
+
+        request._analytics_scope = "global"
+        data = self.build_response_data(request, qs, rating_value=0)
+
+        filename = f"analytics_{matched_origin}_{matched_destination}.xlsx"
+        return self.export_to_excel(data, filename=filename)

@@ -7,6 +7,7 @@ from .views import (
     MyAnalyticsView,
     PartnerAnalyticsView,
     ExportAnalyticsView,
+    ExportDirectionAnalyticsView,
 )
 
 urlpatterns = [
@@ -36,5 +37,10 @@ urlpatterns = [
         "export/",
         ExportAnalyticsView.as_view(),
         name="analytics-export",
+    ),
+    path(
+        "export/<str:direction_id>/",
+        ExportDirectionAnalyticsView.as_view(),
+        name="analytics-export-direction",
     ),
 ]

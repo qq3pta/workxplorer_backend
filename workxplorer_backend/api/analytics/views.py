@@ -513,8 +513,8 @@ class BaseAnalyticsMixin:
             avg_price_per_km_change = 1.0 if avg_price_per_km > 0 else 0.0
 
         year = int(request.query_params.get("year", now.year))
-        pie_charts = self._build_pie_charts(qs, year)
-        season_chart = self._build_season_chart(request, qs, year)
+        pie_charts = self._build_pie_charts(summary_qs, year)
+        season_chart = self._build_season_chart(request, summary_qs, year)
 
         directions_data = self.build_directions(summary_qs, currency=currency)
 
@@ -663,6 +663,7 @@ class DirectionDetailView(BaseAnalyticsMixin, APIView):
             cargo__origin_region=matched_origin,
             cargo__destination_region=matched_destination,
         )
+        qs = self.apply_filters(request, qs)
 
         data = qs.aggregate(
             shipments=Count("id"),
@@ -723,6 +724,7 @@ class CountryDirectionDetailView(BaseAnalyticsMixin, APIView):
             cargo__origin_country=matched_origin,
             cargo__destination_country=matched_destination,
         )
+        qs = self.apply_filters(request, qs)
 
         data = qs.aggregate(
             shipments=Count("id"),

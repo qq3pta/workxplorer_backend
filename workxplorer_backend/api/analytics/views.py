@@ -10,6 +10,7 @@ from django.db.models.functions import TruncMonth
 from django.utils import timezone
 from django.http import HttpResponse
 from drf_spectacular.utils import extend_schema
+from drf_spectacular.types import OpenApiTypes
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -830,7 +831,12 @@ class PartnerAnalyticsView(BaseAnalyticsMixin, APIView):
 
 @extend_schema(
     operation_id="analytics_export_file",
-    responses=bytes,
+    responses={
+        (
+            200,
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        ): OpenApiTypes.BINARY
+    },
 )
 class ExportAnalyticsView(BaseAnalyticsMixin, APIView):
     permission_classes = [IsAuthenticatedAndVerified]
@@ -843,7 +849,12 @@ class ExportAnalyticsView(BaseAnalyticsMixin, APIView):
 
 @extend_schema(
     operation_id="analytics_export_direction_file",
-    responses=bytes,
+    responses={
+        (
+            200,
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        ): OpenApiTypes.BINARY
+    },
 )
 class ExportDirectionAnalyticsView(BaseAnalyticsMixin, APIView):
     permission_classes = [IsAuthenticatedAndVerified]

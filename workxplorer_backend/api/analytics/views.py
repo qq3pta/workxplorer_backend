@@ -829,15 +829,6 @@ class PartnerAnalyticsView(BaseAnalyticsMixin, APIView):
         return Response(ser.data)
 
 
-@extend_schema(
-    operation_id="analytics_export_file",
-    responses={
-        (
-            200,
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        ): OpenApiTypes.BINARY
-    },
-)
 class ExportAnalyticsView(BaseAnalyticsMixin, APIView):
     permission_classes = [IsAuthenticatedAndVerified]
 
@@ -847,15 +838,6 @@ class ExportAnalyticsView(BaseAnalyticsMixin, APIView):
         return self.export_to_excel(data)
 
 
-@extend_schema(
-    operation_id="analytics_export_direction_file",
-    responses={
-        (
-            200,
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        ): OpenApiTypes.BINARY
-    },
-)
 class ExportDirectionAnalyticsView(BaseAnalyticsMixin, APIView):
     permission_classes = [IsAuthenticatedAndVerified]
 

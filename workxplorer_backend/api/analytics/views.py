@@ -1,4 +1,5 @@
 import hashlib
+from openpyxl import Workbook
 from datetime import timedelta
 from decimal import Decimal
 
@@ -7,6 +8,7 @@ from django.contrib.auth import get_user_model
 from django.db.models import Avg, Count, DurationField, ExpressionWrapper, F, Max, Min, Q, Sum
 from django.db.models.functions import TruncMonth
 from django.utils import timezone
+from django.http import HttpResponse
 from drf_spectacular.utils import extend_schema
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -515,6 +517,56 @@ class BaseAnalyticsMixin:
 
         return data
 
+    def export_to_excel(self, data):
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Analytics"
+
+        ws.append(["Метрика", "Значение"])
+        ws.append(["Сделки", data["deals_count"]])
+        ws.append(["Направления", data["directions_count"]])
+        ws.append(["Общий вес", data["total_weight_kg"]])
+        ws.append(["Мин цена", data["min_price"]])
+        ws.append(["Макс цена", data["max_price"]])
+        ws.append(["Средняя цена за км", data["average_price_per_km"]])
+
+        ws.append([])
+
+        ws.append(
+            [
+                "Откуда",
+                "Куда",
+                "Средняя цена",
+                "Мин цена",
+                "Макс цена",
+                "Кол-во",
+                "Вес",
+                "Время (ч)",
+            ]
+        )
+
+        for d in data["directions"]:
+            ws.append(
+                [
+                    d["origin"],
+                    d["destination"],
+                    d["price_value"],
+                    d["min_price"],
+                    d["max_price"],
+                    d["shipments"],
+                    d["weight"],
+                    d["time"],
+                ]
+            )
+
+        response = HttpResponse(
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+        response["Content-Disposition"] = 'attachment; filename="analytics.xlsx"'
+
+        wb.save(response)
+        return response
+
 
 @extend_schema(responses=MyAnalyticsSerializer)
 class MyAnalyticsView(BaseAnalyticsMixin, APIView):
@@ -774,3 +826,13 @@ class PartnerAnalyticsView(BaseAnalyticsMixin, APIView):
         ser = PartnerAnalyticsSerializer(data=data)
         ser.is_valid(raise_exception=True)
         return Response(ser.data)
+
+
+class ExportAnalyticsView(BaseAnalyticsMixin, APIView):
+    permission_classes = [IsAuthenticatedAndVerified]
+
+    def get(self, request):
+        qs = self.scoped_completed_orders_qs(request)
+        data = self.build_response_data(request, qs)
+
+        return self.export_to_excel(data)

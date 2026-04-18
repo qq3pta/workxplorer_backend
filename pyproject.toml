@@ -34,6 +34,7 @@ twilio = "^9.9.0"
 phonenumbers = "^9.0.21"
 sentry-sdk = "^2.52.0"
 anthropic = "^0.79.0"
+openpyxl = "^3.1.5"
 
 [tool.poetry.group.dev.dependencies]
 black = "^24.3.0"

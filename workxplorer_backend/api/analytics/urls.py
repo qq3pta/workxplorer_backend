@@ -6,6 +6,7 @@ from .views import (
     GlobalAnalyticsView,
     MyAnalyticsView,
     PartnerAnalyticsView,
+    ExportAnalyticsView,
 )
 
 urlpatterns = [
@@ -30,5 +31,10 @@ urlpatterns = [
         "directions-countries/<str:direction_id>/",
         CountryDirectionDetailView.as_view(),
         name="analytics-direction-country-detail",
+    ),
+    path(
+        "export/",
+        ExportAnalyticsView.as_view(),
+        name="analytics-export",
     ),
 ]

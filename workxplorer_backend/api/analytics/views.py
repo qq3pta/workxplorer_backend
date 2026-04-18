@@ -732,6 +732,9 @@ class CountryDirectionsListView(BaseAnalyticsMixin, APIView):
     def get(self, request):
         qs = self.scoped_completed_orders_qs(request)
         qs = self.apply_filters(request, qs)
+
+        currency = self.normalize_currency(request.query_params.get("currency"))
+
         summary = qs.aggregate(
             total_weight=Sum("cargo__weight_kg"),
             avg_km=Avg("route_distance_km"),
@@ -769,13 +772,20 @@ class CountryDirectionsListView(BaseAnalyticsMixin, APIView):
             direction_id = hashlib.md5(raw.encode()).hexdigest()
             duration = d["avg_duration"]
             hours = duration.total_seconds() / 3600 if duration else 0
+
+            converted_price = self._convert_amount(
+                d["avg_price"],
+                "UZS",
+                currency,
+            )
+
             result.append(
                 {
                     "id": direction_id,
                     "origin": origin or "—",
                     "destination": destination or "—",
-                    "price_value": float(d["avg_price"] or 0),
-                    "price_currency": "UZS",
+                    "price_value": round(converted_price or 0, 2),
+                    "price_currency": currency,
                     "shipments": d["shipments"],
                     "weight": float(d["total_weight"] or 0),
                     "time": round(hours, 1),

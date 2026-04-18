@@ -828,18 +828,23 @@ class PartnerAnalyticsView(BaseAnalyticsMixin, APIView):
         return Response(ser.data)
 
 
-@extend_schema(responses=bytes)
+@extend_schema(
+    operation_id="analytics_export_file",
+    responses=bytes,
+)
 class ExportAnalyticsView(BaseAnalyticsMixin, APIView):
     permission_classes = [IsAuthenticatedAndVerified]
 
     def get(self, request):
         qs = self.scoped_completed_orders_qs(request)
         data = self.build_response_data(request, qs)
-
         return self.export_to_excel(data)
 
 
-@extend_schema(responses=bytes)
+@extend_schema(
+    operation_id="analytics_export_direction_file",
+    responses=bytes,
+)
 class ExportDirectionAnalyticsView(BaseAnalyticsMixin, APIView):
     permission_classes = [IsAuthenticatedAndVerified]
 
@@ -875,5 +880,10 @@ class ExportDirectionAnalyticsView(BaseAnalyticsMixin, APIView):
         request._analytics_scope = "global"
         data = self.build_response_data(request, qs, rating_value=0)
 
-        filename = f"analytics_{matched_origin}_{matched_destination}.xlsx"
+        safe_origin = (matched_origin or "origin").replace("/", "_").replace("\\", "_").strip()
+        safe_destination = (
+            (matched_destination or "destination").replace("/", "_").replace("\\", "_").strip()
+        )
+        filename = f"analytics_{safe_origin}_{safe_destination}.xlsx"
+
         return self.export_to_excel(data, filename=filename)

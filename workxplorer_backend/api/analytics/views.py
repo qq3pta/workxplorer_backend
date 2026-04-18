@@ -335,6 +335,7 @@ class BaseAnalyticsMixin:
         transport_type = self._qp_first(request, "transport_type", "transportType", "type")
         category = self._qp_first(request, "cargo_category", "cargoCategory", "category")
         payment_method = self._qp_first(request, "payment_method", "paymentMethod")
+        currency = self._qp_first(request, "currency", "price_currency")
 
         if date_from:
             qs = qs.filter(cargo__load_date__gte=date_from)
@@ -364,6 +365,10 @@ class BaseAnalyticsMixin:
 
         if payment_method:
             qs = qs.filter(cargo__payment_method=payment_method)
+
+        if currency and str(currency).strip().lower() not in {"all", "все"}:
+            normalized_currency = self.normalize_currency(currency)
+            qs = qs.filter(currency=normalized_currency)
 
         return qs
 

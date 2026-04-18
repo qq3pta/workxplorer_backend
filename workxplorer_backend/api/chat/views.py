@@ -1,5 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.db.models import Q
+from django.http import HttpResponse
 from django.utils import timezone
 from django.utils.text import slugify
 from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema, inline_serializer
@@ -26,6 +27,7 @@ from .serializers import (
     MessageSerializer,
     OpenPersonalChatSerializer,
     UserSearchResultSerializer,
+    build_user_display_name,
 )
 from .services import (
     emit_added_to_group,
@@ -774,6 +776,62 @@ class ChatMessagesView(APIView):
         msg = serializer.save()
         emit_new_message(msg)
         return Response(MessageSerializer(msg, context={"request": request}).data, status=201)
+
+
+class ChatExportView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        tags=["chat"],
+        responses={
+            (200, "text/plain"): OpenApiTypes.BINARY,
+            404: ErrorDetailSerializer,
+        },
+    )
+    def get(self, request, chat_id: str):
+        chat, _participant = resolve_chat_and_participant(request.user, chat_id)
+        if not chat:
+            return Response({"detail": "Чат не найден или нет доступа."}, status=404)
+
+        messages = (
+            chat.messages.select_related("sender")
+            .order_by("created_at")
+            .only(
+                "sender_id",
+                "sender__first_name",
+                "sender__last_name",
+                "sender__username",
+                "text",
+                "created_at",
+            )
+        )
+
+        lines = [
+            f"Chat #{chat.id}",
+            f"Exported at: {timezone.localtime(timezone.now()).isoformat()}",
+            "",
+        ]
+
+        for msg in messages:
+            text = (msg.text or "").strip()
+            if not text:
+                # Skip attachment-only messages by design: export is text history only.
+                continue
+            sender_name = (
+                build_user_display_name(msg.sender) if msg.sender else "Удаленный пользователь"
+            )
+            created_at = timezone.localtime(msg.created_at).strftime("%Y-%m-%d %H:%M:%S")
+            lines.append(f"[{created_at}] {sender_name}: {text}")
+
+        if len(lines) == 3:
+            lines.append("В этом чате нет текстовых сообщений для экспорта.")
+
+        content = "\n".join(lines) + "\n"
+        filename = f"chat_{chat.id}_history.txt"
+
+        response = HttpResponse(content, content_type="text/plain; charset=utf-8")
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response
 
 
 class ChatMessageDeleteView(APIView):

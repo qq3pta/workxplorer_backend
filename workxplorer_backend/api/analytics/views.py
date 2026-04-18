@@ -828,6 +828,7 @@ class PartnerAnalyticsView(BaseAnalyticsMixin, APIView):
         return Response(ser.data)
 
 
+@extend_schema(responses=bytes)
 class ExportAnalyticsView(BaseAnalyticsMixin, APIView):
     permission_classes = [IsAuthenticatedAndVerified]
 
@@ -838,6 +839,7 @@ class ExportAnalyticsView(BaseAnalyticsMixin, APIView):
         return self.export_to_excel(data)
 
 
+@extend_schema(responses=bytes)
 class ExportDirectionAnalyticsView(BaseAnalyticsMixin, APIView):
     permission_classes = [IsAuthenticatedAndVerified]
 

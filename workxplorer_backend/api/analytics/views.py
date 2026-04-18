@@ -1,7 +1,7 @@
 import hashlib
 
 from openpyxl import Workbook
-from datetime import timedelta
+from datetime import date, timedelta
 from decimal import Decimal
 
 from common.utils import RATES, convert_to_uzs
@@ -222,47 +222,101 @@ class BaseAnalyticsMixin:
             self._qp_first(request, "mode", "metric", "chart_type", "chartType")
         )
         currency = Currency.USD
-        labels = [self.month_label(m) for m in range(1, 13)]
-
-        chart_qs = self._apply_seasonal_filters(request, qs).filter(created_at__year=year)
-        month_counts = {
-            row["m"].month: int(row["shipments"] or 0)
-            for row in chart_qs.annotate(m=TruncMonth("created_at"))
-            .values("m")
-            .annotate(shipments=Count("id"))
-        }
-        shipments = [month_counts.get(m, 0) for m in range(1, 13)]
-
-        prices_customer_to_intermediary = [[] for _ in range(12)]
-        prices_carrier_earnings = [[] for _ in range(12)]
-
-        rows = chart_qs.values(
-            "created_at",
-            "logistic_id",
-            "price_total",
-            "currency",
-            "driver_price",
-            "driver_currency",
+        date_from = self._parse_date(
+            self._qp_first(request, "date_from", "dateFrom", "load_date", "loadDate")
+        )
+        date_to = self._parse_date(
+            self._qp_first(request, "date_to", "dateTo", "delivery_date", "deliveryDate")
         )
 
-        for row in rows:
-            month_index = row["created_at"].month - 1
+        chart_qs = self._apply_seasonal_filters(request, qs)
 
-            if row["logistic_id"] and row["price_total"] is not None:
-                converted_customer = self._convert_amount(
-                    row["price_total"], row["currency"], currency
-                )
-                if converted_customer is not None:
-                    prices_customer_to_intermediary[month_index].append(converted_customer)
+        if date_from and date_to and date_from <= date_to:
+            chart_qs = chart_qs.filter(
+                cargo__load_date__gte=date_from, cargo__load_date__lte=date_to
+            )
+            labels, bucket_ranges = self._build_range_labels(date_from, date_to)
+            shipments = [0 for _ in labels]
+            prices_customer_to_intermediary = [[] for _ in labels]
+            prices_carrier_earnings = [[] for _ in labels]
 
-            carrier_amount = row["driver_price"]
-            carrier_currency = row["driver_currency"] or row["currency"]
-            if carrier_amount is None:
-                carrier_amount = row["price_total"]
+            rows = chart_qs.values(
+                "cargo__load_date",
+                "logistic_id",
+                "price_total",
+                "currency",
+                "driver_price",
+                "driver_currency",
+            )
+            for row in rows:
+                load_date = row["cargo__load_date"]
+                if not load_date:
+                    continue
+                bucket_index = self._bucket_index(load_date, bucket_ranges)
+                if bucket_index is None:
+                    continue
 
-            converted_carrier = self._convert_amount(carrier_amount, carrier_currency, currency)
-            if converted_carrier is not None:
-                prices_carrier_earnings[month_index].append(converted_carrier)
+                shipments[bucket_index] += 1
+
+                if row["logistic_id"] and row["price_total"] is not None:
+                    converted_customer = self._convert_amount(
+                        row["price_total"], row["currency"], currency
+                    )
+                    if converted_customer is not None:
+                        prices_customer_to_intermediary[bucket_index].append(converted_customer)
+
+                carrier_amount = row["driver_price"]
+                carrier_currency = row["driver_currency"] or row["currency"]
+                if carrier_amount is None:
+                    carrier_amount = row["price_total"]
+
+                converted_carrier = self._convert_amount(carrier_amount, carrier_currency, currency)
+                if converted_carrier is not None:
+                    prices_carrier_earnings[bucket_index].append(converted_carrier)
+        else:
+            labels = [self.month_label(m) for m in range(1, 13)]
+            chart_qs = chart_qs.filter(cargo__load_date__year=year)
+            month_counts = {
+                row["m"].month: int(row["shipments"] or 0)
+                for row in chart_qs.annotate(m=TruncMonth("cargo__load_date"))
+                .values("m")
+                .annotate(shipments=Count("id"))
+            }
+            shipments = [month_counts.get(m, 0) for m in range(1, 13)]
+
+            prices_customer_to_intermediary = [[] for _ in range(12)]
+            prices_carrier_earnings = [[] for _ in range(12)]
+
+            rows = chart_qs.values(
+                "cargo__load_date",
+                "logistic_id",
+                "price_total",
+                "currency",
+                "driver_price",
+                "driver_currency",
+            )
+
+            for row in rows:
+                load_date = row["cargo__load_date"]
+                if not load_date:
+                    continue
+                month_index = load_date.month - 1
+
+                if row["logistic_id"] and row["price_total"] is not None:
+                    converted_customer = self._convert_amount(
+                        row["price_total"], row["currency"], currency
+                    )
+                    if converted_customer is not None:
+                        prices_customer_to_intermediary[month_index].append(converted_customer)
+
+                carrier_amount = row["driver_price"]
+                carrier_currency = row["driver_currency"] or row["currency"]
+                if carrier_amount is None:
+                    carrier_amount = row["price_total"]
+
+                converted_carrier = self._convert_amount(carrier_amount, carrier_currency, currency)
+                if converted_carrier is not None:
+                    prices_carrier_earnings[month_index].append(converted_carrier)
 
         def curve(values_by_month):
             avg = []
@@ -293,6 +347,98 @@ class BaseAnalyticsMixin:
             "shipments": shipments,
             "prices": prices,
         }
+
+    @staticmethod
+    def _parse_date(raw_value: str | None) -> date | None:
+        if not raw_value:
+            return None
+        try:
+            return date.fromisoformat(str(raw_value))
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _month_short_ru(m: int) -> str:
+        return [
+            "",
+            "янв",
+            "фев",
+            "мар",
+            "апр",
+            "май",
+            "июн",
+            "июл",
+            "авг",
+            "сен",
+            "окт",
+            "ноя",
+            "дек",
+        ][m]
+
+    def _fmt_day_label(self, d: date) -> str:
+        return f"{d.day} {self._month_short_ru(d.month)}"
+
+    def _build_range_labels(
+        self, date_from: date, date_to: date
+    ) -> tuple[list[str], list[tuple[date, date]]]:
+        total_days = (date_to - date_from).days + 1
+
+        # Up to 45 days: one label per day.
+        if total_days <= 45:
+            labels: list[str] = []
+            ranges: list[tuple[date, date]] = []
+            current = date_from
+            while current <= date_to:
+                labels.append(self._fmt_day_label(current))
+                ranges.append((current, current))
+                current += timedelta(days=1)
+            return labels, ranges
+
+        # 46..120 days: weekly buckets.
+        if total_days <= 120:
+            labels = []
+            ranges = []
+            start = date_from
+            while start <= date_to:
+                end = min(start + timedelta(days=6), date_to)
+                if start.month == end.month:
+                    label = f"{start.day}-{end.day} {self._month_short_ru(start.month)}"
+                else:
+                    label = (
+                        f"{start.day} {self._month_short_ru(start.month)} - "
+                        f"{end.day} {self._month_short_ru(end.month)}"
+                    )
+                labels.append(label)
+                ranges.append((start, end))
+                start = end + timedelta(days=1)
+            return labels, ranges
+
+        # Long ranges: monthly buckets.
+        labels = []
+        ranges = []
+        current = date(date_from.year, date_from.month, 1)
+        while current <= date_to:
+            month_start = (
+                date_from
+                if (current.year == date_from.year and current.month == date_from.month)
+                else current
+            )
+            if current.month == 12:
+                next_month = date(current.year + 1, 1, 1)
+            else:
+                next_month = date(current.year, current.month + 1, 1)
+            month_end = min(next_month - timedelta(days=1), date_to)
+            labels.append(f"{self._month_short_ru(current.month)} {current.year}")
+            ranges.append((month_start, month_end))
+            current = next_month
+        return labels, ranges
+
+    @staticmethod
+    def _bucket_index(target: date, bucket_ranges: list[tuple[date, date]]) -> int | None:
+        for idx, (start, end) in enumerate(bucket_ranges):
+            if start <= target <= end:
+                return idx
+        return None
 
     def month_label(self, m):
         return [

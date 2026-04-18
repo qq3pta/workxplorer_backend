@@ -840,12 +840,7 @@ class ExportAnalyticsView(BaseAnalyticsMixin, APIView):
 
 @extend_schema(
     operation_id="analytics_export_direction_file",
-    responses={
-        (
-            200,
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        ): OpenApiTypes.BINARY
-    },
+    responses={200: OpenApiTypes.BINARY},
 )
 class ExportDirectionAnalyticsView(BaseAnalyticsMixin, APIView):
     permission_classes = [IsAuthenticatedAndVerified]

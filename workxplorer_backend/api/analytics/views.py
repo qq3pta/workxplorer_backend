@@ -1,4 +1,5 @@
 import hashlib
+
 from openpyxl import Workbook
 from datetime import timedelta
 from decimal import Decimal
@@ -210,7 +211,7 @@ class BaseAnalyticsMixin:
         mode = self.normalize_chart_mode(
             self._qp_first(request, "mode", "metric", "chart_type", "chartType")
         )
-        currency = self.normalize_currency(request.query_params.get("currency"))
+        currency = Currency.USD
         labels = [self.month_label(m) for m in range(1, 13)]
 
         chart_qs = self._apply_seasonal_filters(request, qs).filter(created_at__year=year)
@@ -366,7 +367,7 @@ class BaseAnalyticsMixin:
 
         return qs
 
-    def build_directions(self, qs):
+    def build_directions(self, qs, currency="USD"):
         directions_agg = (
             qs.select_related("cargo")
             .values(
@@ -399,6 +400,10 @@ class BaseAnalyticsMixin:
             duration = d["avg_duration"]
             hours = duration.total_seconds() / 3600 if duration else 0
 
+            avg_price = self._convert_amount(d["avg_price"], "UZS", currency)
+            min_price = self._convert_amount(d["min_price"], "UZS", currency)
+            max_price = self._convert_amount(d["max_price"], "UZS", currency)
+
             directions_data.append(
                 {
                     "id": direction_id,
@@ -406,10 +411,10 @@ class BaseAnalyticsMixin:
                     "destination": d["cargo__destination_region"] or "—",
                     "load_date": d.get("cargo__load_date"),
                     "delivery_date": d.get("cargo__delivery_date"),
-                    "price_value": float(d["avg_price"] or 0),
-                    "min_price": float(d["min_price"] or 0),
-                    "max_price": float(d["max_price"] or 0),
-                    "price_currency": "UZS",
+                    "price_value": round(avg_price or 0, 2),
+                    "min_price": round(min_price or 0, 2),
+                    "max_price": round(max_price or 0, 2),
+                    "price_currency": currency,
                     "shipments": d["shipments"],
                     "weight": float(d["total_weight"] or 0),
                     "time": round(hours, 1),
@@ -420,6 +425,7 @@ class BaseAnalyticsMixin:
     def build_response_data(self, request, qs, rating_value=0):
         now = timezone.now()
         summary_qs = self.apply_filters(request, qs)
+        currency = Currency.USD
 
         days = 30
         current_start = now - timedelta(days=days)
@@ -453,8 +459,9 @@ class BaseAnalyticsMixin:
         distance_km = float(agg["total_km"] or 0)
         avg_distance_km = float(agg["avg_km"] or 0)
         total_weight_kg = float(agg["total_weight"] or 0)
-        min_price = float(agg["min_price"] or 0)
-        max_price = float(agg["max_price"] or 0)
+
+        min_price = self._convert_amount(agg["min_price"], "UZS", currency) or 0
+        max_price = self._convert_amount(agg["max_price"], "UZS", currency) or 0
 
         directions_count = (
             summary_qs.values("cargo__origin_region", "cargo__destination_region")
@@ -472,10 +479,13 @@ class BaseAnalyticsMixin:
             total_km=Sum("route_distance_km"),
         )
 
-        current_total_price = float(current_agg["total_price"] or 0)
+        current_total_price_uzs = float(current_agg["total_price"] or 0)
         current_total_km = float(current_agg["total_km"] or 0)
-        prev_total_price = float(prev_agg["total_price"] or 0)
+        prev_total_price_uzs = float(prev_agg["total_price"] or 0)
         prev_total_km = float(prev_agg["total_km"] or 0)
+
+        current_total_price = self._convert_amount(current_total_price_uzs, "UZS", currency) or 0
+        prev_total_price = self._convert_amount(prev_total_price_uzs, "UZS", currency) or 0
 
         avg_price_per_km = current_total_price / current_total_km if current_total_km > 0 else 0.0
         prev_avg_price_per_km = prev_total_price / prev_total_km if prev_total_km > 0 else 0.0
@@ -491,7 +501,7 @@ class BaseAnalyticsMixin:
         pie_charts = self._build_pie_charts(qs, year)
         season_chart = self._build_season_chart(request, qs, year)
 
-        directions_data = self.build_directions(summary_qs)
+        directions_data = self.build_directions(summary_qs, currency=currency)
 
         data = {
             "successful_deliveries": current_cnt,
@@ -501,9 +511,9 @@ class BaseAnalyticsMixin:
             "deals_count": deals_count,
             "directions_count": directions_count,
             "total_weight_kg": total_weight_kg,
-            "min_price": min_price,
-            "max_price": max_price,
-            "price_currency": "UZS",
+            "min_price": round(min_price, 2),
+            "max_price": round(max_price, 2),
+            "price_currency": "USD",
             "average_price_per_km": round(avg_price_per_km, 2),
             "average_price_per_km_change": round(avg_price_per_km_change, 3),
             "directions": directions_data,
@@ -644,6 +654,7 @@ class DirectionDetailView(BaseAnalyticsMixin, APIView):
             weight=Sum("cargo__weight_kg"),
             avg_price=Avg("cargo__price_uzs"),
         )
+        price_value = self._convert_amount(data["avg_price"], "UZS", Currency.USD) or 0
 
         now = timezone.now()
         year = int(request.query_params.get("year", now.year))
@@ -657,8 +668,8 @@ class DirectionDetailView(BaseAnalyticsMixin, APIView):
                 "destination_region": matched_destination,
                 "shipments": data["shipments"] or 0,
                 "weight": float(data["weight"] or 0),
-                "price_value": float(data["avg_price"] or 0),
-                "price_currency": "UZS",
+                "price_value": round(price_value, 2),
+                "price_currency": "USD",
                 "pie_charts": pie_charts,
                 "season_chart": season_chart,
             }
@@ -704,6 +715,7 @@ class CountryDirectionDetailView(BaseAnalyticsMixin, APIView):
             weight=Sum("cargo__weight_kg"),
             avg_price=Avg("cargo__price_uzs"),
         )
+        price_value = self._convert_amount(data["avg_price"], "UZS", Currency.USD) or 0
 
         now = timezone.now()
         year = int(request.query_params.get("year", now.year))
@@ -717,8 +729,8 @@ class CountryDirectionDetailView(BaseAnalyticsMixin, APIView):
                 "destination_country": matched_destination,
                 "shipments": data["shipments"] or 0,
                 "weight": float(data["weight"] or 0),
-                "price_value": float(data["avg_price"] or 0),
-                "price_currency": "UZS",
+                "price_value": round(price_value, 2),
+                "price_currency": "USD",
                 "pie_charts": pie_charts,
                 "season_chart": season_chart,
             }
@@ -733,7 +745,7 @@ class CountryDirectionsListView(BaseAnalyticsMixin, APIView):
         qs = self.scoped_completed_orders_qs(request)
         qs = self.apply_filters(request, qs)
 
-        currency = self.normalize_currency(request.query_params.get("currency"))
+        currency = Currency.USD
 
         summary = qs.aggregate(
             total_weight=Sum("cargo__weight_kg"),

@@ -159,7 +159,7 @@ class BaseAnalyticsMixin:
         }
 
     def _build_pie_charts(self, qs, year: int):
-        year_qs = qs.filter(cargo__load_date__year=year).select_related("cargo")
+        year_qs = qs.filter(created_at__year=year).select_related("cargo")
         total = year_qs.count()
 
         category_label_map = {c.value: c.label for c in CargoCategory}

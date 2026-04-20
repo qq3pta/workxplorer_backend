@@ -7,8 +7,8 @@ from decimal import Decimal
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.pagesizes import A4
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+from reportlab.platypus import Table, TableStyle
+from reportlab.lib import colors
 from io import BytesIO
 
 from common.utils import RATES, convert_to_uzs
@@ -757,20 +757,24 @@ class BaseAnalyticsMixin:
     def export_to_pdf(self, data, filename="analytics.pdf"):
         buffer = BytesIO()
 
-        pdfmetrics.registerFont(UnicodeCIDFont("STSong-Light"))
-
         doc = SimpleDocTemplate(buffer, pagesize=A4)
         styles = getSampleStyleSheet()
 
         title_style = ParagraphStyle(
-            "RuTitle",
+            "Title",
             parent=styles["Title"],
-            fontName="STSong-Light",
+            fontName="Helvetica-Bold",
+            fontSize=18,
+            leading=22,
+            spaceAfter=12,
         )
+
         normal_style = ParagraphStyle(
-            "RuNormal",
+            "Normal",
             parent=styles["Normal"],
-            fontName="STSong-Light",
+            fontName="Helvetica",
+            fontSize=11,
+            leading=14,
         )
 
         elements = []
@@ -778,11 +782,28 @@ class BaseAnalyticsMixin:
         elements.append(Paragraph("Аналитика перевозок", title_style))
         elements.append(Spacer(1, 20))
 
-        elements.append(Paragraph(f"Сделки: {data['deals_count']}", normal_style))
-        elements.append(Paragraph(f"Направления: {data['directions_count']}", normal_style))
-        elements.append(Paragraph(f"Общий вес: {data['total_weight_kg']}", normal_style))
-        elements.append(Paragraph(f"Мин цена: {data['min_price']}", normal_style))
-        elements.append(Paragraph(f"Макс цена: {data['max_price']}", normal_style))
+        stats = [
+            ["Сделки", data["deals_count"]],
+            ["Направления", data["directions_count"]],
+            ["Вес", f"{data['total_weight_kg']} кг"],
+            ["Мин цена", data["min_price"]],
+            ["Макс цена", data["max_price"]],
+        ]
+
+        table = Table(stats, colWidths=[200, 150])
+
+        table.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, -1), colors.whitesmoke),
+                    ("BOX", (0, 0), (-1, -1), 1, colors.black),
+                    ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.grey),
+                    ("FONTNAME", (0, 0), (-1, -1), "Helvetica"),
+                ]
+            )
+        )
+
+        elements.append(table)
         elements.append(Spacer(1, 20))
 
         line_chart = self._generate_line_chart(data["season_chart"])
@@ -806,13 +827,17 @@ class BaseAnalyticsMixin:
         labels = season_chart["labels"]
         values = season_chart["shipments"]
 
-        plt.figure()
-        plt.plot(labels, values)
-        plt.xticks(rotation=45)
+        plt.figure(figsize=(8, 4))
 
-        plt.title("Перевозки по месяцам")
+        plt.plot(labels, values, linewidth=3)
+
+        plt.grid(True, linestyle="--", alpha=0.5)
+
+        plt.title("Перевозки по месяцам", fontsize=14)
         plt.xlabel("Период")
-        plt.ylabel("Кол-во")
+        plt.ylabel("Количество")
+
+        plt.xticks(rotation=30)
 
         plt.tight_layout()
         plt.savefig(buffer, format="png")
@@ -827,15 +852,15 @@ class BaseAnalyticsMixin:
         labels = [x["label"] for x in pie_data if x["shipments"] > 0]
         values = [x["shipments"] for x in pie_data if x["shipments"] > 0]
 
-        plt.figure()
+        plt.figure(figsize=(5, 5))
 
         if values:
-            plt.pie(values, labels=labels, autopct="%1.1f%%")
+            plt.pie(values, labels=labels, autopct="%1.1f%%", startangle=140)
         else:
             plt.text(0.5, 0.5, "Нет данных", ha="center", va="center")
             plt.axis("off")
 
-        plt.title("Категории грузов")
+        plt.title("Категории грузов", fontsize=14)
         plt.savefig(buffer, format="png")
         plt.close()
 

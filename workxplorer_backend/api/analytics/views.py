@@ -804,12 +804,13 @@ class BaseAnalyticsMixin:
 
         title_style = ParagraphStyle(
             "AnalyticsTitle",
-            parent=styles["Title"],
+            parent=styles["Normal"],
             fontName=FONT_BOLD,
             fontSize=21,
             leading=26,
             textColor=colors.HexColor("#0F172A"),
             spaceAfter=4,
+            alignment=0,  # слева
         )
 
         subtitle_style = ParagraphStyle(

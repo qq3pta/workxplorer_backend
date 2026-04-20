@@ -5,8 +5,10 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
-from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.pagesizes import A4
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 from io import BytesIO
 
 from common.utils import RATES, convert_to_uzs
@@ -754,21 +756,33 @@ class BaseAnalyticsMixin:
 
     def export_to_pdf(self, data, filename="analytics.pdf"):
         buffer = BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=A4)
 
+        pdfmetrics.registerFont(UnicodeCIDFont("STSong-Light"))
+
+        doc = SimpleDocTemplate(buffer, pagesize=A4)
         styles = getSampleStyleSheet()
+
+        title_style = ParagraphStyle(
+            "RuTitle",
+            parent=styles["Title"],
+            fontName="STSong-Light",
+        )
+        normal_style = ParagraphStyle(
+            "RuNormal",
+            parent=styles["Normal"],
+            fontName="STSong-Light",
+        )
+
         elements = []
 
-        # Заголовок
-        elements.append(Paragraph("Аналитика перевозок", styles["Title"]))
+        elements.append(Paragraph("Аналитика перевозок", title_style))
         elements.append(Spacer(1, 20))
 
-        # Метрики
-        elements.append(Paragraph(f"Сделки: {data['deals_count']}", styles["Normal"]))
-        elements.append(Paragraph(f"Направления: {data['directions_count']}", styles["Normal"]))
-        elements.append(Paragraph(f"Общий вес: {data['total_weight_kg']}", styles["Normal"]))
-        elements.append(Paragraph(f"Мин цена: {data['min_price']}", styles["Normal"]))
-        elements.append(Paragraph(f"Макс цена: {data['max_price']}", styles["Normal"]))
+        elements.append(Paragraph(f"Сделки: {data['deals_count']}", normal_style))
+        elements.append(Paragraph(f"Направления: {data['directions_count']}", normal_style))
+        elements.append(Paragraph(f"Общий вес: {data['total_weight_kg']}", normal_style))
+        elements.append(Paragraph(f"Мин цена: {data['min_price']}", normal_style))
+        elements.append(Paragraph(f"Макс цена: {data['max_price']}", normal_style))
         elements.append(Spacer(1, 20))
 
         line_chart = self._generate_line_chart(data["season_chart"])

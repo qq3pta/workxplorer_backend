@@ -1,18 +1,30 @@
 import hashlib
 import matplotlib.pyplot as plt
+import os
 
 from datetime import date, timedelta
 from decimal import Decimal
 
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.pagesizes import A4
-from reportlab.platypus import Table, TableStyle
 from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.platypus import (
+    HRFlowable,
+    Image,
+    KeepTogether,
+    Paragraph,
+    SimpleDocTemplate,
+    Spacer,
+    Table,
+    TableStyle,
+)
 from io import BytesIO
 
 from common.utils import RATES, convert_to_uzs
 from django.contrib.auth import get_user_model
+from django.conf import settings
 from django.db.models import Avg, Count, DurationField, ExpressionWrapper, F, Max, Min, Q, Sum
 from django.db.models.functions import TruncMonth
 from django.utils import timezone
@@ -37,6 +49,22 @@ from .serializers import (
 )
 
 User = get_user_model()
+
+
+def _register_pdf_fonts():
+    fonts_dir = os.path.join(settings.BASE_DIR, "fonts")
+
+    regular_path = os.path.join(fonts_dir, "Inter-Regular.ttf")
+    bold_path = os.path.join(fonts_dir, "Inter-Bold.ttf")
+
+    if os.path.exists(regular_path) and "Inter" not in pdfmetrics.getRegisteredFontNames():
+        pdfmetrics.registerFont(TTFont("Inter", regular_path))
+
+    if os.path.exists(bold_path) and "Inter-Bold" not in pdfmetrics.getRegisteredFontNames():
+        pdfmetrics.registerFont(TTFont("Inter-Bold", bold_path))
+
+
+_register_pdf_fonts()
 
 
 class BaseAnalyticsMixin:
@@ -757,69 +785,251 @@ class BaseAnalyticsMixin:
     def export_to_pdf(self, data, filename="analytics.pdf"):
         buffer = BytesIO()
 
-        doc = SimpleDocTemplate(buffer, pagesize=A4)
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=A4,
+            leftMargin=28,
+            rightMargin=28,
+            topMargin=24,
+            bottomMargin=24,
+        )
+
         styles = getSampleStyleSheet()
 
-        title_style = ParagraphStyle(
-            "Title",
-            parent=styles["Title"],
-            fontName="Helvetica-Bold",
-            fontSize=18,
-            leading=22,
-            spaceAfter=12,
+        FONT_REGULAR = "Inter" if "Inter" in pdfmetrics.getRegisteredFontNames() else "Helvetica"
+        FONT_BOLD = (
+            "Inter-Bold"
+            if "Inter-Bold" in pdfmetrics.getRegisteredFontNames()
+            else "Helvetica-Bold"
         )
 
-        normal_style = ParagraphStyle(
-            "Normal",
-            parent=styles["Normal"],
-            fontName="Helvetica",
-            fontSize=11,
-            leading=14,
+        title_style = ParagraphStyle(
+            "AnalyticsTitle",
+            parent=styles["Title"],
+            fontName=FONT_BOLD,
+            fontSize=21,
+            leading=26,
+            textColor=colors.HexColor("#0F172A"),
+            spaceAfter=4,
         )
+
+        subtitle_style = ParagraphStyle(
+            "AnalyticsSubtitle",
+            parent=styles["Normal"],
+            fontName=FONT_REGULAR,
+            fontSize=10,
+            leading=14,
+            textColor=colors.HexColor("#64748B"),
+            spaceAfter=0,
+        )
+
+        section_title_style = ParagraphStyle(
+            "SectionTitle",
+            parent=styles["Heading2"],
+            fontName=FONT_BOLD,
+            fontSize=12,
+            leading=16,
+            textColor=colors.HexColor("#0F172A"),
+            spaceAfter=10,
+        )
+
+        label_style = ParagraphStyle(
+            "LabelStyle",
+            parent=styles["Normal"],
+            fontName=FONT_REGULAR,
+            fontSize=9,
+            leading=12,
+            textColor=colors.HexColor("#64748B"),
+        )
+
+        value_style = ParagraphStyle(
+            "ValueStyle",
+            parent=styles["Normal"],
+            fontName=FONT_BOLD,
+            fontSize=17,
+            leading=20,
+            textColor=colors.HexColor("#0F172A"),
+        )
+
+        body_style = ParagraphStyle(
+            "BodyStyle",
+            parent=styles["Normal"],
+            fontName=FONT_REGULAR,
+            fontSize=10,
+            leading=14,
+            textColor=colors.HexColor("#334155"),
+        )
+
+        body_bold_style = ParagraphStyle(
+            "BodyBoldStyle",
+            parent=styles["Normal"],
+            fontName=FONT_BOLD,
+            fontSize=10,
+            leading=14,
+            textColor=colors.HexColor("#0F172A"),
+        )
+
+        def card(content, width=None, padding=14):
+            if not isinstance(content, list):
+                content = [content]
+
+            t = Table([[KeepTogether(content)]], colWidths=[width or doc.width])
+            t.setStyle(
+                TableStyle(
+                    [
+                        ("BACKGROUND", (0, 0), (-1, -1), colors.white),
+                        ("BOX", (0, 0), (-1, -1), 1, colors.HexColor("#E2E8F0")),
+                        ("LEFTPADDING", (0, 0), (-1, -1), padding),
+                        ("RIGHTPADDING", (0, 0), (-1, -1), padding),
+                        ("TOPPADDING", (0, 0), (-1, -1), padding),
+                        ("BOTTOMPADDING", (0, 0), (-1, -1), padding),
+                        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ]
+                )
+            )
+            return t
+
+        def kpi_card(label, value):
+            t = Table(
+                [
+                    [Paragraph(label, label_style)],
+                    [Paragraph(str(value), value_style)],
+                ],
+                colWidths=[doc.width / 4 - 8],
+                rowHeights=[20, 28],
+            )
+            t.setStyle(
+                TableStyle(
+                    [
+                        ("BACKGROUND", (0, 0), (-1, -1), colors.white),
+                        ("BOX", (0, 0), (-1, -1), 1, colors.HexColor("#E2E8F0")),
+                        ("LEFTPADDING", (0, 0), (-1, -1), 12),
+                        ("RIGHTPADDING", (0, 0), (-1, -1), 12),
+                        ("TOPPADDING", (0, 0), (-1, -1), 10),
+                        ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+                        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ]
+                )
+            )
+            return t
 
         elements = []
 
-        elements.append(Paragraph("Аналитика перевозок", title_style))
-        elements.append(Spacer(1, 20))
+        # Header
+        elements.append(
+            card(
+                [
+                    Paragraph("Аналитика перевозок", title_style),
+                    Paragraph(
+                        "Сводный отчет по перевозкам, стоимости и структуре грузов", subtitle_style
+                    ),
+                ],
+                padding=18,
+            )
+        )
+        elements.append(Spacer(1, 14))
 
-        stats = [
-            ["Сделки", data["deals_count"]],
-            ["Направления", data["directions_count"]],
-            ["Вес", f"{data['total_weight_kg']} кг"],
-            ["Мин цена", data["min_price"]],
-            ["Макс цена", data["max_price"]],
-        ]
-
-        table = Table(stats, colWidths=[200, 150])
-
-        table.setStyle(
+        # KPI row
+        kpi_table = Table(
+            [
+                [
+                    kpi_card("Сделки", data["deals_count"]),
+                    kpi_card("Направления", data["directions_count"]),
+                    kpi_card("Мин. цена", f'{data["min_price"]} $'),
+                    kpi_card("Макс. цена", f'{data["max_price"]} $'),
+                ]
+            ],
+            colWidths=[doc.width / 4] * 4,
+        )
+        kpi_table.setStyle(
             TableStyle(
                 [
-                    ("BACKGROUND", (0, 0), (-1, -1), colors.white),
-                    ("BOX", (0, 0), (-1, -1), 0, colors.white),
-                    ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.lightgrey),
-                    ("TEXTCOLOR", (0, 0), (-1, -1), colors.black),
-                    ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
-                    ("TOPPADDING", (0, 0), (-1, -1), 10),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 3),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 3),
+                    ("TOPPADDING", (0, 0), (-1, -1), 0),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ]
+            )
+        )
+        elements.append(kpi_table)
+        elements.append(Spacer(1, 14))
+
+        # Summary card
+        summary_rows = [
+            [
+                Paragraph("Общий вес", body_style),
+                Paragraph(f"{int(data['total_weight_kg'])} кг", body_bold_style),
+            ],
+            [
+                Paragraph("Средняя дистанция", body_style),
+                Paragraph(f"{data['avg_distance_km']} км", body_bold_style),
+            ],
+            [
+                Paragraph("Средняя цена за км", body_style),
+                Paragraph(f"{data['average_price_per_km']} $", body_bold_style),
+            ],
+        ]
+
+        summary_table = Table(summary_rows, colWidths=[doc.width * 0.58, doc.width * 0.28])
+        summary_table.setStyle(
+            TableStyle(
+                [
+                    ("LINEBELOW", (0, 0), (-1, -2), 0.6, colors.HexColor("#E2E8F0")),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                    ("TOPPADDING", (0, 0), (-1, -1), 8),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
                 ]
             )
         )
 
-        elements.append(table)
-        elements.append(Spacer(1, 20))
+        elements.append(
+            card(
+                [
+                    Paragraph("Краткая сводка", section_title_style),
+                    summary_table,
+                ],
+                padding=16,
+            )
+        )
+        elements.append(Spacer(1, 14))
 
+        # Line chart card
         line_chart = self._generate_line_chart(data["season_chart"])
-        elements.append(Image(line_chart, width=450, height=220))
-        elements.append(Spacer(1, 20))
+        elements.append(
+            card(
+                [
+                    Paragraph("Динамика перевозок", section_title_style),
+                    Spacer(1, 4),
+                    Image(line_chart, width=doc.width - 32, height=235),
+                ],
+                padding=16,
+            )
+        )
+        elements.append(Spacer(1, 14))
 
+        # Divider
+        elements.append(HRFlowable(width="100%", thickness=0.6, color=colors.HexColor("#E2E8F0")))
+        elements.append(Spacer(1, 14))
+
+        # Pie chart card
         pie_chart = self._generate_pie_chart(data["pie_charts"]["by_cargo_category"])
-        elements.append(Image(pie_chart, width=300, height=300))
+        elements.append(
+            card(
+                [
+                    Paragraph("Категории грузов", section_title_style),
+                    Spacer(1, 4),
+                    Image(pie_chart, width=doc.width - 52, height=300),
+                ],
+                padding=16,
+            )
+        )
 
         doc.build(elements)
 
         buffer.seek(0)
-
         response = HttpResponse(buffer, content_type="application/pdf")
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
         return response
@@ -830,22 +1040,31 @@ class BaseAnalyticsMixin:
         labels = season_chart["labels"]
         values = season_chart["shipments"]
 
-        plt.figure(figsize=(8, 4))
+        plt.figure(figsize=(8.2, 4.2), dpi=160)
+        ax = plt.gca()
+        ax.set_facecolor("#F8FAFC")
 
-        plt.plot(labels, values, linewidth=3, marker="o")
+        x = list(range(len(labels)))
 
-        plt.fill_between(range(len(values)), values, alpha=0.1)
+        plt.plot(
+            x,
+            values,
+            linewidth=2.8,
+            marker="o",
+            markersize=5,
+        )
+        plt.fill_between(x, values, alpha=0.12)
 
-        plt.grid(True, linestyle="--", alpha=0.3)
+        plt.grid(True, linestyle="--", alpha=0.18)
+        plt.title("Перевозки по периодам", fontsize=13, fontweight="bold")
+        plt.xticks(x, labels, rotation=30, ha="right", fontsize=8)
+        plt.yticks(fontsize=8)
 
-        plt.title("Перевозки по месяцам", fontsize=14, weight="bold")
-        plt.xlabel("")
-        plt.ylabel("")
-
-        plt.xticks(rotation=30)
+        for spine in ax.spines.values():
+            spine.set_visible(False)
 
         plt.tight_layout()
-        plt.savefig(buffer, format="png")
+        plt.savefig(buffer, format="png", bbox_inches="tight", facecolor="white")
         plt.close()
 
         buffer.seek(0)
@@ -857,22 +1076,26 @@ class BaseAnalyticsMixin:
         labels = [x["label"] for x in pie_data if x["shipments"] > 0]
         values = [x["shipments"] for x in pie_data if x["shipments"] > 0]
 
-        plt.figure(figsize=(5, 5))
+        plt.figure(figsize=(7, 5.2), dpi=160)
 
         if values:
             plt.pie(
                 values,
                 labels=labels,
                 autopct="%1.1f%%",
-                startangle=140,
-                wedgeprops={"linewidth": 1, "edgecolor": "white"},
+                startangle=135,
+                wedgeprops={"linewidth": 1.2, "edgecolor": "white"},
+                textprops={"fontsize": 8},
+                pctdistance=0.75,
+                labeldistance=1.08,
             )
         else:
-            plt.text(0.5, 0.5, "Нет данных", ha="center", va="center")
+            plt.text(0.5, 0.5, "Нет данных", ha="center", va="center", fontsize=12)
             plt.axis("off")
 
-        plt.title("Категории грузов", fontsize=14, weight="bold")
-        plt.savefig(buffer, format="png")
+        plt.title("Структура грузов", fontsize=13, fontweight="bold")
+        plt.tight_layout()
+        plt.savefig(buffer, format="png", bbox_inches="tight", facecolor="white")
         plt.close()
 
         buffer.seek(0)

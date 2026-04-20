@@ -958,7 +958,7 @@ class BaseAnalyticsMixin:
         summary_rows = [
             [
                 Paragraph("Общий вес", body_style),
-                Paragraph(f"{int(data['total_weight_kg'])} кг", body_bold_style),
+                Paragraph(f"{data['total_weight_kg'] / 1000:,.2f} т", body_bold_style),
             ],
             [
                 Paragraph("Средняя дистанция", body_style),

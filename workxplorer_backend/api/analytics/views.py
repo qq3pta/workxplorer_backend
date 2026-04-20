@@ -771,12 +771,10 @@ class BaseAnalyticsMixin:
         elements.append(Paragraph(f"Макс цена: {data['max_price']}", styles["Normal"]))
         elements.append(Spacer(1, 20))
 
-        # 📈 LINE CHART
         line_chart = self._generate_line_chart(data["season_chart"])
         elements.append(Image(line_chart, width=450, height=220))
         elements.append(Spacer(1, 20))
 
-        # 🍩 PIE CHART (берем категории)
         pie_chart = self._generate_pie_chart(data["pie_charts"]["by_cargo_category"])
         elements.append(Image(pie_chart, width=300, height=300))
 

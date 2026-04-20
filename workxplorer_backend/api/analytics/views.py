@@ -1080,6 +1080,63 @@ class ExportMyAnalyticsView(BaseAnalyticsMixin, APIView):
 
 
 @extend_schema(
+    operation_id="analytics_export_my_direction_file",
+    responses={200: OpenApiTypes.BINARY},
+)
+class ExportMyDirectionAnalyticsView(BaseAnalyticsMixin, APIView):
+    permission_classes = [IsAuthenticatedAndVerified]
+
+    def get(self, request, direction_id):
+        qs = Order.objects.filter(status__in=self.completed_statuses).select_related("cargo")
+
+        user = request.user
+        role = getattr(user, "role", None)
+        if role == UserRole.LOGISTIC:
+            qs = qs.filter(customer=user)
+        elif role == UserRole.CARRIER:
+            qs = qs.filter(carrier=user)
+        else:
+            qs = qs.filter(Q(customer=user) | Q(carrier=user))
+
+        qs = self.apply_filters(request, qs)
+
+        matched_origin = None
+        matched_destination = None
+
+        pairs = qs.values("cargo__origin_region", "cargo__destination_region").distinct()
+
+        for pair in pairs:
+            origin = pair["cargo__origin_region"] or ""
+            destination = pair["cargo__destination_region"] or ""
+
+            raw = f"{origin}:{destination}"
+            current_id = hashlib.md5(raw.encode()).hexdigest()
+
+            if current_id == direction_id:
+                matched_origin = origin
+                matched_destination = destination
+                break
+
+        if matched_origin is None:
+            return Response({"detail": "Not found"}, status=404)
+
+        qs = qs.filter(
+            cargo__origin_region=matched_origin,
+            cargo__destination_region=matched_destination,
+        )
+
+        data = self.build_response_data(request, qs, rating_value=user.avg_rating)
+
+        safe_origin = (matched_origin or "origin").replace("/", "_").replace("\\", "_").strip()
+        safe_destination = (
+            (matched_destination or "destination").replace("/", "_").replace("\\", "_").strip()
+        )
+        filename = f"my_analytics_{safe_origin}_{safe_destination}.xlsx"
+
+        return self.export_to_excel(data, filename=filename)
+
+
+@extend_schema(
     operation_id="analytics_export_direction_file",
     responses={200: OpenApiTypes.BINARY},
 )

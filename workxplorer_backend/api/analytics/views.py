@@ -13,7 +13,6 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import (
     HRFlowable,
     Image,
-    KeepTogether,
     Paragraph,
     SimpleDocTemplate,
     Spacer,
@@ -873,7 +872,7 @@ class BaseAnalyticsMixin:
             if not isinstance(content, list):
                 content = [content]
 
-            t = Table([[KeepTogether(content)]], colWidths=[width or doc.width])
+            t = Table([[content]], colWidths=[width or doc.width])
             t.setStyle(
                 TableStyle(
                     [

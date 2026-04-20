@@ -1078,65 +1078,6 @@ class CountryDirectionsListView(BaseAnalyticsMixin, APIView):
         )
 
 
-@extend_schema(responses=CountryDirectionDetailSerializer)
-class MyCountryDirectionDetailView(BaseAnalyticsMixin, APIView):
-    permission_classes = [IsAuthenticatedAndVerified]
-
-    def get(self, request, direction_id):
-        qs = self.my_completed_orders_qs(request)
-
-        matched_origin = None
-        matched_destination = None
-
-        pairs = qs.values("cargo__origin_country", "cargo__destination_country").distinct()
-
-        for pair in pairs:
-            origin = pair["cargo__origin_country"] or ""
-            destination = pair["cargo__destination_country"] or ""
-
-            raw = f"{origin}:{destination}"
-            current_id = hashlib.md5(raw.encode()).hexdigest()
-
-            if current_id == direction_id:
-                matched_origin = origin
-                matched_destination = destination
-                break
-
-        if matched_origin is None:
-            return Response({"detail": "Not found"}, status=404)
-
-        qs = qs.filter(
-            cargo__origin_country=matched_origin,
-            cargo__destination_country=matched_destination,
-        )
-        qs = self.apply_filters(request, qs)
-
-        data = qs.aggregate(
-            shipments=Count("id"),
-            weight=Sum("cargo__weight_kg"),
-            avg_price=Avg("cargo__price_uzs"),
-        )
-        price_value = self._convert_amount(data["avg_price"], "UZS", Currency.USD) or 0
-
-        year = self._resolve_year(request, default_year=2026)
-        pie_charts = self._build_pie_charts(qs, year)
-        season_chart = self._build_season_chart(request, qs, year)
-
-        return Response(
-            {
-                "id": direction_id,
-                "origin_country": matched_origin,
-                "destination_country": matched_destination,
-                "shipments": data["shipments"] or 0,
-                "weight": float(data["weight"] or 0),
-                "price_value": round(price_value, 2),
-                "price_currency": "USD",
-                "pie_charts": pie_charts,
-                "season_chart": season_chart,
-            }
-        )
-
-
 @extend_schema(responses=CountryDirectionsListResponseSerializer)
 class MyCountryDirectionsListView(BaseAnalyticsMixin, APIView):
     permission_classes = [IsAuthenticatedAndVerified]

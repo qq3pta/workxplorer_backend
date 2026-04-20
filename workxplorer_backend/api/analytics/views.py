@@ -795,10 +795,13 @@ class BaseAnalyticsMixin:
         table.setStyle(
             TableStyle(
                 [
-                    ("BACKGROUND", (0, 0), (-1, -1), colors.whitesmoke),
-                    ("BOX", (0, 0), (-1, -1), 1, colors.black),
-                    ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.grey),
-                    ("FONTNAME", (0, 0), (-1, -1), "Helvetica"),
+                    ("BACKGROUND", (0, 0), (-1, -1), colors.white),
+                    ("BOX", (0, 0), (-1, -1), 0, colors.white),
+                    ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.lightgrey),
+                    ("TEXTCOLOR", (0, 0), (-1, -1), colors.black),
+                    ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+                    ("TOPPADDING", (0, 0), (-1, -1), 10),
                 ]
             )
         )
@@ -829,13 +832,15 @@ class BaseAnalyticsMixin:
 
         plt.figure(figsize=(8, 4))
 
-        plt.plot(labels, values, linewidth=3)
+        plt.plot(labels, values, linewidth=3, marker="o")
 
-        plt.grid(True, linestyle="--", alpha=0.5)
+        plt.fill_between(range(len(values)), values, alpha=0.1)
 
-        plt.title("Перевозки по месяцам", fontsize=14)
-        plt.xlabel("Период")
-        plt.ylabel("Количество")
+        plt.grid(True, linestyle="--", alpha=0.3)
+
+        plt.title("Перевозки по месяцам", fontsize=14, weight="bold")
+        plt.xlabel("")
+        plt.ylabel("")
 
         plt.xticks(rotation=30)
 
@@ -855,12 +860,18 @@ class BaseAnalyticsMixin:
         plt.figure(figsize=(5, 5))
 
         if values:
-            plt.pie(values, labels=labels, autopct="%1.1f%%", startangle=140)
+            plt.pie(
+                values,
+                labels=labels,
+                autopct="%1.1f%%",
+                startangle=140,
+                wedgeprops={"linewidth": 1, "edgecolor": "white"},
+            )
         else:
             plt.text(0.5, 0.5, "Нет данных", ha="center", va="center")
             plt.axis("off")
 
-        plt.title("Категории грузов", fontsize=14)
+        plt.title("Категории грузов", fontsize=14, weight="bold")
         plt.savefig(buffer, format="png")
         plt.close()
 

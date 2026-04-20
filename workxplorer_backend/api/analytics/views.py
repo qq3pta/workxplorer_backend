@@ -1046,6 +1046,25 @@ class ExportAnalyticsView(BaseAnalyticsMixin, APIView):
         return self.export_to_excel(data)
 
 
+class ExportMyAnalyticsView(BaseAnalyticsMixin, APIView):
+    permission_classes = [IsAuthenticatedAndVerified]
+
+    def get(self, request):
+        qs = Order.objects.filter(status__in=self.completed_statuses).select_related("cargo")
+
+        user = request.user
+        role = getattr(user, "role", None)
+        if role == UserRole.LOGISTIC:
+            qs = qs.filter(customer=user)
+        elif role == UserRole.CARRIER:
+            qs = qs.filter(carrier=user)
+        else:
+            qs = qs.filter(Q(customer=user) | Q(carrier=user))
+
+        data = self.build_response_data(request, qs, rating_value=user.avg_rating)
+        return self.export_to_excel(data, filename="my_analytics.xlsx")
+
+
 @extend_schema(
     operation_id="analytics_export_direction_file",
     responses={200: OpenApiTypes.BINARY},

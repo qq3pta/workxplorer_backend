@@ -70,6 +70,8 @@ class CountryDirectionSerializer(serializers.Serializer):
     origin = serializers.CharField()
     destination = serializers.CharField()
     price_value = serializers.FloatField()
+    min_price = serializers.FloatField()
+    max_price = serializers.FloatField()
     price_currency = serializers.CharField()
     shipments = serializers.IntegerField()
     weight = serializers.FloatField()

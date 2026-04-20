@@ -1,12 +1,15 @@
 from django.urls import path
 from .views import (
-    CountryDirectionDetailView,
     CountryDirectionsListView,
+    MyCountryDirectionDetailView,
+    MyCountryDirectionsListView,
     DirectionDetailView,
     GlobalAnalyticsView,
     MyAnalyticsView,
     PartnerAnalyticsView,
     ExportAnalyticsView,
+    ExportMyAnalyticsView,
+    ExportMyDirectionAnalyticsView,
     ExportDirectionAnalyticsView,
 )
 
@@ -29,14 +32,29 @@ urlpatterns = [
         name="analytics-directions-countries-list",
     ),
     path(
-        "directions-countries/<str:direction_id>/",
-        CountryDirectionDetailView.as_view(),
-        name="analytics-direction-country-detail",
+        "directions-countries/me/",
+        MyCountryDirectionsListView.as_view(),
+        name="analytics-directions-countries-list-me",
+    ),
+    path(
+        "directions-countries/me/<str:direction_id>/",
+        MyCountryDirectionDetailView.as_view(),
+        name="analytics-direction-country-detail-me",
     ),
     path(
         "export/",
         ExportAnalyticsView.as_view(),
         name="analytics-export",
+    ),
+    path(
+        "export/me/",
+        ExportMyAnalyticsView.as_view(),
+        name="analytics-export-me",
+    ),
+    path(
+        "export/me/<str:direction_id>/",
+        ExportMyDirectionAnalyticsView.as_view(),
+        name="analytics-export-me-direction",
     ),
     path(
         "export/<str:direction_id>/",

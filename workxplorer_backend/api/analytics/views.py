@@ -73,6 +73,16 @@ class BaseAnalyticsMixin:
             return qs.filter(carrier=user)
         return qs.filter(Q(customer=user) | Q(carrier=user))
 
+    def my_completed_orders_qs(self, request):
+        qs = Order.objects.filter(status__in=self.completed_statuses).select_related("cargo")
+        user = request.user
+        role = getattr(user, "role", None)
+        if role == UserRole.LOGISTIC:
+            return qs.filter(customer=user)
+        if role == UserRole.CARRIER:
+            return qs.filter(carrier=user)
+        return qs.filter(Q(customer=user) | Q(carrier=user))
+
     def normalize_cargo_category(self, value: str | None) -> str | None:
         if not value:
             return None
@@ -247,6 +257,7 @@ class BaseAnalyticsMixin:
                 "currency",
                 "driver_price",
                 "driver_currency",
+                "cargo__price_uzs",
             )
             for row in rows:
                 load_date = row["cargo__load_date"]
@@ -258,17 +269,27 @@ class BaseAnalyticsMixin:
 
                 shipments[bucket_index] += 1
 
-                if row["logistic_id"] and row["price_total"] is not None:
-                    converted_customer = self._convert_amount(
-                        row["price_total"], row["currency"], currency
-                    )
-                    if converted_customer is not None:
-                        prices_customer_to_intermediary[bucket_index].append(converted_customer)
+                customer_amount = row["price_total"]
+                customer_currency = row["currency"] or Currency.UZS
+                if customer_amount is None:
+                    customer_amount = row["cargo__price_uzs"]
+                    customer_currency = Currency.UZS
+
+                converted_customer = self._convert_amount(
+                    customer_amount,
+                    customer_currency,
+                    currency,
+                )
+                if converted_customer is not None:
+                    prices_customer_to_intermediary[bucket_index].append(converted_customer)
 
                 carrier_amount = row["driver_price"]
                 carrier_currency = row["driver_currency"] or row["currency"]
                 if carrier_amount is None:
                     carrier_amount = row["price_total"]
+                if carrier_amount is None:
+                    carrier_amount = row["cargo__price_uzs"]
+                    carrier_currency = Currency.UZS
 
                 converted_carrier = self._convert_amount(carrier_amount, carrier_currency, currency)
                 if converted_carrier is not None:
@@ -294,6 +315,7 @@ class BaseAnalyticsMixin:
                 "currency",
                 "driver_price",
                 "driver_currency",
+                "cargo__price_uzs",
             )
 
             for row in rows:
@@ -302,17 +324,27 @@ class BaseAnalyticsMixin:
                     continue
                 month_index = load_date.month - 1
 
-                if row["logistic_id"] and row["price_total"] is not None:
-                    converted_customer = self._convert_amount(
-                        row["price_total"], row["currency"], currency
-                    )
-                    if converted_customer is not None:
-                        prices_customer_to_intermediary[month_index].append(converted_customer)
+                customer_amount = row["price_total"]
+                customer_currency = row["currency"] or Currency.UZS
+                if customer_amount is None:
+                    customer_amount = row["cargo__price_uzs"]
+                    customer_currency = Currency.UZS
+
+                converted_customer = self._convert_amount(
+                    customer_amount,
+                    customer_currency,
+                    currency,
+                )
+                if converted_customer is not None:
+                    prices_customer_to_intermediary[month_index].append(converted_customer)
 
                 carrier_amount = row["driver_price"]
                 carrier_currency = row["driver_currency"] or row["currency"]
                 if carrier_amount is None:
                     carrier_amount = row["price_total"]
+                if carrier_amount is None:
+                    carrier_amount = row["cargo__price_uzs"]
+                    carrier_currency = Currency.UZS
 
                 converted_carrier = self._convert_amount(carrier_amount, carrier_currency, currency)
                 if converted_carrier is not None:
@@ -952,6 +984,8 @@ class CountryDirectionsListView(BaseAnalyticsMixin, APIView):
             .annotate(
                 shipments=Count("id"),
                 avg_price=Avg("cargo__price_uzs"),
+                min_price=Min("cargo__price_uzs"),
+                max_price=Max("cargo__price_uzs"),
                 total_weight=Sum("cargo__weight_kg"),
                 avg_duration=Avg(
                     ExpressionWrapper(
@@ -976,6 +1010,16 @@ class CountryDirectionsListView(BaseAnalyticsMixin, APIView):
                 "UZS",
                 currency,
             )
+            converted_min_price = self._convert_amount(
+                d["min_price"],
+                "UZS",
+                currency,
+            )
+            converted_max_price = self._convert_amount(
+                d["max_price"],
+                "UZS",
+                currency,
+            )
 
             result.append(
                 {
@@ -983,6 +1027,158 @@ class CountryDirectionsListView(BaseAnalyticsMixin, APIView):
                     "origin": origin or "—",
                     "destination": destination or "—",
                     "price_value": round(converted_price or 0, 2),
+                    "min_price": round(converted_min_price or 0, 2),
+                    "max_price": round(converted_max_price or 0, 2),
+                    "price_currency": currency,
+                    "shipments": d["shipments"],
+                    "weight": float(d["total_weight"] or 0),
+                    "time": self.format_duration(duration),
+                }
+            )
+
+        return Response(
+            {
+                "directions_count": directions_count,
+                "deals_count": deals_count,
+                "total_weight_kg": float(summary["total_weight"] or 0),
+                "avg_distance_km": round(float(summary["avg_km"] or 0), 2),
+                "directions": result,
+            }
+        )
+
+
+@extend_schema(responses=CountryDirectionDetailSerializer)
+class MyCountryDirectionDetailView(BaseAnalyticsMixin, APIView):
+    permission_classes = [IsAuthenticatedAndVerified]
+
+    def get(self, request, direction_id):
+        qs = self.my_completed_orders_qs(request)
+
+        matched_origin = None
+        matched_destination = None
+
+        pairs = qs.values("cargo__origin_country", "cargo__destination_country").distinct()
+
+        for pair in pairs:
+            origin = pair["cargo__origin_country"] or ""
+            destination = pair["cargo__destination_country"] or ""
+
+            raw = f"{origin}:{destination}"
+            current_id = hashlib.md5(raw.encode()).hexdigest()
+
+            if current_id == direction_id:
+                matched_origin = origin
+                matched_destination = destination
+                break
+
+        if matched_origin is None:
+            return Response({"detail": "Not found"}, status=404)
+
+        qs = qs.filter(
+            cargo__origin_country=matched_origin,
+            cargo__destination_country=matched_destination,
+        )
+        qs = self.apply_filters(request, qs)
+
+        data = qs.aggregate(
+            shipments=Count("id"),
+            weight=Sum("cargo__weight_kg"),
+            avg_price=Avg("cargo__price_uzs"),
+        )
+        price_value = self._convert_amount(data["avg_price"], "UZS", Currency.USD) or 0
+
+        year = self._resolve_year(request, default_year=2026)
+        pie_charts = self._build_pie_charts(qs, year)
+        season_chart = self._build_season_chart(request, qs, year)
+
+        return Response(
+            {
+                "id": direction_id,
+                "origin_country": matched_origin,
+                "destination_country": matched_destination,
+                "shipments": data["shipments"] or 0,
+                "weight": float(data["weight"] or 0),
+                "price_value": round(price_value, 2),
+                "price_currency": "USD",
+                "pie_charts": pie_charts,
+                "season_chart": season_chart,
+            }
+        )
+
+
+@extend_schema(responses=CountryDirectionsListResponseSerializer)
+class MyCountryDirectionsListView(BaseAnalyticsMixin, APIView):
+    permission_classes = [IsAuthenticatedAndVerified]
+
+    def get(self, request):
+        qs = self.my_completed_orders_qs(request)
+        qs = self.apply_filters(request, qs)
+
+        currency = Currency.USD
+
+        summary = qs.aggregate(
+            total_weight=Sum("cargo__weight_kg"),
+            avg_km=Avg("route_distance_km"),
+        )
+        deals_count = qs.count()
+        directions_count = (
+            qs.values("cargo__origin_region", "cargo__destination_region").distinct().count()
+        )
+
+        directions_agg = (
+            qs.select_related("cargo")
+            .values(
+                "cargo__origin_region",
+                "cargo__destination_region",
+            )
+            .annotate(
+                shipments=Count("id"),
+                avg_price=Avg("cargo__price_uzs"),
+                min_price=Min("cargo__price_uzs"),
+                max_price=Max("cargo__price_uzs"),
+                total_weight=Sum("cargo__weight_kg"),
+                avg_duration=Avg(
+                    ExpressionWrapper(
+                        F("unloading_datetime") - F("loading_datetime"),
+                        output_field=DurationField(),
+                    )
+                ),
+            )
+            .order_by("-shipments")
+        )
+
+        result = []
+        for d in directions_agg:
+            origin = d["cargo__origin_region"] or ""
+            destination = d["cargo__destination_region"] or ""
+            raw = f"{origin}:{destination}"
+            direction_id = hashlib.md5(raw.encode()).hexdigest()
+            duration = d["avg_duration"]
+
+            converted_price = self._convert_amount(
+                d["avg_price"],
+                "UZS",
+                currency,
+            )
+            converted_min_price = self._convert_amount(
+                d["min_price"],
+                "UZS",
+                currency,
+            )
+            converted_max_price = self._convert_amount(
+                d["max_price"],
+                "UZS",
+                currency,
+            )
+
+            result.append(
+                {
+                    "id": direction_id,
+                    "origin": origin or "—",
+                    "destination": destination or "—",
+                    "price_value": round(converted_price or 0, 2),
+                    "min_price": round(converted_min_price or 0, 2),
+                    "max_price": round(converted_max_price or 0, 2),
                     "price_currency": currency,
                     "shipments": d["shipments"],
                     "weight": float(d["total_weight"] or 0),
@@ -1044,6 +1240,82 @@ class ExportAnalyticsView(BaseAnalyticsMixin, APIView):
         qs = self.scoped_completed_orders_qs(request)
         data = self.build_response_data(request, qs)
         return self.export_to_excel(data)
+
+
+class ExportMyAnalyticsView(BaseAnalyticsMixin, APIView):
+    permission_classes = [IsAuthenticatedAndVerified]
+
+    def get(self, request):
+        qs = Order.objects.filter(status__in=self.completed_statuses).select_related("cargo")
+
+        user = request.user
+        role = getattr(user, "role", None)
+        if role == UserRole.LOGISTIC:
+            qs = qs.filter(customer=user)
+        elif role == UserRole.CARRIER:
+            qs = qs.filter(carrier=user)
+        else:
+            qs = qs.filter(Q(customer=user) | Q(carrier=user))
+
+        data = self.build_response_data(request, qs, rating_value=user.avg_rating)
+        return self.export_to_excel(data, filename="my_analytics.xlsx")
+
+
+@extend_schema(
+    operation_id="analytics_export_my_direction_file",
+    responses={200: OpenApiTypes.BINARY},
+)
+class ExportMyDirectionAnalyticsView(BaseAnalyticsMixin, APIView):
+    permission_classes = [IsAuthenticatedAndVerified]
+
+    def get(self, request, direction_id):
+        qs = Order.objects.filter(status__in=self.completed_statuses).select_related("cargo")
+
+        user = request.user
+        role = getattr(user, "role", None)
+        if role == UserRole.LOGISTIC:
+            qs = qs.filter(customer=user)
+        elif role == UserRole.CARRIER:
+            qs = qs.filter(carrier=user)
+        else:
+            qs = qs.filter(Q(customer=user) | Q(carrier=user))
+
+        qs = self.apply_filters(request, qs)
+
+        matched_origin = None
+        matched_destination = None
+
+        pairs = qs.values("cargo__origin_region", "cargo__destination_region").distinct()
+
+        for pair in pairs:
+            origin = pair["cargo__origin_region"] or ""
+            destination = pair["cargo__destination_region"] or ""
+
+            raw = f"{origin}:{destination}"
+            current_id = hashlib.md5(raw.encode()).hexdigest()
+
+            if current_id == direction_id:
+                matched_origin = origin
+                matched_destination = destination
+                break
+
+        if matched_origin is None:
+            return Response({"detail": "Not found"}, status=404)
+
+        qs = qs.filter(
+            cargo__origin_region=matched_origin,
+            cargo__destination_region=matched_destination,
+        )
+
+        data = self.build_response_data(request, qs, rating_value=user.avg_rating)
+
+        safe_origin = (matched_origin or "origin").replace("/", "_").replace("\\", "_").strip()
+        safe_destination = (
+            (matched_destination or "destination").replace("/", "_").replace("\\", "_").strip()
+        )
+        filename = f"my_analytics_{safe_origin}_{safe_destination}.xlsx"
+
+        return self.export_to_excel(data, filename=filename)
 
 
 @extend_schema(

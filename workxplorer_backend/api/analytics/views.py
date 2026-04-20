@@ -1,8 +1,13 @@
 import hashlib
+import matplotlib.pyplot as plt
 
-from openpyxl import Workbook
 from datetime import date, timedelta
 from decimal import Decimal
+
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.pagesizes import A4
+from io import BytesIO
 
 from common.utils import RATES, convert_to_uzs
 from django.contrib.auth import get_user_model
@@ -747,55 +752,83 @@ class BaseAnalyticsMixin:
 
         return data
 
-    def export_to_excel(self, data, filename="analytics.xlsx"):
-        wb = Workbook()
-        ws = wb.active
-        ws.title = "Analytics"
+    def export_to_pdf(self, data, filename="analytics.pdf"):
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=A4)
 
-        ws.append(["Метрика", "Значение"])
-        ws.append(["Сделки", data["deals_count"]])
-        ws.append(["Направления", data["directions_count"]])
-        ws.append(["Общий вес", data["total_weight_kg"]])
-        ws.append(["Мин цена", data["min_price"]])
-        ws.append(["Макс цена", data["max_price"]])
-        ws.append(["Средняя цена за км", data["average_price_per_km"]])
+        styles = getSampleStyleSheet()
+        elements = []
 
-        ws.append([])
+        # Заголовок
+        elements.append(Paragraph("Аналитика перевозок", styles["Title"]))
+        elements.append(Spacer(1, 20))
 
-        ws.append(
-            [
-                "Откуда",
-                "Куда",
-                "Средняя цена",
-                "Мин цена",
-                "Макс цена",
-                "Кол-во",
-                "Вес",
-                "Время",
-            ]
-        )
+        # Метрики
+        elements.append(Paragraph(f"Сделки: {data['deals_count']}", styles["Normal"]))
+        elements.append(Paragraph(f"Направления: {data['directions_count']}", styles["Normal"]))
+        elements.append(Paragraph(f"Общий вес: {data['total_weight_kg']}", styles["Normal"]))
+        elements.append(Paragraph(f"Мин цена: {data['min_price']}", styles["Normal"]))
+        elements.append(Paragraph(f"Макс цена: {data['max_price']}", styles["Normal"]))
+        elements.append(Spacer(1, 20))
 
-        for d in data["directions"]:
-            ws.append(
-                [
-                    d["origin"],
-                    d["destination"],
-                    d["price_value"],
-                    d["min_price"],
-                    d["max_price"],
-                    d["shipments"],
-                    d["weight"],
-                    d["time"],
-                ]
-            )
+        # 📈 LINE CHART
+        line_chart = self._generate_line_chart(data["season_chart"])
+        elements.append(Image(line_chart, width=450, height=220))
+        elements.append(Spacer(1, 20))
 
-        response = HttpResponse(
-            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
+        # 🍩 PIE CHART (берем категории)
+        pie_chart = self._generate_pie_chart(data["pie_charts"]["by_cargo_category"])
+        elements.append(Image(pie_chart, width=300, height=300))
+
+        doc.build(elements)
+
+        buffer.seek(0)
+
+        response = HttpResponse(buffer, content_type="application/pdf")
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
-
-        wb.save(response)
         return response
+
+    def _generate_line_chart(self, season_chart):
+        buffer = BytesIO()
+
+        labels = season_chart["labels"]
+        values = season_chart["shipments"]
+
+        plt.figure()
+        plt.plot(labels, values)
+        plt.xticks(rotation=45)
+
+        plt.title("Перевозки по месяцам")
+        plt.xlabel("Период")
+        plt.ylabel("Кол-во")
+
+        plt.tight_layout()
+        plt.savefig(buffer, format="png")
+        plt.close()
+
+        buffer.seek(0)
+        return buffer
+
+    def _generate_pie_chart(self, pie_data):
+        buffer = BytesIO()
+
+        labels = [x["label"] for x in pie_data if x["shipments"] > 0]
+        values = [x["shipments"] for x in pie_data if x["shipments"] > 0]
+
+        plt.figure()
+
+        if values:
+            plt.pie(values, labels=labels, autopct="%1.1f%%")
+        else:
+            plt.text(0.5, 0.5, "Нет данных", ha="center", va="center")
+            plt.axis("off")
+
+        plt.title("Категории грузов")
+        plt.savefig(buffer, format="png")
+        plt.close()
+
+        buffer.seek(0)
+        return buffer
 
 
 @extend_schema(responses=MyAnalyticsSerializer)
@@ -1239,7 +1272,7 @@ class ExportAnalyticsView(BaseAnalyticsMixin, APIView):
     def get(self, request):
         qs = self.scoped_completed_orders_qs(request)
         data = self.build_response_data(request, qs)
-        return self.export_to_excel(data)
+        return self.export_to_pdf(data)
 
 
 class ExportMyAnalyticsView(BaseAnalyticsMixin, APIView):
@@ -1258,7 +1291,7 @@ class ExportMyAnalyticsView(BaseAnalyticsMixin, APIView):
             qs = qs.filter(Q(customer=user) | Q(carrier=user))
 
         data = self.build_response_data(request, qs, rating_value=user.avg_rating)
-        return self.export_to_excel(data, filename="my_analytics.xlsx")
+        return self.export_to_pdf(data, filename="my_analytics.pdf")
 
 
 @extend_schema(
@@ -1313,9 +1346,8 @@ class ExportMyDirectionAnalyticsView(BaseAnalyticsMixin, APIView):
         safe_destination = (
             (matched_destination or "destination").replace("/", "_").replace("\\", "_").strip()
         )
-        filename = f"my_analytics_{safe_origin}_{safe_destination}.xlsx"
-
-        return self.export_to_excel(data, filename=filename)
+        filename = f"my_analytics_{safe_origin}_{safe_destination}.pdf"
+        return self.export_to_pdf(data, filename=filename)
 
 
 @extend_schema(
@@ -1361,6 +1393,5 @@ class ExportDirectionAnalyticsView(BaseAnalyticsMixin, APIView):
         safe_destination = (
             (matched_destination or "destination").replace("/", "_").replace("\\", "_").strip()
         )
-        filename = f"analytics_{safe_origin}_{safe_destination}.xlsx"
-
-        return self.export_to_excel(data, filename=filename)
+        filename = f"analytics_{safe_origin}_{safe_destination}.pdf"
+        return self.export_to_pdf(data, filename=filename)

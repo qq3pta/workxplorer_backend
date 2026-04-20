@@ -257,7 +257,6 @@ class BaseAnalyticsMixin:
                 "currency",
                 "driver_price",
                 "driver_currency",
-                "cargo__price_uzs",
             )
             for row in rows:
                 load_date = row["cargo__load_date"]
@@ -270,26 +269,23 @@ class BaseAnalyticsMixin:
                 shipments[bucket_index] += 1
 
                 customer_amount = row["price_total"]
-                customer_currency = row["currency"] or Currency.UZS
+                customer_currency = row["currency"]
                 if customer_amount is None:
-                    customer_amount = row["cargo__price_uzs"]
-                    customer_currency = Currency.UZS
-
-                converted_customer = self._convert_amount(
-                    customer_amount,
-                    customer_currency,
-                    currency,
-                )
-                if converted_customer is not None:
-                    prices_customer_to_intermediary[bucket_index].append(converted_customer)
+                    customer_amount = row["driver_price"]
+                    customer_currency = row["driver_currency"] or row["currency"]
+                if customer_amount is not None:
+                    converted_customer = self._convert_amount(
+                        customer_amount,
+                        customer_currency,
+                        currency,
+                    )
+                    if converted_customer is not None:
+                        prices_customer_to_intermediary[bucket_index].append(converted_customer)
 
                 carrier_amount = row["driver_price"]
                 carrier_currency = row["driver_currency"] or row["currency"]
                 if carrier_amount is None:
                     carrier_amount = row["price_total"]
-                if carrier_amount is None:
-                    carrier_amount = row["cargo__price_uzs"]
-                    carrier_currency = Currency.UZS
 
                 converted_carrier = self._convert_amount(carrier_amount, carrier_currency, currency)
                 if converted_carrier is not None:
@@ -315,7 +311,6 @@ class BaseAnalyticsMixin:
                 "currency",
                 "driver_price",
                 "driver_currency",
-                "cargo__price_uzs",
             )
 
             for row in rows:
@@ -325,26 +320,23 @@ class BaseAnalyticsMixin:
                 month_index = load_date.month - 1
 
                 customer_amount = row["price_total"]
-                customer_currency = row["currency"] or Currency.UZS
+                customer_currency = row["currency"]
                 if customer_amount is None:
-                    customer_amount = row["cargo__price_uzs"]
-                    customer_currency = Currency.UZS
-
-                converted_customer = self._convert_amount(
-                    customer_amount,
-                    customer_currency,
-                    currency,
-                )
-                if converted_customer is not None:
-                    prices_customer_to_intermediary[month_index].append(converted_customer)
+                    customer_amount = row["driver_price"]
+                    customer_currency = row["driver_currency"] or row["currency"]
+                if customer_amount is not None:
+                    converted_customer = self._convert_amount(
+                        customer_amount,
+                        customer_currency,
+                        currency,
+                    )
+                    if converted_customer is not None:
+                        prices_customer_to_intermediary[month_index].append(converted_customer)
 
                 carrier_amount = row["driver_price"]
                 carrier_currency = row["driver_currency"] or row["currency"]
                 if carrier_amount is None:
                     carrier_amount = row["price_total"]
-                if carrier_amount is None:
-                    carrier_amount = row["cargo__price_uzs"]
-                    carrier_currency = Currency.UZS
 
                 converted_carrier = self._convert_amount(carrier_amount, carrier_currency, currency)
                 if converted_carrier is not None:

@@ -952,6 +952,8 @@ class CountryDirectionsListView(BaseAnalyticsMixin, APIView):
             .annotate(
                 shipments=Count("id"),
                 avg_price=Avg("cargo__price_uzs"),
+                min_price=Min("cargo__price_uzs"),
+                max_price=Max("cargo__price_uzs"),
                 total_weight=Sum("cargo__weight_kg"),
                 avg_duration=Avg(
                     ExpressionWrapper(
@@ -976,6 +978,16 @@ class CountryDirectionsListView(BaseAnalyticsMixin, APIView):
                 "UZS",
                 currency,
             )
+            converted_min_price = self._convert_amount(
+                d["min_price"],
+                "UZS",
+                currency,
+            )
+            converted_max_price = self._convert_amount(
+                d["max_price"],
+                "UZS",
+                currency,
+            )
 
             result.append(
                 {
@@ -983,6 +995,8 @@ class CountryDirectionsListView(BaseAnalyticsMixin, APIView):
                     "origin": origin or "—",
                     "destination": destination or "—",
                     "price_value": round(converted_price or 0, 2),
+                    "min_price": round(converted_min_price or 0, 2),
+                    "max_price": round(converted_max_price or 0, 2),
                     "price_currency": currency,
                     "shipments": d["shipments"],
                     "weight": float(d["total_weight"] or 0),

@@ -559,7 +559,6 @@ class BaseAnalyticsMixin:
             raw = f"{origin}:{destination}"
             direction_id = hashlib.md5(raw.encode()).hexdigest()
             duration = d["avg_duration"]
-            hours = duration.total_seconds() / 3600 if duration else 0
 
             avg_price = self._convert_amount(d["avg_price"], "UZS", currency)
             min_price = self._convert_amount(d["min_price"], "UZS", currency)
@@ -578,10 +577,37 @@ class BaseAnalyticsMixin:
                     "price_currency": currency,
                     "shipments": d["shipments"],
                     "weight": float(d["total_weight"] or 0),
-                    "time": round(hours, 1),
+                    "time": self.format_duration(duration),
                 }
             )
         return directions_data
+
+    def format_duration(self, td):
+        if not td:
+            return "-"
+
+        total_seconds = int(td.total_seconds())
+
+        days = total_seconds // 86400
+        hours = (total_seconds % 86400) // 3600
+        minutes = (total_seconds % 3600) // 60
+
+        parts = []
+
+        if days:
+            parts.append(f"{days} {'день' if days == 1 else 'дня' if 2 <= days <= 4 else 'дней'}")
+
+        if hours:
+            parts.append(
+                f"{hours} {'час' if hours == 1 else 'часа' if 2 <= hours <= 4 else 'часов'}"
+            )
+
+        if minutes or not parts:
+            parts.append(
+                f"{minutes} {'минута' if minutes == 1 else 'минуты' if 2 <= minutes <= 4 else 'минут'}"
+            )
+
+        return " ".join(parts)
 
     def build_response_data(self, request, qs, rating_value=0):
         now = timezone.now()
@@ -713,7 +739,7 @@ class BaseAnalyticsMixin:
                 "Макс цена",
                 "Кол-во",
                 "Вес",
-                "Время (ч)",
+                "Время",
             ]
         )
 
@@ -944,7 +970,6 @@ class CountryDirectionsListView(BaseAnalyticsMixin, APIView):
             raw = f"{origin}:{destination}"
             direction_id = hashlib.md5(raw.encode()).hexdigest()
             duration = d["avg_duration"]
-            hours = duration.total_seconds() / 3600 if duration else 0
 
             converted_price = self._convert_amount(
                 d["avg_price"],
@@ -961,7 +986,7 @@ class CountryDirectionsListView(BaseAnalyticsMixin, APIView):
                     "price_currency": currency,
                     "shipments": d["shipments"],
                     "weight": float(d["total_weight"] or 0),
-                    "time": round(hours, 1),
+                    "time": self.format_duration(duration),
                 }
             )
 

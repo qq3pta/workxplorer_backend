@@ -13,7 +13,7 @@ class DirectionSerializer(serializers.Serializer):
     price_currency = serializers.CharField()
     shipments = serializers.IntegerField()
     weight = serializers.FloatField()
-    time = serializers.FloatField()
+    time = serializers.CharField()
 
 
 class BarChartSerializer(serializers.Serializer):
@@ -73,7 +73,7 @@ class CountryDirectionSerializer(serializers.Serializer):
     price_currency = serializers.CharField()
     shipments = serializers.IntegerField()
     weight = serializers.FloatField()
-    time = serializers.FloatField()
+    time = serializers.CharField()
 
 
 class CountryDirectionsListResponseSerializer(serializers.Serializer):

@@ -1122,16 +1122,62 @@ class BaseAnalyticsMixin:
         return buffer
 
     def get_applied_filters(self, request):
+        date_from = self._qp_first(request, "date_from", "dateFrom")
+        date_to = self._qp_first(request, "date_to", "dateTo")
+        origin_region = self._qp_first(request, "origin_region", "originRegion")
+        destination_region = self._qp_first(request, "destination_region", "destinationRegion")
+        transport_type = self._qp_first(request, "transport_type", "transportType")
+        cargo_category = self._qp_first(request, "cargo_category", "cargoCategory")
+        payment_method = self._qp_first(request, "payment_method", "paymentMethod")
+        currency = self._qp_first(request, "currency", "price_currency")
+
         return {
-            "Дата от": self._qp_first(request, "date_from", "dateFrom") or "—",
-            "Дата до": self._qp_first(request, "date_to", "dateTo") or "—",
-            "Откуда": self._qp_first(request, "origin_region", "originRegion") or "—",
-            "Куда": self._qp_first(request, "destination_region", "destinationRegion") or "—",
-            "Тип транспорта": self._qp_first(request, "transport_type", "transportType") or "—",
-            "Категория": self._qp_first(request, "cargo_category", "cargoCategory") or "—",
-            "Оплата": self._qp_first(request, "payment_method", "paymentMethod") or "—",
-            "Валюта": self._qp_first(request, "currency", "price_currency") or "—",
+            "Дата от": date_from or "—",
+            "Дата до": date_to or "—",
+            "Откуда": origin_region or "—",
+            "Куда": destination_region or "—",
+            "Тип транспорта": self.humanize_filter_value("transport_type", transport_type),
+            "Категория": self.humanize_filter_value("cargo_category", cargo_category),
+            "Оплата": self.humanize_filter_value("payment_method", payment_method),
+            "Валюта": self.humanize_filter_value("currency", currency),
         }
+
+    def humanize_filter_value(self, filter_name: str, value: str | None) -> str:
+        if not value:
+            return "—"
+
+        raw = str(value).strip()
+        if not raw:
+            return "—"
+
+        if raw.lower() in {"all", "все"}:
+            return "Все"
+
+        if filter_name == "transport_type":
+            for item in TransportType:
+                if item.value == raw or item.value == raw.upper():
+                    return item.label
+
+        if filter_name == "cargo_category":
+            normalized = self.normalize_cargo_category(raw)
+            for item in CargoCategory:
+                if item.value == normalized:
+                    return item.label
+
+        if filter_name == "currency":
+            normalized = self.normalize_currency(raw)
+            return normalized
+
+        if filter_name == "payment_method":
+            payment_map = {
+                "cash": "Наличные",
+                "card": "Карта",
+                "bank_transfer": "Банковский перевод",
+                "transfer": "Перевод",
+            }
+            return payment_map.get(raw.lower(), raw)
+
+        return raw
 
 
 @extend_schema(responses=MyAnalyticsSerializer)

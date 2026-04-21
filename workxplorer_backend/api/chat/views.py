@@ -19,6 +19,7 @@ from .serializers import (
     GroupAddParticipantsSerializer,
     GroupCreateSerializer,
     GroupInviteDecisionSerializer,
+    GroupTitleUpdateSerializer,
     InviteLinkRequestSerializer,
     InviteLinkResponseSerializer,
     JoinByLinkSerializer,
@@ -57,7 +58,7 @@ def resolve_chat_and_participant(user, chat_identifier: str):
 
     if chat_id_str.isdigit():
         try:
-            participant = ChatParticipant.objects.select_related("chat").get(
+            participant = ChatParticipant.objects.select_related("chat", "chat__order").get(
                 chat_id=int(chat_id_str), user=user, is_active=True
             )
             return participant.chat, participant
@@ -65,7 +66,9 @@ def resolve_chat_and_participant(user, chat_identifier: str):
             return None, None
 
     target_slug = slugify(chat_id_str)
-    participants = ChatParticipant.objects.select_related("chat").filter(user=user, is_active=True)
+    participants = ChatParticipant.objects.select_related("chat", "chat__order").filter(
+        user=user, is_active=True
+    )
     for participant in participants:
         if slugify(participant.chat.title or "") == target_slug:
             return participant.chat, participant
@@ -78,7 +81,7 @@ def resolve_chat_participant_any_status(user, chat_identifier: str):
 
     if chat_id_str.isdigit():
         try:
-            participant = ChatParticipant.objects.select_related("chat").get(
+            participant = ChatParticipant.objects.select_related("chat", "chat__order").get(
                 chat_id=int(chat_id_str), user=user
             )
             return participant.chat, participant
@@ -86,7 +89,7 @@ def resolve_chat_participant_any_status(user, chat_identifier: str):
             return None, None
 
     target_slug = slugify(chat_id_str)
-    participants = ChatParticipant.objects.select_related("chat").filter(user=user)
+    participants = ChatParticipant.objects.select_related("chat", "chat__order").filter(user=user)
     for participant in participants:
         if slugify(participant.chat.title or "") == target_slug:
             return participant.chat, participant
@@ -333,6 +336,33 @@ class GroupAddParticipantsView(APIView):
         return Response(
             {"chat": ChatSummarySerializer(chat).data, "invited_user_ids": invited_user_ids}
         )
+
+
+class GroupTitleUpdateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        tags=["chat"],
+        request=GroupTitleUpdateSerializer,
+        responses={200: ChatInfoSerializer, 403: ErrorDetailSerializer, 404: ErrorDetailSerializer},
+    )
+    def patch(self, request, chat_id: str):
+        chat, participant = resolve_chat_and_participant(request.user, chat_id)
+        if not chat:
+            return Response({"detail": "Чат не найден."}, status=404)
+        if chat.chat_type != Chat.ChatType.GROUP:
+            return Response(
+                {"detail": "Изменение названия доступно только для группы."}, status=403
+            )
+        if not user_can_manage_group(chat, request.user.id):
+            return Response({"detail": "Недостаточно прав для изменения названия."}, status=403)
+
+        serializer = GroupTitleUpdateSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        chat.title = serializer.validated_data["title"]
+        chat.save(update_fields=["title"])
+        chat._viewer_participant = participant
+        return Response(ChatInfoSerializer(chat, context={"request": request}).data)
 
 
 class GroupKickMemberView(APIView):
@@ -671,6 +701,7 @@ class ChatListView(APIView):
                     "id": serializers.IntegerField(),
                     "chat_type": serializers.CharField(),
                     "title": serializers.CharField(required=False, allow_blank=True),
+                    "order_title": serializers.CharField(required=False, allow_null=True),
                     "display_title": serializers.CharField(required=False, allow_blank=True),
                     "participants_count": serializers.IntegerField(required=False),
                     "unread_count": serializers.IntegerField(required=False),
@@ -693,7 +724,7 @@ class ChatListView(APIView):
         sync_user_default_role_chat(request.user, emit_events=True)
         active_participants = (
             ChatParticipant.objects.filter(user=request.user, is_active=True)
-            .select_related("chat")
+            .select_related("chat", "chat__order")
             .order_by("-chat__last_message_at")
         )
         chats = []

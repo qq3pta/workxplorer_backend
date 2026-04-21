@@ -781,7 +781,7 @@ class BaseAnalyticsMixin:
 
         return data
 
-    def export_to_pdf(self, data, filename="analytics.pdf"):
+    def export_to_pdf(self, data, request, filename="analytics.pdf"):
         buffer = BytesIO()
 
         doc = SimpleDocTemplate(
@@ -927,6 +927,26 @@ class BaseAnalyticsMixin:
                 padding=18,
             )
         )
+        elements.append(Spacer(1, 14))
+
+        # Filters block
+        filters = self.get_applied_filters(request)
+
+        filters_text = ", ".join([f"{k}: {v}" for k, v in filters.items() if v != "—"])
+
+        filters_block = Paragraph(f"<b>Фильтры:</b> {filters_text or 'Не применялись'}", body_style)
+
+        elements.append(
+            card(
+                [
+                    Paragraph("Применённые фильтры", section_title_style),
+                    Spacer(1, 6),
+                    filters_block,
+                ],
+                padding=14,
+            )
+        )
+
         elements.append(Spacer(1, 14))
 
         # KPI row
@@ -1100,6 +1120,18 @@ class BaseAnalyticsMixin:
 
         buffer.seek(0)
         return buffer
+
+    def get_applied_filters(self, request):
+        return {
+            "Дата от": self._qp_first(request, "date_from", "dateFrom") or "—",
+            "Дата до": self._qp_first(request, "date_to", "dateTo") or "—",
+            "Откуда": self._qp_first(request, "origin_region", "originRegion") or "—",
+            "Куда": self._qp_first(request, "destination_region", "destinationRegion") or "—",
+            "Тип транспорта": self._qp_first(request, "transport_type", "transportType") or "—",
+            "Категория": self._qp_first(request, "cargo_category", "cargoCategory") or "—",
+            "Оплата": self._qp_first(request, "payment_method", "paymentMethod") or "—",
+            "Валюта": self._qp_first(request, "currency", "price_currency") or "—",
+        }
 
 
 @extend_schema(responses=MyAnalyticsSerializer)
@@ -1484,7 +1516,7 @@ class ExportAnalyticsView(BaseAnalyticsMixin, APIView):
     def get(self, request):
         qs = self.scoped_completed_orders_qs(request)
         data = self.build_response_data(request, qs)
-        return self.export_to_pdf(data)
+        return self.export_to_pdf(data, request)
 
 
 class ExportMyAnalyticsView(BaseAnalyticsMixin, APIView):
@@ -1503,7 +1535,7 @@ class ExportMyAnalyticsView(BaseAnalyticsMixin, APIView):
             qs = qs.filter(Q(customer=user) | Q(carrier=user))
 
         data = self.build_response_data(request, qs, rating_value=user.avg_rating)
-        return self.export_to_pdf(data, filename="my_analytics.pdf")
+        return self.export_to_pdf(data, request, filename="my_analytics.pdf")
 
 
 @extend_schema(
@@ -1559,7 +1591,7 @@ class ExportMyDirectionAnalyticsView(BaseAnalyticsMixin, APIView):
             (matched_destination or "destination").replace("/", "_").replace("\\", "_").strip()
         )
         filename = f"my_analytics_{safe_origin}_{safe_destination}.pdf"
-        return self.export_to_pdf(data, filename=filename)
+        return self.export_to_pdf(data, request, filename=filename)
 
 
 @extend_schema(
@@ -1606,4 +1638,4 @@ class ExportDirectionAnalyticsView(BaseAnalyticsMixin, APIView):
             (matched_destination or "destination").replace("/", "_").replace("\\", "_").strip()
         )
         filename = f"analytics_{safe_origin}_{safe_destination}.pdf"
-        return self.export_to_pdf(data, filename=filename)
+        return self.export_to_pdf(data, request, filename=filename)

@@ -101,6 +101,16 @@ class GroupCreateSerializer(serializers.Serializer):
         return chat
 
 
+class GroupTitleUpdateSerializer(serializers.Serializer):
+    title = serializers.CharField(max_length=255)
+
+    def validate_title(self, value):
+        title = value.strip()
+        if not title:
+            raise serializers.ValidationError("Название группы не может быть пустым.")
+        return title
+
+
 class GroupAddParticipantsSerializer(serializers.Serializer):
     participant_ids = serializers.ListField(
         child=serializers.IntegerField(min_value=1),
@@ -211,6 +221,7 @@ class ChatInfoSerializer(serializers.ModelSerializer):
     user_is_online = serializers.SerializerMethodField()
     creator = serializers.SerializerMethodField()
     is_muted = serializers.SerializerMethodField()
+    order_title = serializers.SerializerMethodField()
 
     class Meta:
         model = Chat
@@ -218,6 +229,7 @@ class ChatInfoSerializer(serializers.ModelSerializer):
             "id",
             "chat_type",
             "title",
+            "order_title",
             "display_title",
             "chat_avatar",
             "company_name",
@@ -319,6 +331,13 @@ class ChatInfoSerializer(serializers.ModelSerializer):
         if obj.chat_type != Chat.ChatType.GROUP or not obj.created_by:
             return None
         return ChatMemberSerializer(obj.created_by, context=self.context).data
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_order_title(self, obj):
+        order = getattr(obj, "order", None)
+        if not order:
+            return None
+        return f"Заказ #{order.id}"
 
 
 class MessageSerializer(serializers.ModelSerializer):
@@ -422,6 +441,7 @@ class ChatListItemSerializer(serializers.ModelSerializer):
     user_last_seen = serializers.SerializerMethodField()
     user_is_online = serializers.SerializerMethodField()
     is_muted = serializers.SerializerMethodField()
+    order_title = serializers.SerializerMethodField()
 
     class Meta:
         model = Chat
@@ -429,6 +449,7 @@ class ChatListItemSerializer(serializers.ModelSerializer):
             "id",
             "chat_type",
             "title",
+            "order_title",
             "display_title",
             "chat_avatar",
             "company_name",
@@ -545,6 +566,13 @@ class ChatListItemSerializer(serializers.ModelSerializer):
         if not participant:
             return False
         return bool(participant.is_muted)
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_order_title(self, obj):
+        order = getattr(obj, "order", None)
+        if not order:
+            return None
+        return f"Заказ #{order.id}"
 
 
 class OpenPersonalChatSerializer(serializers.Serializer):

@@ -524,15 +524,18 @@ class GPSUpdateSerializer(serializers.Serializer):
 
 class SharedOrderTrackingSerializer(serializers.ModelSerializer):
     driver_location = serializers.SerializerMethodField()
+    roles = serializers.SerializerMethodField()
 
     origin_city = serializers.CharField(source="cargo.origin_city", read_only=True)
     destination_city = serializers.CharField(source="cargo.destination_city", read_only=True)
-
     origin_address = serializers.CharField(source="cargo.origin_address", read_only=True)
     destination_address = serializers.CharField(source="cargo.destination_address", read_only=True)
-
     load_date = serializers.DateField(source="cargo.load_date", read_only=True)
     delivery_date = serializers.DateField(source="cargo.delivery_date", read_only=True)
+    origin_lat = serializers.SerializerMethodField()
+    origin_lng = serializers.SerializerMethodField()
+    dest_lat = serializers.SerializerMethodField()
+    dest_lng = serializers.SerializerMethodField()
 
     class Meta:
         model = Order
@@ -540,10 +543,15 @@ class SharedOrderTrackingSerializer(serializers.ModelSerializer):
             "id",
             "status",
             "driver_status",
+            "roles",
             "origin_city",
             "destination_city",
             "origin_address",
             "destination_address",
+            "origin_lat",
+            "origin_lng",
+            "dest_lat",
+            "dest_lng",
             "load_date",
             "delivery_date",
             "route_distance_km",
@@ -552,9 +560,65 @@ class SharedOrderTrackingSerializer(serializers.ModelSerializer):
             "driver_location",
         )
 
+    def _get_user_company(self, u):
+        return getattr(u, "company_name", "") if u else ""
+
+    def _get_user_full_name(self, u):
+        if not u:
+            return ""
+        return u.get_full_name() or getattr(u, "name", "") or getattr(u, "username", "")
+
+    def _public_user_info(self, u):
+        if not u:
+            return {
+                "id": 0,
+                "name": "",
+                "company": "",
+                "role": "",
+            }
+
+        return {
+            "id": u.id,
+            "name": self._get_user_full_name(u),
+            "company": self._get_user_company(u),
+            "role": getattr(u, "role", "") or "",
+        }
+
+    def get_roles(self, obj):
+        logistic_user = None
+        if obj.logistic_id and obj.logistic_id != obj.customer_id:
+            logistic_user = obj.logistic
+        elif (
+            obj.created_by_id
+            and obj.created_by_id != obj.customer_id
+            and getattr(obj.created_by, "role", "") == "LOGISTIC"
+        ):
+            logistic_user = obj.created_by
+
+        return {
+            "customer": self._public_user_info(obj.customer),
+            "logistic": self._public_user_info(logistic_user),
+            "carrier": self._public_user_info(obj.carrier),
+        }
+
+    def get_origin_lat(self, obj):
+        p = getattr(getattr(obj, "cargo", None), "origin_point", None)
+        return p.y if p else None
+
+    def get_origin_lng(self, obj):
+        p = getattr(getattr(obj, "cargo", None), "origin_point", None)
+        return p.x if p else None
+
+    def get_dest_lat(self, obj):
+        p = getattr(getattr(obj, "cargo", None), "dest_point", None)
+        return p.y if p else None
+
+    def get_dest_lng(self, obj):
+        p = getattr(getattr(obj, "cargo", None), "dest_point", None)
+        return p.x if p else None
+
     def get_driver_location(self, obj):
         driver = obj.carrier
-
         if not driver or not hasattr(driver, "gps") or not driver.gps.point:
             return None
 

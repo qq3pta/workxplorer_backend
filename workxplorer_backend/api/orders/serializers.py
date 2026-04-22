@@ -520,3 +520,47 @@ class GPSUpdateSerializer(serializers.Serializer):
     lat = serializers.FloatField(required=True, min_value=-90, max_value=90)
     lng = serializers.FloatField(required=True, min_value=-180, max_value=180)
     speed = serializers.FloatField(required=False, min_value=0)
+
+
+class SharedOrderTrackingSerializer(serializers.ModelSerializer):
+    driver_location = serializers.SerializerMethodField()
+
+    origin_city = serializers.CharField(source="cargo.origin_city", read_only=True)
+    destination_city = serializers.CharField(source="cargo.destination_city", read_only=True)
+
+    origin_address = serializers.CharField(source="cargo.origin_address", read_only=True)
+    destination_address = serializers.CharField(source="cargo.destination_address", read_only=True)
+
+    load_date = serializers.DateField(source="cargo.load_date", read_only=True)
+    delivery_date = serializers.DateField(source="cargo.delivery_date", read_only=True)
+
+    class Meta:
+        model = Order
+        fields = (
+            "id",
+            "status",
+            "driver_status",
+            "origin_city",
+            "destination_city",
+            "origin_address",
+            "destination_address",
+            "load_date",
+            "delivery_date",
+            "route_distance_km",
+            "loading_datetime",
+            "unloading_datetime",
+            "driver_location",
+        )
+
+    def get_driver_location(self, obj):
+        driver = obj.carrier
+
+        if not driver or not hasattr(driver, "gps") or not driver.gps.point:
+            return None
+
+        return {
+            "lat": driver.gps.point.y,
+            "lng": driver.gps.point.x,
+            "speed": driver.gps.speed,
+            "recorded_at": driver.gps.recorded_at.isoformat() if driver.gps.recorded_at else None,
+        }

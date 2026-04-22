@@ -37,6 +37,7 @@ from .serializers import (
     InvitePreviewSerializer,
     PrivacyToggleSerializer,
     GPSUpdateSerializer,
+    SharedOrderTrackingSerializer,
 )
 
 User = get_user_model()
@@ -1001,12 +1002,12 @@ class SharedOrderView(RetrieveAPIView):
 
     queryset = Order.objects.all().select_related(
         "cargo",
-        "customer",
         "carrier",
+        "carrier__gps",
         "logistic",
         "created_by",
         "offer",
     )
-    serializer_class = OrderDetailSerializer
+    serializer_class = SharedOrderTrackingSerializer
     permission_classes = [AllowAny]
     lookup_field = "share_token"

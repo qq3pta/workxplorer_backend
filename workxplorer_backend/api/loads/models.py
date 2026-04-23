@@ -114,6 +114,16 @@ class Cargo(models.Model):
         verbose_name="Скрыта от других пользователей",
     )
 
+    is_own_vehicle = models.BooleanField(
+        default=False,
+        verbose_name="Своя машина",
+        help_text=(
+            "Заявка для собственного транспорта заказчика: "
+            "не выходит на публичный борд, цена и способ оплаты не заполняются, "
+            "участники добавляются только через приглашение/ссылку."
+        ),
+    )
+
     moderation_status = models.CharField(
         max_length=10,
         choices=ModerationStatus.choices,
@@ -129,6 +139,8 @@ class Cargo(models.Model):
         max_length=10,
         choices=PaymentMethod.choices,
         default=PaymentMethod.CASH,
+        null=True,
+        blank=True,
         verbose_name="Способ оплаты",
     )
 

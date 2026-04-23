@@ -51,6 +51,11 @@ class OfferCreateSerializer(serializers.ModelSerializer):
                 {"cargo": "Нельзя сделать оффер на собственную заявку."}
             )
 
+        if getattr(cargo, "is_own_vehicle", False):
+            raise serializers.ValidationError(
+                {"cargo": "Заявка для своей машины — доступна только по приглашению."}
+            )
+
         if getattr(cargo, "is_hidden", False):
             raise serializers.ValidationError({"cargo": "Заявка скрыта."})
 

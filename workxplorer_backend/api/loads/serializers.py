@@ -97,8 +97,12 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
 
     payment_method = serializers.ChoiceField(
         choices=PaymentMethod.choices,
+        required=False,
+        allow_null=True,
         default=PaymentMethod.CASH,
     )
+
+    is_own_vehicle = serializers.BooleanField(required=False, default=False)
 
     class Meta:
         model = Cargo
@@ -126,6 +130,7 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
             "contact_pref",
             "payment_method",
             "is_hidden",
+            "is_own_vehicle",
             # input:
             "origin_lat",
             "origin_lng",
@@ -270,6 +275,17 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {"cargo_category": "Категория груза не подходит выбранному типу транспорта."}
             )
+
+        is_own_vehicle = self._val_or_instance(attrs, "is_own_vehicle") or False
+        if is_own_vehicle:
+            if attrs.get("price_value") not in (None, ""):
+                raise serializers.ValidationError(
+                    {"price_value": "Для заявки со своей машиной цена не заполняется."}
+                )
+            attrs["price_value"] = None
+            attrs["price_currency"] = None
+            attrs["payment_method"] = None
+            attrs["is_hidden"] = True
 
         price = attrs.get("price_value")
         if price is not None and price != "" and price < 0:
@@ -428,6 +444,7 @@ class CargoListSerializer(RouteKmMixin, serializers.ModelSerializer):
     dest_lat = serializers.SerializerMethodField()
     dest_lng = serializers.SerializerMethodField()
     is_hidden = serializers.BooleanField(read_only=True)
+    is_own_vehicle = serializers.BooleanField(read_only=True)
 
     @extend_schema_field(serializers.FloatField(allow_null=True))
     def get_origin_lat(self, obj) -> float | None:
@@ -496,6 +513,7 @@ class CargoListSerializer(RouteKmMixin, serializers.ModelSerializer):
             "origin_radius_km",
             "dest_radius_km",
             "is_hidden",
+            "is_own_vehicle",
             "user_name",
             "user_id",
             "origin_lat",

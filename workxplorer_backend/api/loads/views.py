@@ -276,6 +276,7 @@ class MyCargosView(generics.ListAPIView):
                 "created_at",
                 "refreshed_at",
                 "is_hidden",
+                "is_own_vehicle",
                 "payment_method",
                 "route_km_cached",
                 "origin_point",
@@ -342,6 +343,7 @@ class MyCargosBoardView(generics.ListAPIView):
                 "created_at",
                 "refreshed_at",
                 "is_hidden",
+                "is_own_vehicle",
                 "payment_method",
                 "route_km_cached",
                 "origin_point",
@@ -376,6 +378,7 @@ class PublicLoadsView(generics.ListAPIView):
             Cargo.objects.filter(
                 moderation_status=ModerationStatus.APPROVED,
                 is_hidden=False,
+                is_own_vehicle=False,
                 status=CargoStatus.POSTED,
             )
             .exclude(offers__agreement__status="pending")
@@ -411,6 +414,7 @@ class PublicLoadsView(generics.ListAPIView):
                 "created_at",
                 "refreshed_at",
                 "is_hidden",
+                "is_own_vehicle",
                 "payment_method",
                 "route_km_cached",
                 "origin_point",
@@ -495,30 +499,18 @@ class CargoCancelView(generics.GenericAPIView):
     tags=["loads"],
     request=inline_serializer(
         name="CargoVisibilityRequest",
-        fields={"is_hidden": drf_serializers.BooleanField()},
+        fields={
+            "is_hidden": drf_serializers.BooleanField(required=False),
+            "is_own_vehicle": drf_serializers.BooleanField(required=False),
+        },
     ),
     responses={
         200: inline_serializer(
             name="CargoVisibilityResponse",
             fields={
                 "detail": drf_serializers.CharField(),
-                "is_hidden_for_me": drf_serializers.BooleanField(),
-            },
-        )
-    },
-)
-@extend_schema(
-    tags=["loads"],
-    request=inline_serializer(
-        name="CargoVisibilityRequest",
-        fields={"is_hidden": drf_serializers.BooleanField()},
-    ),
-    responses={
-        200: inline_serializer(
-            name="CargoVisibilityResponse",
-            fields={
-                "detail": drf_serializers.CharField(),
-                "is_hidden_for_me": drf_serializers.BooleanField(),
+                "is_hidden": drf_serializers.BooleanField(),
+                "is_own_vehicle": drf_serializers.BooleanField(),
             },
         )
     },
@@ -537,11 +529,52 @@ class CargoVisibilityView(generics.GenericAPIView):
             return Response({"detail": "Нет доступа"}, status=403)
 
         is_hidden = request.data.get("is_hidden")
-        if not isinstance(is_hidden, bool):
+        is_own_vehicle = request.data.get("is_own_vehicle")
+
+        if is_hidden is None and is_own_vehicle is None:
+            return Response({"detail": "Передайте is_hidden или is_own_vehicle"}, status=400)
+
+        if is_hidden is not None and not isinstance(is_hidden, bool):
             return Response({"detail": "is_hidden must be boolean"}, status=400)
 
-        cargo.is_hidden = is_hidden
-        cargo.save(update_fields=["is_hidden"])
+        if is_own_vehicle is not None and not isinstance(is_own_vehicle, bool):
+            return Response({"detail": "is_own_vehicle must be boolean"}, status=400)
+
+        update_fields: list[str] = []
+
+        if is_own_vehicle is not None:
+            cargo.is_own_vehicle = is_own_vehicle
+            update_fields.append("is_own_vehicle")
+            if is_own_vehicle:
+                cargo.is_hidden = True
+                cargo.price_value = None
+                cargo.price_currency = None
+                cargo.price_uzs = None
+                cargo.payment_method = None
+                update_fields += [
+                    "is_hidden",
+                    "price_value",
+                    "price_currency",
+                    "price_uzs",
+                    "payment_method",
+                ]
+
+        if is_hidden is not None:
+            if cargo.is_own_vehicle and not is_hidden:
+                return Response(
+                    {
+                        "detail": (
+                            "Нельзя сделать заявку видимой, пока включён режим «Своя машина». "
+                            "Сначала отключите «Своя машина»."
+                        )
+                    },
+                    status=400,
+                )
+            cargo.is_hidden = is_hidden
+            if "is_hidden" not in update_fields:
+                update_fields.append("is_hidden")
+
+        cargo.save(update_fields=update_fields)
 
         channel_layer = get_channel_layer()
 
@@ -562,6 +595,7 @@ class CargoVisibilityView(generics.GenericAPIView):
             {
                 "detail": "Видимость обновлена",
                 "is_hidden": cargo.is_hidden,
+                "is_own_vehicle": cargo.is_own_vehicle,
             },
             status=200,
         )

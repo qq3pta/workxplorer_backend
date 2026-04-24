@@ -49,6 +49,10 @@ from .serializers import (
 
 User = get_user_model()
 
+# Заявки «Своя машина» не участвуют в ценовых метриках аналитики
+# (количество перевозок, километраж и т.п. считаются обычно).
+PRICE_METRIC_FILTER = ~Q(cargo__is_own_vehicle=True)
+
 
 def _register_pdf_fonts():
     fonts_dir = os.path.join(settings.BASE_DIR, "fonts")
@@ -286,6 +290,7 @@ class BaseAnalyticsMixin:
 
             rows = chart_qs.values(
                 "cargo__load_date",
+                "cargo__is_own_vehicle",
                 "logistic_id",
                 "price_total",
                 "currency",
@@ -302,6 +307,9 @@ class BaseAnalyticsMixin:
                     continue
 
                 shipments[bucket_index] += 1
+
+                if row.get("cargo__is_own_vehicle"):
+                    continue
 
                 customer_amount = row["price_total"]
                 customer_currency = row["currency"] or Currency.UZS
@@ -344,6 +352,7 @@ class BaseAnalyticsMixin:
 
             rows = chart_qs.values(
                 "cargo__load_date",
+                "cargo__is_own_vehicle",
                 "logistic_id",
                 "price_total",
                 "currency",
@@ -357,6 +366,9 @@ class BaseAnalyticsMixin:
                 if not load_date:
                     continue
                 month_index = load_date.month - 1
+
+                if row.get("cargo__is_own_vehicle"):
+                    continue
 
                 customer_amount = row["price_total"]
                 customer_currency = row["currency"] or Currency.UZS
@@ -603,9 +615,9 @@ class BaseAnalyticsMixin:
             )
             .annotate(
                 shipments=Count("id"),
-                avg_price=Avg("cargo__price_uzs"),
-                min_price=Min("cargo__price_uzs"),
-                max_price=Max("cargo__price_uzs"),
+                avg_price=Avg("cargo__price_uzs", filter=PRICE_METRIC_FILTER),
+                min_price=Min("cargo__price_uzs", filter=PRICE_METRIC_FILTER),
+                max_price=Max("cargo__price_uzs", filter=PRICE_METRIC_FILTER),
                 total_weight=Sum("cargo__weight_kg"),
                 avg_duration=Avg(
                     ExpressionWrapper(
@@ -706,8 +718,8 @@ class BaseAnalyticsMixin:
             total_km=Sum("route_distance_km"),
             avg_km=Avg("route_distance_km"),
             total_weight=Sum("cargo__weight_kg"),
-            min_price=Min("cargo__price_uzs"),
-            max_price=Max("cargo__price_uzs"),
+            min_price=Min("cargo__price_uzs", filter=PRICE_METRIC_FILTER),
+            max_price=Max("cargo__price_uzs", filter=PRICE_METRIC_FILTER),
         )
         distance_km = float(agg["total_km"] or 0)
         avg_distance_km = float(agg["avg_km"] or 0)
@@ -724,24 +736,32 @@ class BaseAnalyticsMixin:
         deals_count = summary_qs.count()
 
         current_agg = current_qs.aggregate(
-            total_price=Sum("cargo__price_uzs"),
+            total_price=Sum("cargo__price_uzs", filter=PRICE_METRIC_FILTER),
             total_km=Sum("route_distance_km"),
+            total_km_for_price=Sum("route_distance_km", filter=PRICE_METRIC_FILTER),
         )
         prev_agg = prev_qs.aggregate(
-            total_price=Sum("cargo__price_uzs"),
+            total_price=Sum("cargo__price_uzs", filter=PRICE_METRIC_FILTER),
             total_km=Sum("route_distance_km"),
+            total_km_for_price=Sum("route_distance_km", filter=PRICE_METRIC_FILTER),
         )
 
         current_total_price_uzs = float(current_agg["total_price"] or 0)
-        current_total_km = float(current_agg["total_km"] or 0)
+        current_total_km_for_price = float(current_agg["total_km_for_price"] or 0)
         prev_total_price_uzs = float(prev_agg["total_price"] or 0)
-        prev_total_km = float(prev_agg["total_km"] or 0)
+        prev_total_km_for_price = float(prev_agg["total_km_for_price"] or 0)
 
         current_total_price = self._convert_amount(current_total_price_uzs, "UZS", currency) or 0
         prev_total_price = self._convert_amount(prev_total_price_uzs, "UZS", currency) or 0
 
-        avg_price_per_km = current_total_price / current_total_km if current_total_km > 0 else 0.0
-        prev_avg_price_per_km = prev_total_price / prev_total_km if prev_total_km > 0 else 0.0
+        avg_price_per_km = (
+            current_total_price / current_total_km_for_price
+            if current_total_km_for_price > 0
+            else 0.0
+        )
+        prev_avg_price_per_km = (
+            prev_total_price / prev_total_km_for_price if prev_total_km_for_price > 0 else 0.0
+        )
 
         if prev_avg_price_per_km > 0:
             avg_price_per_km_change = (
@@ -1254,7 +1274,7 @@ class DirectionDetailView(BaseAnalyticsMixin, APIView):
         data = qs.aggregate(
             shipments=Count("id"),
             weight=Sum("cargo__weight_kg"),
-            avg_price=Avg("cargo__price_uzs"),
+            avg_price=Avg("cargo__price_uzs", filter=PRICE_METRIC_FILTER),
         )
         price_value = self._convert_amount(data["avg_price"], "UZS", Currency.USD) or 0
 
@@ -1315,7 +1335,7 @@ class CountryDirectionDetailView(BaseAnalyticsMixin, APIView):
         data = qs.aggregate(
             shipments=Count("id"),
             weight=Sum("cargo__weight_kg"),
-            avg_price=Avg("cargo__price_uzs"),
+            avg_price=Avg("cargo__price_uzs", filter=PRICE_METRIC_FILTER),
         )
         price_value = self._convert_amount(data["avg_price"], "UZS", Currency.USD) or 0
 
@@ -1365,9 +1385,9 @@ class CountryDirectionsListView(BaseAnalyticsMixin, APIView):
             )
             .annotate(
                 shipments=Count("id"),
-                avg_price=Avg("cargo__price_uzs"),
-                min_price=Min("cargo__price_uzs"),
-                max_price=Max("cargo__price_uzs"),
+                avg_price=Avg("cargo__price_uzs", filter=PRICE_METRIC_FILTER),
+                min_price=Min("cargo__price_uzs", filter=PRICE_METRIC_FILTER),
+                max_price=Max("cargo__price_uzs", filter=PRICE_METRIC_FILTER),
                 total_weight=Sum("cargo__weight_kg"),
                 avg_duration=Avg(
                     ExpressionWrapper(
@@ -1456,9 +1476,9 @@ class MyCountryDirectionsListView(BaseAnalyticsMixin, APIView):
             )
             .annotate(
                 shipments=Count("id"),
-                avg_price=Avg("cargo__price_uzs"),
-                min_price=Min("cargo__price_uzs"),
-                max_price=Max("cargo__price_uzs"),
+                avg_price=Avg("cargo__price_uzs", filter=PRICE_METRIC_FILTER),
+                min_price=Min("cargo__price_uzs", filter=PRICE_METRIC_FILTER),
+                max_price=Max("cargo__price_uzs", filter=PRICE_METRIC_FILTER),
                 total_weight=Sum("cargo__weight_kg"),
                 avg_duration=Avg(
                     ExpressionWrapper(

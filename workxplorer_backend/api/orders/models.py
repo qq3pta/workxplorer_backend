@@ -354,9 +354,11 @@ class Order(models.Model):
     def save(self, *args, **kwargs):
         is_new = self.pk is None
         old_status = None
+        old_obj = None
 
         if not is_new:
-            old_status = Order.objects.filter(pk=self.pk).values_list("status", flat=True).first()
+            old_obj = Order.objects.get(pk=self.pk)
+            old_status = old_obj.status
 
         super().save(*args, **kwargs)
 
@@ -370,6 +372,37 @@ class Order(models.Model):
             transaction.on_commit(
                 lambda old=old_status, new=self.status: self.notify_status_changed(old, new)
             )
+
+        def log_changes():
+            if not old_obj:
+                return
+
+            fields_to_track = [
+                "status",
+                "driver_status",
+                "price_total",
+                "driver_price",
+                "carrier_id",
+                "customer_id",
+                "logistic_id",
+                "payment_method",
+            ]
+
+            for field in fields_to_track:
+                old = getattr(old_obj, field)
+                new = getattr(self, field)
+
+                if old != new:
+                    OrderAuditLog.objects.create(
+                        order=self,
+                        user=self.created_by,
+                        action="update",
+                        field_name=field,
+                        old_value=str(old),
+                        new_value=str(new),
+                    )
+
+        transaction.on_commit(log_changes)
 
     def update_payment_status(self):
         """
@@ -510,3 +543,34 @@ class DriverLocation(models.Model):
             models.Index(fields=["recorded_at"]),
             models.Index(fields=["driver"]),
         ]
+
+
+class OrderAuditLog(models.Model):
+    order = models.ForeignKey(
+        Order,
+        on_delete=models.CASCADE,
+        related_name="audit_logs",
+    )
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
+
+    action = models.CharField(max_length=100)
+    field_name = models.CharField(max_length=100, blank=True)
+
+    old_value = models.TextField(null=True, blank=True)
+    new_value = models.TextField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "Audit log заказа"
+        verbose_name_plural = "Audit logs заказов"
+
+    def __str__(self):
+        return f"Order#{self.order_id} {self.action}"

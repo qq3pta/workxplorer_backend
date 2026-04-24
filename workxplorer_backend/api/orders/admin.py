@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.db.models import FloatField
 from django.db.models.expressions import Func
 
-from .models import Order, OrderDocument, OrderStatusHistory
+from .models import Order, OrderDocument, OrderStatusHistory, OrderAuditLog
 
 
 class GeoDistance(Func):
@@ -13,6 +13,23 @@ class GeoDistance(Func):
 
     function = "ST_Distance"
     output_field = FloatField()
+
+
+class OrderAuditInline(admin.TabularInline):
+    model = OrderAuditLog
+    extra = 0
+    can_delete = False
+    readonly_fields = (
+        "user",
+        "action",
+        "field_name",
+        "old_value",
+        "new_value",
+        "created_at",
+    )
+
+    def has_add_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(Order)
@@ -43,6 +60,8 @@ class OrderAdmin(admin.ModelAdmin):
         "carrier__username",
     )
     readonly_fields = ("price_per_km",)
+
+    inlines = [OrderAuditInline]
 
     def price_per_km_display(self, obj):
         if obj.price_per_km is None:

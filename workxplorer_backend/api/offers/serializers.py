@@ -261,6 +261,7 @@ class OfferInviteSerializer(serializers.Serializer):
             message=validated_data.get("message", ""),
             initiator=Offer.Initiator.CUSTOMER,
             deal_type=deal_type,
+            accepted_by_customer=bool(getattr(cargo, "is_own_vehicle", False)),
         )
 
         offer.send_invite_notifications()
@@ -280,6 +281,7 @@ class OfferShortSerializer(serializers.ModelSerializer):
         source="cargo.get_cargo_category_display",
         read_only=True,
     )
+    is_own_vehicle = serializers.BooleanField(source="cargo.is_own_vehicle", read_only=True)
 
     customer_company = serializers.SerializerMethodField()
     customer_full_name = serializers.SerializerMethodField()
@@ -332,6 +334,7 @@ class OfferShortSerializer(serializers.ModelSerializer):
             "cargo_title",
             "cargo_category",
             "cargo_category_display",
+            "is_own_vehicle",
             "customer_company",
             "customer_id",
             "customer_full_name",

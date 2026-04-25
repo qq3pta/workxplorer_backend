@@ -655,6 +655,7 @@ class CargoInviteGenerateView(generics.GenericAPIView):
                 "carrier_id": drf_serializers.IntegerField(),
                 "invited_by_id": drf_serializers.IntegerField(),
                 "cargo": CargoListSerializer(),
+                "is_own_vehicle": drf_serializers.BooleanField(),
                 "expires_at": drf_serializers.DateTimeField(),
             },
         )
@@ -747,6 +748,7 @@ class CargoInviteOpenView(generics.GenericAPIView):
                 "logistic_id": logistic.id if logistic else None,
                 "invited_by_id": invited_by.id if invited_by else None,
                 "offer_id": offer.id if offer else None,
+                "is_own_vehicle": bool(getattr(cargo, "is_own_vehicle", False)),
                 "expires_at": invite.expires_at,
                 "cargo": CargoListSerializer(cargo, context={"request": request}).data,
             }

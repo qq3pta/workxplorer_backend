@@ -355,12 +355,17 @@ class MapRegionsView(APIView):
     def get(self, request):
         country_code = (request.query_params.get("country_code") or "").strip().upper()
 
-        qs = GeoPlace.objects.exclude(region__isnull=True).exclude(region="")
+        if not country_code:
+            return Response({"detail": "country_code is required"}, status=400)
 
-        if country_code:
-            qs = qs.filter(country_code=country_code)
-
-        regions = qs.values_list("region", flat=True).distinct().order_by("region")
+        regions = (
+            GeoPlace.objects.filter(country_code=country_code)
+            .exclude(region__isnull=True)
+            .exclude(region="")
+            .values_list("region", flat=True)
+            .distinct()
+            .order_by("region")
+        )
 
         return Response({"results": [{"name": region} for region in regions]})
 
@@ -373,15 +378,16 @@ class MapCitiesView(APIView):
         region = (request.query_params.get("region") or "").strip()
         lang = get_lang(request)
 
-        qs = GeoPlace.objects.all()
+        if not country_code:
+            return Response({"detail": "country_code is required"}, status=400)
 
-        if country_code:
-            qs = qs.filter(country_code=country_code)
+        if not region:
+            return Response({"detail": "region is required"}, status=400)
 
-        if region:
-            qs = qs.filter(region__iexact=region)
-
-        qs = qs.order_by("name")
+        qs = GeoPlace.objects.filter(
+            country_code=country_code,
+            region__iexact=region,
+        ).order_by("name")
 
         grouped = {}
         ordered_keys = []
@@ -403,16 +409,11 @@ class MapCitiesView(APIView):
         results = []
 
         for key in ordered_keys:
-            variants = grouped[key]
-            chosen = pick_city_variant(variants, lang)
+            chosen = pick_city_variant(grouped[key], lang)
 
             if not chosen:
                 continue
 
-            results.append(
-                {
-                    "name": chosen.name,
-                }
-            )
+            results.append({"name": chosen.name})
 
         return Response({"results": results})

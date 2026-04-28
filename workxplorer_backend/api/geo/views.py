@@ -384,9 +384,6 @@ class MapCitiesView(APIView):
         if not country_code:
             return Response({"detail": "country_code is required"}, status=400)
 
-        if not region:
-            return Response({"detail": "region is required"}, status=400)
-
         qs = GeoPlace.objects.filter(
             country_code=country_code,
             region__iexact=region,
@@ -417,6 +414,6 @@ class MapCitiesView(APIView):
             if not chosen:
                 continue
 
-            results.append({"name": chosen.name})
+            results.append({"name": chosen.name, "region": chosen.region})
 
         return Response({"results": results})

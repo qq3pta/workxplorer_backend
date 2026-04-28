@@ -313,6 +313,7 @@ class RegionSuggestView(APIView):
         )
 
 
+@extend_schema(tags=["Geo"])
 class MapCountriesView(APIView):
     permission_classes = [AllowAny]
 
@@ -349,6 +350,7 @@ class MapCountriesView(APIView):
         return Response({"results": results})
 
 
+@extend_schema(tags=["Geo"])
 class MapRegionsView(APIView):
     permission_classes = [AllowAny]
 
@@ -370,6 +372,7 @@ class MapRegionsView(APIView):
         return Response({"results": [{"name": region} for region in regions]})
 
 
+@extend_schema(tags=["Geo"])
 class MapCitiesView(APIView):
     permission_classes = [AllowAny]
 

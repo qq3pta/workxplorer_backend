@@ -381,13 +381,15 @@ class MapCitiesView(APIView):
         region = (request.query_params.get("region") or "").strip()
         lang = get_lang(request)
 
-        if not country_code:
-            return Response({"detail": "country_code is required"}, status=400)
+        qs = GeoPlace.objects.all()
 
-        qs = GeoPlace.objects.filter(
-            country_code=country_code,
-            region__iexact=region,
-        ).order_by("name")
+        if country_code:
+            qs = qs.filter(country_code=country_code)
+
+        if region:
+            qs = qs.filter(region__iexact=region)
+
+        qs = qs.order_by("name")
 
         grouped = {}
         ordered_keys = []
@@ -409,11 +411,13 @@ class MapCitiesView(APIView):
         results = []
 
         for key in ordered_keys:
-            chosen = pick_city_variant(grouped[key], lang)
+            chosen = pick_city_variant(grouped[key], lang) or grouped[key][0]
 
-            if not chosen:
-                continue
-
-            results.append({"name": chosen.name, "region": chosen.region})
+            results.append(
+                {
+                    "name": chosen.name,
+                    "region": chosen.region,
+                }
+            )
 
         return Response({"results": results})

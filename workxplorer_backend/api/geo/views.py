@@ -311,3 +311,108 @@ class RegionSuggestView(APIView):
         return Response(
             RegionSuggestResponseSerializer({"results": [{"name": r} for r in regions]}).data
         )
+
+
+class MapCountriesView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        lang = get_lang(request)
+
+        rows = (
+            GeoPlace.objects.exclude(country__isnull=True)
+            .exclude(country="")
+            .values("country", "country_code")
+            .distinct()
+            .order_by("country")
+        )
+
+        seen = set()
+        results = []
+
+        for row in rows:
+            country_name = normalize_country(row["country"], lang)
+            key = row["country_code"]
+
+            if key in seen:
+                continue
+
+            seen.add(key)
+
+            results.append(
+                {
+                    "name": country_name,
+                    "country_code": row["country_code"],
+                }
+            )
+
+        return Response({"results": results})
+
+
+class MapRegionsView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        country_code = (request.query_params.get("country_code") or "").strip().upper()
+
+        qs = GeoPlace.objects.exclude(region__isnull=True).exclude(region="")
+
+        if country_code:
+            qs = qs.filter(country_code=country_code)
+
+        regions = qs.values_list("region", flat=True).distinct().order_by("region")
+
+        return Response({"results": [{"name": region} for region in regions]})
+
+
+class MapCitiesView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        country_code = (request.query_params.get("country_code") or "").strip().upper()
+        region = (request.query_params.get("region") or "").strip()
+        lang = get_lang(request)
+
+        qs = GeoPlace.objects.all()
+
+        if country_code:
+            qs = qs.filter(country_code=country_code)
+
+        if region:
+            qs = qs.filter(region__iexact=region)
+
+        qs = qs.order_by("name")
+
+        grouped = {}
+        ordered_keys = []
+
+        for x in qs:
+            point_key = None
+
+            if x.point:
+                point_key = (round(x.point.x, 6), round(x.point.y, 6))
+
+            dedupe_key = point_key or (x.country_code, x.name_latin.lower())
+
+            if dedupe_key not in grouped:
+                grouped[dedupe_key] = []
+                ordered_keys.append(dedupe_key)
+
+            grouped[dedupe_key].append(x)
+
+        results = []
+
+        for key in ordered_keys:
+            variants = grouped[key]
+            chosen = pick_city_variant(variants, lang)
+
+            if not chosen:
+                continue
+
+            results.append(
+                {
+                    "name": chosen.name,
+                }
+            )
+
+        return Response({"results": results})

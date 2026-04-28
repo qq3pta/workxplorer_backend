@@ -25,3 +25,16 @@ class RegionSerializer(serializers.Serializer):
 
 class RegionSuggestResponseSerializer(serializers.Serializer):
     results = RegionSerializer(many=True)
+
+
+class MapCountrySerializer(serializers.Serializer):
+    name = serializers.CharField()
+    country_code = serializers.CharField()
+
+
+class MapRegionSerializer(serializers.Serializer):
+    name = serializers.CharField()
+
+
+class MapCitySerializer(serializers.Serializer):
+    name = serializers.CharField()

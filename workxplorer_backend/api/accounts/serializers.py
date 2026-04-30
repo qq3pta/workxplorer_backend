@@ -550,6 +550,37 @@ class SendEmailVerifyFromProfileSerializer(serializers.Serializer):
         }
 
 
+class AvatarUploadSerializer(serializers.Serializer):
+    photo = serializers.ImageField(write_only=True)
+
+    ALLOWED_CONTENT_TYPES = ("image/jpeg", "image/png", "image/webp", "image/gif")
+
+    def validate_photo(self, value):
+        max_bytes = int(getattr(settings, "MAX_UPLOAD_MB", 20)) * 1024 * 1024
+        if value.size > max_bytes:
+            raise serializers.ValidationError(
+                f"Файл слишком большой (максимум {max_bytes // (1024 * 1024)} МБ)"
+            )
+        ctype = getattr(value, "content_type", None)
+        if ctype and ctype not in self.ALLOWED_CONTENT_TYPES:
+            raise serializers.ValidationError("Допустимые форматы: JPEG, PNG, WEBP, GIF")
+        return value
+
+    def save(self, **kwargs):
+        user = self.context["request"].user
+        photo = self.validated_data["photo"]
+
+        if user.photo:
+            try:
+                user.photo.delete(save=False)
+            except Exception:
+                pass
+
+        user.photo = photo
+        user.save(update_fields=["photo"])
+        return user
+
+
 class VerifyEmailFromProfileSerializer(serializers.Serializer):
     code = serializers.CharField(max_length=6)
 

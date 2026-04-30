@@ -4,10 +4,11 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema, inline_serializer
-from rest_framework import generics, serializers
+from rest_framework import generics, serializers, status
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from common.ws_utils import to_ws_safe
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -23,6 +24,7 @@ from rest_framework_simplejwt.tokens import (
 from .models import Profile
 from .permissions import IsAuthenticatedAndVerified
 from .serializers import (
+    AvatarUploadSerializer,
     ForgotPasswordSerializer,
     LoginSerializer,
     MeSerializer,
@@ -308,6 +310,7 @@ class MeView(generics.RetrieveAPIView):
 class UpdateMeView(generics.UpdateAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = UpdateMeSerializer
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get_object(self):
         return self.request.user
@@ -471,3 +474,30 @@ class VerifyEmailFromProfileView(APIView):
         )
         s.is_valid(raise_exception=True)
         return Response(s.save())
+
+
+@extend_schema(
+    tags=["auth"],
+    request={"multipart/form-data": AvatarUploadSerializer},
+    responses=MeSerializer,
+)
+class AvatarView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        s = AvatarUploadSerializer(data=request.data, context={"request": request})
+        s.is_valid(raise_exception=True)
+        user = s.save()
+        return Response(MeSerializer(user).data, status=status.HTTP_200_OK)
+
+    def delete(self, request):
+        user = request.user
+        if user.photo:
+            try:
+                user.photo.delete(save=False)
+            except Exception:
+                pass
+            user.photo = None
+            user.save(update_fields=["photo"])
+        return Response(status=status.HTTP_204_NO_CONTENT)

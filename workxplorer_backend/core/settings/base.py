@@ -80,6 +80,7 @@ INSTALLED_APPS = [
     "api.chat",
     "api.analytics",
     "channels",
+    "storages",
 ]
 
 MIDDLEWARE = [
@@ -251,6 +252,16 @@ DEFAULT_FROM_EMAIL = getenv("DEFAULT_FROM_EMAIL", "noreply@example.com")
 MAX_UPLOAD_MB = int(getenv("MAX_UPLOAD_MB", "20"))
 FILE_UPLOAD_MAX_MEMORY_SIZE = MAX_UPLOAD_MB * 1024 * 1024
 DATA_UPLOAD_MAX_MEMORY_SIZE = MAX_UPLOAD_MB * 1024 * 1024
+
+# Yandex Object Storage (S3-compatible) — used for user avatars
+AWS_S3_ACCESS_KEY_ID = getenv("ACCESS_KEY_ID", "")
+AWS_S3_SECRET_ACCESS_KEY = getenv("SECRET_ACCESS_KEY", "")
+AWS_S3_ENDPOINT_URL = getenv("S3_ENDPOINT_URL", "https://storage.yandexcloud.net")
+AWS_S3_REGION_NAME = getenv("S3_REGION", "ru-central1")
+AWS_STORAGE_BUCKET_NAME = getenv("S3_BUCKET_NAME", "")
+USE_S3_AVATAR_STORAGE = bool(
+    AWS_S3_ACCESS_KEY_ID and AWS_S3_SECRET_ACCESS_KEY and AWS_STORAGE_BUCKET_NAME
+)
 
 # Geo / Nominatim
 GEO_NOMINATIM_USER_AGENT = getenv(

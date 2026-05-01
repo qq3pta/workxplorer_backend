@@ -67,7 +67,12 @@ class OrderDocumentSerializer(serializers.ModelSerializer):
 
     @extend_schema_field(serializers.IntegerField(allow_null=True))
     def get_file_size(self, obj):
-        return int(obj.file.size) if obj.file else None
+        if not obj.file:
+            return None
+        try:
+            return int(obj.file.size)
+        except (FileNotFoundError, OSError):
+            return None
 
 
 # --------------------------

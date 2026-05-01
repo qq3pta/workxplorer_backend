@@ -2,6 +2,8 @@ from django.contrib.auth import get_user_model
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
+from api.chat.serializers import build_user_avatar_url
+
 from .models import UserRating
 
 User = get_user_model()
@@ -74,6 +76,7 @@ class RatingUserListSerializer(serializers.ModelSerializer):
     """
 
     display_name = serializers.SerializerMethodField()
+    avatar = serializers.SerializerMethodField()
 
     phone = serializers.CharField(read_only=True)
     email = serializers.EmailField(read_only=True)
@@ -97,6 +100,7 @@ class RatingUserListSerializer(serializers.ModelSerializer):
             "role",
             "company_name",
             "display_name",
+            "avatar",
             "phone",
             "email",
             "city",
@@ -118,6 +122,10 @@ class RatingUserListSerializer(serializers.ModelSerializer):
         if full_name:
             return full_name
         return obj.username or obj.email
+
+    @extend_schema_field(serializers.URLField(allow_null=True))
+    def get_avatar(self, obj):
+        return build_user_avatar_url(obj, request=self.context.get("request"))
 
     # -----------------------
     # KM суммарно для перевозчика

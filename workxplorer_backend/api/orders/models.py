@@ -237,9 +237,6 @@ class Order(models.Model):
             )
             Order.objects.filter(pk=self.pk, chat__isnull=True).update(chat=chat)
             self.chat = chat
-        elif chat.title != self._order_chat_title():
-            chat.title = self._order_chat_title()
-            chat.save(update_fields=["title"])
 
         added_user_ids: list[int] = []
         for user_id in self._order_chat_user_ids():

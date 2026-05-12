@@ -149,6 +149,8 @@ class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
     password2 = serializers.CharField(write_only=True)
     role = serializers.ChoiceField(choices=UserRole.choices, required=False)
+    inn = serializers.CharField(required=True, allow_blank=False, max_length=32)
+    legal_address = serializers.CharField(required=False, allow_blank=True, max_length=500)
     fcm_token = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
     country = serializers.CharField(required=False, allow_blank=True)
@@ -166,6 +168,8 @@ class RegisterSerializer(serializers.ModelSerializer):
             "first_name",
             "phone",
             "company_name",
+            "inn",
+            "legal_address",
             "role",
             "country",
             "country_code",
@@ -183,6 +187,14 @@ class RegisterSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"phone": "Укажите номер телефона"})
 
         attrs["phone"] = normalize_phone_e164(phone)
+
+        inn = attrs.get("inn")
+        if not inn or not str(inn).strip():
+            raise serializers.ValidationError({"inn": "Укажите ИНН"})
+        attrs["inn"] = str(inn).strip()
+
+        if "legal_address" in attrs:
+            attrs["legal_address"] = str(attrs.get("legal_address") or "").strip()
 
         email = attrs.get("email")
         if email and User.objects.filter(email__iexact=email).exists():
@@ -354,8 +366,11 @@ class MeSerializer(serializers.ModelSerializer):
             "first_name",
             "phone",
             "company_name",
+            "inn",
+            "legal_address",
             "photo",
             "role",
+            "is_verified",
             "rating_as_customer",
             "rating_as_carrier",
             "is_phone_verified",
@@ -372,6 +387,7 @@ class MeSerializer(serializers.ModelSerializer):
             "username",
             "email",
             "role",
+            "is_verified",
             "rating_as_customer",
             "rating_as_carrier",
             "is_email_verified",
@@ -402,6 +418,8 @@ class UpdateMeSerializer(serializers.ModelSerializer):
             "first_name",
             "phone",
             "company_name",
+            "inn",
+            "legal_address",
             "photo",
             "profile",
             "fcm_token",

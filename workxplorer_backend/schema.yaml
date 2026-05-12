@@ -2061,6 +2061,14 @@ components:
         company_name:
           type: string
           maxLength: 255
+        inn:
+          type: string
+          title: ИНН
+          maxLength: 32
+        legal_address:
+          type: string
+          title: Юридический адрес
+          maxLength: 500
         photo:
           type: string
           format: uri
@@ -2076,6 +2084,10 @@ components:
             * `CUSTOMER` - Заказчик
             * `CARRIER` - Перевозчик
           x-spec-enum-id: f8c39d86e82f4ceb
+          readOnly: true
+        is_verified:
+          type: boolean
+          title: Верифицирован
           readOnly: true
         rating_as_customer:
           type: number
@@ -2096,6 +2108,7 @@ components:
       - email
       - id
       - is_email_verified
+      - is_verified
       - profile
       - rating_as_carrier
       - rating_as_customer
@@ -2906,6 +2919,14 @@ components:
         company_name:
           type: string
           maxLength: 255
+        inn:
+          type: string
+          title: ИНН
+          maxLength: 32
+        legal_address:
+          type: string
+          title: Юридический адрес
+          maxLength: 500
         photo:
           type: string
           format: binary
@@ -2999,6 +3020,13 @@ components:
         company_name:
           type: string
           maxLength: 255
+        inn:
+          type: string
+          minLength: 1
+          maxLength: 32
+        legal_address:
+          type: string
+          maxLength: 500
         role:
           enum:
           - LOGISTIC
@@ -3021,6 +3049,7 @@ components:
           type: string
       required:
       - email
+      - inn
       - password
       - password2
       - phone
@@ -3160,6 +3189,14 @@ components:
         company_name:
           type: string
           maxLength: 255
+        inn:
+          type: string
+          title: ИНН
+          maxLength: 32
+        legal_address:
+          type: string
+          title: Юридический адрес
+          maxLength: 500
         photo:
           type: string
           format: binary

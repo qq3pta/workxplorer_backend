@@ -9,6 +9,18 @@ from .models import UserRating
 User = get_user_model()
 
 
+class RatingUserDocumentSerializer(serializers.Serializer):
+    id = serializers.IntegerField(read_only=True)
+    order_id = serializers.IntegerField(read_only=True)
+    title = serializers.CharField(read_only=True)
+    category = serializers.CharField(read_only=True)
+    category_display = serializers.CharField(read_only=True)
+    file = serializers.FileField(read_only=True)
+    file_name = serializers.CharField(read_only=True, allow_null=True)
+    file_size = serializers.IntegerField(read_only=True, allow_null=True)
+    created_at = serializers.DateTimeField(read_only=True)
+
+
 class UserRatingSerializer(serializers.ModelSerializer):
     rated_by = serializers.StringRelatedField(read_only=True)
 
@@ -88,6 +100,7 @@ class RatingUserListSerializer(serializers.ModelSerializer):
 
     registered_at = serializers.DateTimeField(source="date_joined", read_only=True)
     country = serializers.CharField(source="profile.country", read_only=True)
+    documents = serializers.SerializerMethodField()
 
     total_distance = serializers.SerializerMethodField()
 
@@ -99,6 +112,9 @@ class RatingUserListSerializer(serializers.ModelSerializer):
             "id",
             "role",
             "company_name",
+            "inn",
+            "legal_address",
+            "is_verified",
             "display_name",
             "avatar",
             "phone",
@@ -110,6 +126,7 @@ class RatingUserListSerializer(serializers.ModelSerializer):
             "completed_orders",
             "total_distance",
             "registered_at",
+            "documents",
             "pie_chart",
         )
         read_only_fields = fields
@@ -126,6 +143,37 @@ class RatingUserListSerializer(serializers.ModelSerializer):
     @extend_schema_field(serializers.URLField(allow_null=True))
     def get_avatar(self, obj):
         return build_user_avatar_url(obj, request=self.context.get("request"))
+
+    @extend_schema_field(RatingUserDocumentSerializer(many=True))
+    def get_documents(self, obj):
+        from api.orders.models import OrderDocument
+
+        documents = getattr(obj, "published_documents", None)
+        if documents is None:
+            documents = OrderDocument.objects.filter(uploaded_by=obj).order_by("-created_at")
+
+        return [
+            {
+                "id": document.id,
+                "order_id": document.order_id,
+                "title": document.title,
+                "category": document.category,
+                "category_display": document.get_category_display(),
+                "file": document.file.url if document.file else None,
+                "file_name": document.file.name.rsplit("/", 1)[-1] if document.file else None,
+                "file_size": self._get_document_file_size(document),
+                "created_at": document.created_at,
+            }
+            for document in documents
+        ]
+
+    def _get_document_file_size(self, document):
+        if not document.file:
+            return None
+        try:
+            return int(document.file.size)
+        except (FileNotFoundError, OSError):
+            return None
 
     # -----------------------
     # KM суммарно для перевозчика

@@ -2104,7 +2104,13 @@ components:
           allOf:
           - $ref: '#/components/schemas/Profile'
           readOnly: true
+        documents:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserDocument'
+          readOnly: true
       required:
+      - documents
       - email
       - id
       - is_email_verified
@@ -2114,6 +2120,50 @@ components:
       - rating_as_customer
       - role
       - username
+    UserDocument:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        order_id:
+          type: integer
+          readOnly: true
+        title:
+          type: string
+          readOnly: true
+        category:
+          type: string
+          readOnly: true
+        category_display:
+          type: string
+          readOnly: true
+        file:
+          type: string
+          format: uri
+          readOnly: true
+        file_name:
+          type: string
+          nullable: true
+          readOnly: true
+        file_size:
+          type: integer
+          nullable: true
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - category
+      - category_display
+      - created_at
+      - file
+      - file_name
+      - file_size
+      - id
+      - order_id
+      - title
     OfferAcceptResponse:
       type: object
       properties:

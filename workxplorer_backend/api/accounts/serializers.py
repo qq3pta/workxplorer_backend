@@ -55,6 +55,18 @@ class ProfileSerializer(serializers.ModelSerializer):
         return attrs
 
 
+class UserDocumentSerializer(serializers.Serializer):
+    id = serializers.IntegerField(read_only=True)
+    order_id = serializers.IntegerField(read_only=True)
+    title = serializers.CharField(read_only=True)
+    category = serializers.CharField(read_only=True)
+    category_display = serializers.CharField(read_only=True)
+    file = serializers.FileField(read_only=True)
+    file_name = serializers.CharField(read_only=True, allow_null=True)
+    file_size = serializers.IntegerField(read_only=True, allow_null=True)
+    created_at = serializers.DateTimeField(read_only=True)
+
+
 class SendPhoneOTPSerializer(serializers.Serializer):
     phone = serializers.CharField()
     purpose = serializers.ChoiceField(
@@ -354,6 +366,7 @@ class LoginSerializer(serializers.Serializer):
 
 class MeSerializer(serializers.ModelSerializer):
     profile = ProfileSerializer(read_only=True)
+    documents = serializers.SerializerMethodField()
     rating_as_customer = serializers.SerializerMethodField()
     rating_as_carrier = serializers.SerializerMethodField()
 
@@ -377,6 +390,7 @@ class MeSerializer(serializers.ModelSerializer):
             "is_email_verified",
             "date_joined",
             "profile",
+            "documents",
             "fcm_token",
             "is_accept_policy",
             "policy_accepted_at",
@@ -392,7 +406,36 @@ class MeSerializer(serializers.ModelSerializer):
             "rating_as_carrier",
             "is_email_verified",
             "profile",
+            "documents",
         )
+
+    @extend_schema_field(UserDocumentSerializer(many=True))
+    def get_documents(self, obj):
+        from api.orders.models import OrderDocument
+
+        documents = OrderDocument.objects.filter(uploaded_by=obj).order_by("-created_at")
+        return [
+            {
+                "id": document.id,
+                "order_id": document.order_id,
+                "title": document.title,
+                "category": document.category,
+                "category_display": document.get_category_display(),
+                "file": document.file.url if document.file else None,
+                "file_name": document.file.name.rsplit("/", 1)[-1] if document.file else None,
+                "file_size": self._get_document_file_size(document),
+                "created_at": document.created_at,
+            }
+            for document in documents
+        ]
+
+    def _get_document_file_size(self, document):
+        if not document.file:
+            return None
+        try:
+            return int(document.file.size)
+        except (FileNotFoundError, OSError):
+            return None
 
     def _get_dynamic_rating(self, obj) -> float:
         avg = obj.ratings_received.aggregate(value=Avg("score"))["value"]

@@ -161,7 +161,7 @@ class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
     password2 = serializers.CharField(write_only=True)
     role = serializers.ChoiceField(choices=UserRole.choices, required=False)
-    inn = serializers.CharField(required=True, allow_blank=False, max_length=32)
+    # inn = serializers.CharField(required=True, allow_blank=False, max_length=32)
     legal_address = serializers.CharField(required=False, allow_blank=True, max_length=500)
     fcm_token = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
@@ -180,7 +180,7 @@ class RegisterSerializer(serializers.ModelSerializer):
             "first_name",
             "phone",
             "company_name",
-            "inn",
+            # "inn",
             "legal_address",
             "role",
             "country",
@@ -200,10 +200,10 @@ class RegisterSerializer(serializers.ModelSerializer):
 
         attrs["phone"] = normalize_phone_e164(phone)
 
-        inn = attrs.get("inn")
-        if not inn or not str(inn).strip():
-            raise serializers.ValidationError({"inn": "Укажите ИНН"})
-        attrs["inn"] = str(inn).strip()
+        # inn = attrs.get("inn")
+        # if not inn or not str(inn).strip():
+        #     raise serializers.ValidationError({"inn": "Укажите ИНН"})
+        # attrs["inn"] = str(inn).strip()
 
         if "legal_address" in attrs:
             attrs["legal_address"] = str(attrs.get("legal_address") or "").strip()

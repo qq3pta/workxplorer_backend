@@ -3070,10 +3070,10 @@ components:
         company_name:
           type: string
           maxLength: 255
-        inn:
-          type: string
-          minLength: 1
-          maxLength: 32
+        # inn:
+        #   type: string
+        #   minLength: 1
+        #   maxLength: 32
         legal_address:
           type: string
           maxLength: 500
@@ -3099,7 +3099,7 @@ components:
           type: string
       required:
       - email
-      - inn
+      # - inn
       - password
       - password2
       - phone

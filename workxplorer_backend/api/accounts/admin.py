@@ -20,6 +20,8 @@ class UserAdmin(admin.ModelAdmin):
         "username",
         "email",
         "role",
+        "inn",
+        "is_verified",
         "is_phone_verified",
         "is_email_verified",
         "rating_as_customer",
@@ -27,12 +29,14 @@ class UserAdmin(admin.ModelAdmin):
         "profile_country",
         "profile_city",
     )
-    list_filter = ("role", "is_phone_verified")
+    list_filter = ("role", "is_verified", "is_phone_verified")
     search_fields = (
         "username",
         "email",
         "phone",
         "company_name",
+        "inn",
+        "legal_address",
         "profile__city",
         "profile__country",
     )

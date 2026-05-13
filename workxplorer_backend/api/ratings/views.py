@@ -1,11 +1,12 @@
-from django.contrib.auth import get_user_model
-from django.db.models import Avg, Count, Q, Sum
-from rest_framework import permissions, viewsets
-from django.db.models.functions import Coalesce
-from django.db.models import IntegerField, ExpressionWrapper
-from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
 from common.ws_utils import to_ws_safe
+from django.contrib.auth import get_user_model
+from django.db.models import Avg, Count, ExpressionWrapper, IntegerField, Prefetch, Q, Sum
+from django.db.models.functions import Coalesce
+from rest_framework import permissions, viewsets
+
+from api.orders.models import OrderDocument
 
 from .models import UserRating
 from .serializers import RatingUserListSerializer, UserRatingSerializer
@@ -227,4 +228,10 @@ class RatingUserViewSet(viewsets.ReadOnlyModelViewSet):
             except ValueError:
                 pass
 
-        return qs
+        return qs.select_related("profile").prefetch_related(
+            Prefetch(
+                "orderdocument_set",
+                queryset=OrderDocument.objects.order_by("-created_at"),
+                to_attr="published_documents",
+            )
+        )

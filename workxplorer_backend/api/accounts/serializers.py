@@ -55,6 +55,18 @@ class ProfileSerializer(serializers.ModelSerializer):
         return attrs
 
 
+class UserDocumentSerializer(serializers.Serializer):
+    id = serializers.IntegerField(read_only=True)
+    order_id = serializers.IntegerField(read_only=True)
+    title = serializers.CharField(read_only=True)
+    category = serializers.CharField(read_only=True)
+    category_display = serializers.CharField(read_only=True)
+    file = serializers.FileField(read_only=True)
+    file_name = serializers.CharField(read_only=True, allow_null=True)
+    file_size = serializers.IntegerField(read_only=True, allow_null=True)
+    created_at = serializers.DateTimeField(read_only=True)
+
+
 class SendPhoneOTPSerializer(serializers.Serializer):
     phone = serializers.CharField()
     purpose = serializers.ChoiceField(
@@ -149,6 +161,8 @@ class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
     password2 = serializers.CharField(write_only=True)
     role = serializers.ChoiceField(choices=UserRole.choices, required=False)
+    inn = serializers.CharField(required=True, allow_blank=False, max_length=32)
+    legal_address = serializers.CharField(required=False, allow_blank=True, max_length=500)
     fcm_token = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
     country = serializers.CharField(required=False, allow_blank=True)
@@ -166,6 +180,8 @@ class RegisterSerializer(serializers.ModelSerializer):
             "first_name",
             "phone",
             "company_name",
+            "inn",
+            "legal_address",
             "role",
             "country",
             "country_code",
@@ -183,6 +199,14 @@ class RegisterSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"phone": "Укажите номер телефона"})
 
         attrs["phone"] = normalize_phone_e164(phone)
+
+        inn = attrs.get("inn")
+        if not inn or not str(inn).strip():
+            raise serializers.ValidationError({"inn": "Укажите ИНН"})
+        attrs["inn"] = str(inn).strip()
+
+        if "legal_address" in attrs:
+            attrs["legal_address"] = str(attrs.get("legal_address") or "").strip()
 
         email = attrs.get("email")
         if email and User.objects.filter(email__iexact=email).exists():
@@ -342,6 +366,7 @@ class LoginSerializer(serializers.Serializer):
 
 class MeSerializer(serializers.ModelSerializer):
     profile = ProfileSerializer(read_only=True)
+    documents = serializers.SerializerMethodField()
     rating_as_customer = serializers.SerializerMethodField()
     rating_as_carrier = serializers.SerializerMethodField()
 
@@ -354,14 +379,18 @@ class MeSerializer(serializers.ModelSerializer):
             "first_name",
             "phone",
             "company_name",
+            "inn",
+            "legal_address",
             "photo",
             "role",
+            "is_verified",
             "rating_as_customer",
             "rating_as_carrier",
             "is_phone_verified",
             "is_email_verified",
             "date_joined",
             "profile",
+            "documents",
             "fcm_token",
             "is_accept_policy",
             "policy_accepted_at",
@@ -372,11 +401,41 @@ class MeSerializer(serializers.ModelSerializer):
             "username",
             "email",
             "role",
+            "is_verified",
             "rating_as_customer",
             "rating_as_carrier",
             "is_email_verified",
             "profile",
+            "documents",
         )
+
+    @extend_schema_field(UserDocumentSerializer(many=True))
+    def get_documents(self, obj):
+        from api.orders.models import OrderDocument
+
+        documents = OrderDocument.objects.filter(uploaded_by=obj).order_by("-created_at")
+        return [
+            {
+                "id": document.id,
+                "order_id": document.order_id,
+                "title": document.title,
+                "category": document.category,
+                "category_display": document.get_category_display(),
+                "file": document.file.url if document.file else None,
+                "file_name": document.file.name.rsplit("/", 1)[-1] if document.file else None,
+                "file_size": self._get_document_file_size(document),
+                "created_at": document.created_at,
+            }
+            for document in documents
+        ]
+
+    def _get_document_file_size(self, document):
+        if not document.file:
+            return None
+        try:
+            return int(document.file.size)
+        except (FileNotFoundError, OSError):
+            return None
 
     def _get_dynamic_rating(self, obj) -> float:
         avg = obj.ratings_received.aggregate(value=Avg("score"))["value"]
@@ -402,6 +461,8 @@ class UpdateMeSerializer(serializers.ModelSerializer):
             "first_name",
             "phone",
             "company_name",
+            "inn",
+            "legal_address",
             "photo",
             "profile",
             "fcm_token",

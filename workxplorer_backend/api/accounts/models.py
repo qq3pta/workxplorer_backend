@@ -22,6 +22,8 @@ class User(AbstractUser):
     phone = models.CharField(max_length=20, unique=True, blank=True, null=True, default=None)
 
     company_name = models.CharField(max_length=255, blank=True)
+    inn = models.CharField("ИНН", max_length=32, blank=True)
+    legal_address = models.CharField("Юридический адрес", max_length=500, blank=True)
     photo = models.ImageField(upload_to="avatars/", blank=True, null=True, storage=avatar_storage)
 
     role = models.CharField(max_length=16, choices=UserRole.choices, default=UserRole.CUSTOMER)
@@ -31,6 +33,7 @@ class User(AbstractUser):
 
     is_phone_verified = models.BooleanField(default=False)
     is_email_verified = models.BooleanField(default=False)
+    is_verified = models.BooleanField("Верифицирован", default=False)
     is_accept_policy = models.BooleanField(default=False)
     policy_accepted_at = models.DateTimeField(null=True, blank=True)
     last_seen = models.DateTimeField(null=True, blank=True, db_index=True)
@@ -55,6 +58,12 @@ class User(AbstractUser):
             self.phone = self.phone.strip().replace(" ", "")
             if self.phone == "":
                 self.phone = None
+
+        if self.inn:
+            self.inn = self.inn.strip()
+
+        if self.legal_address:
+            self.legal_address = self.legal_address.strip()
 
         super().save(*args, **kwargs)
 

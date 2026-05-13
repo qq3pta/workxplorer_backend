@@ -2061,6 +2061,14 @@ components:
         company_name:
           type: string
           maxLength: 255
+        inn:
+          type: string
+          title: ИНН
+          maxLength: 32
+        legal_address:
+          type: string
+          title: Юридический адрес
+          maxLength: 500
         photo:
           type: string
           format: uri
@@ -2077,6 +2085,10 @@ components:
             * `CARRIER` - Перевозчик
           x-spec-enum-id: f8c39d86e82f4ceb
           readOnly: true
+        is_verified:
+          type: boolean
+          title: Верифицирован
+          readOnly: true
         rating_as_customer:
           type: number
           format: double
@@ -2092,15 +2104,66 @@ components:
           allOf:
           - $ref: '#/components/schemas/Profile'
           readOnly: true
+        documents:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserDocument'
+          readOnly: true
       required:
+      - documents
       - email
       - id
       - is_email_verified
+      - is_verified
       - profile
       - rating_as_carrier
       - rating_as_customer
       - role
       - username
+    UserDocument:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        order_id:
+          type: integer
+          readOnly: true
+        title:
+          type: string
+          readOnly: true
+        category:
+          type: string
+          readOnly: true
+        category_display:
+          type: string
+          readOnly: true
+        file:
+          type: string
+          format: uri
+          readOnly: true
+        file_name:
+          type: string
+          nullable: true
+          readOnly: true
+        file_size:
+          type: integer
+          nullable: true
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - category
+      - category_display
+      - created_at
+      - file
+      - file_name
+      - file_size
+      - id
+      - order_id
+      - title
     OfferAcceptResponse:
       type: object
       properties:
@@ -2906,6 +2969,14 @@ components:
         company_name:
           type: string
           maxLength: 255
+        inn:
+          type: string
+          title: ИНН
+          maxLength: 32
+        legal_address:
+          type: string
+          title: Юридический адрес
+          maxLength: 500
         photo:
           type: string
           format: binary
@@ -2999,6 +3070,13 @@ components:
         company_name:
           type: string
           maxLength: 255
+        inn:
+          type: string
+          minLength: 1
+          maxLength: 32
+        legal_address:
+          type: string
+          maxLength: 500
         role:
           enum:
           - LOGISTIC
@@ -3021,6 +3099,7 @@ components:
           type: string
       required:
       - email
+      - inn
       - password
       - password2
       - phone
@@ -3160,6 +3239,14 @@ components:
         company_name:
           type: string
           maxLength: 255
+        inn:
+          type: string
+          title: ИНН
+          maxLength: 32
+        legal_address:
+          type: string
+          title: Юридический адрес
+          maxLength: 500
         photo:
           type: string
           format: binary

@@ -413,10 +413,10 @@ class OfferViewSet(ModelViewSet):
 
         else:
             if role == "CARRIER":
-                qs = qs.filter(carrier=u, is_active=True)
+                qs = qs.filter(carrier=u)
 
             elif role == "CUSTOMER":
-                qs = qs.filter(cargo__customer=u, is_active=True)
+                qs = qs.filter(cargo__customer=u)
 
             elif role == "LOGISTIC":
                 qs = qs.filter(

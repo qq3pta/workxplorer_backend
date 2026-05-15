@@ -367,20 +367,22 @@ class OfferViewSet(ModelViewSet):
 
         if scope == "mine":
             if role == "CARRIER":
-                qs = qs.filter(carrier=u).filter(
-                    Q(initiator=Offer.Initiator.CARRIER) | Q(is_counter=True)
-                )
+                qs = qs.filter(
+                    carrier=u,
+                    is_active=True,
+                ).filter(Q(initiator=Offer.Initiator.CARRIER) | Q(is_counter=True))
 
             elif role == "LOGISTIC":
-                qs = qs.filter(logistic=u)
-
-            elif role == "CUSTOMER":
-                qs = qs.filter(cargo__customer=u).filter(
-                    Q(initiator=Offer.Initiator.CUSTOMER) | Q(is_counter=True)
+                qs = qs.filter(
+                    logistic=u,
+                    is_active=True,
                 )
 
-            else:
-                qs = qs.none()
+            elif role == "CUSTOMER":
+                qs = qs.filter(
+                    cargo__customer=u,
+                    is_active=True,
+                ).filter(Q(initiator=Offer.Initiator.CUSTOMER) | Q(is_counter=True))
 
         # =====================
         # INCOMING (предложили мне)
@@ -417,17 +419,18 @@ class OfferViewSet(ModelViewSet):
 
         else:
             if role == "CARRIER":
-                qs = qs.filter(carrier=u)
+                qs = qs.filter(carrier=u, is_active=True)
 
             elif role == "CUSTOMER":
-                qs = qs.filter(cargo__customer=u)
+                qs = qs.filter(cargo__customer=u, is_active=True)
 
             elif role == "LOGISTIC":
                 qs = qs.filter(
                     Q(logistic=u)
                     | Q(intermediary=u)
                     | Q(cargo__customer=u)
-                    | Q(cargo__created_by=u)
+                    | Q(cargo__created_by=u),
+                    is_active=True,
                 )
 
             else:

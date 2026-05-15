@@ -516,12 +516,14 @@ class Offer(models.Model):
         else:
             raise PermissionDenied("Вы не можете отклонить этот оффер.")
 
+        self.is_active = False
         self.save(
             update_fields=[
                 "accepted_by_customer",
                 "accepted_by_carrier",
                 "accepted_by_logistic",
                 "response_status",
+                "is_active",
                 "updated_at",
             ]
         )

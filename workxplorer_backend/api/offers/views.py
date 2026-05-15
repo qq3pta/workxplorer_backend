@@ -432,7 +432,7 @@ class OfferViewSet(ModelViewSet):
         qs = qs.distinct()
 
         if scope in ("mine", "incoming"):
-            qs = qs.filter(is_active=True)
+            qs = qs.filter(is_active=True).exclude(response_status__startswith="rejected")
 
         common_filter_params = request.query_params
         if scope in ("mine", "incoming") and request.query_params.get("is_active") in (

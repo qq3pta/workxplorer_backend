@@ -369,19 +369,16 @@ class OfferViewSet(ModelViewSet):
             if role == "CARRIER":
                 qs = qs.filter(
                     carrier=u,
-                    is_active=True,
                 ).filter(Q(initiator=Offer.Initiator.CARRIER) | Q(is_counter=True))
 
             elif role == "LOGISTIC":
                 qs = qs.filter(
                     logistic=u,
-                    is_active=True,
                 )
 
             elif role == "CUSTOMER":
                 qs = qs.filter(
                     cargo__customer=u,
-                    is_active=True,
                 ).filter(Q(initiator=Offer.Initiator.CUSTOMER) | Q(is_counter=True))
 
         # =====================
@@ -393,21 +390,18 @@ class OfferViewSet(ModelViewSet):
                 qs = qs.filter(
                     carrier=u,
                     initiator=Offer.Initiator.CUSTOMER,
-                    is_active=True,
                 )
 
             elif role == "CUSTOMER":
                 qs = qs.filter(
                     cargo__customer=u,
                     initiator=Offer.Initiator.CARRIER,
-                    is_active=True,
                 )
 
             elif role == "LOGISTIC":
                 qs = qs.filter(
                     logistic=u,
                     initiator=Offer.Initiator.CARRIER,
-                    is_active=True,
                 )
 
             else:
@@ -430,7 +424,6 @@ class OfferViewSet(ModelViewSet):
                     | Q(intermediary=u)
                     | Q(cargo__customer=u)
                     | Q(cargo__created_by=u),
-                    is_active=True,
                 )
 
             else:
@@ -457,6 +450,9 @@ class OfferViewSet(ModelViewSet):
             qs = qs.filter(
                 id__in=[o.id for o in qs if o.get_response_status_for(u) == response_status]
             )
+
+        else:
+            qs = qs.exclude(id__in=[o.id for o in qs if o.get_response_status_for(u) == "rejected"])
 
         # =====================
         # PAGINATION

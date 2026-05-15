@@ -451,8 +451,15 @@ class OfferViewSet(ModelViewSet):
                 id__in=[o.id for o in qs if o.get_response_status_for(u) == response_status]
             )
 
+
         else:
-            qs = qs.exclude(id__in=[o.id for o in qs if o.get_response_status_for(u) == "rejected"])
+
+            if scope in ("mine", "incoming"):
+                qs = qs.exclude(
+
+                    id__in=[o.id for o in qs if o.get_response_status_for(u) == "rejected"]
+
+                )
 
         # =====================
         # PAGINATION

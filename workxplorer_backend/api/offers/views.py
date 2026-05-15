@@ -431,12 +431,18 @@ class OfferViewSet(ModelViewSet):
 
         qs = qs.distinct()
 
-        is_active_param = request.query_params.get("is_active")
-
-        if scope in ("mine", "incoming") and is_active_param not in ("false", "0"):
+        if scope in ("mine", "incoming"):
             qs = qs.filter(is_active=True)
 
-        qs = _apply_common_filters(qs, request.query_params)
+        common_filter_params = request.query_params
+        if scope in ("mine", "incoming") and request.query_params.get("is_active") in (
+            "false",
+            "0",
+        ):
+            common_filter_params = request.query_params.copy()
+            common_filter_params.pop("is_active", None)
+
+        qs = _apply_common_filters(qs, common_filter_params)
 
         # =====================
         # RESPONSE STATUS

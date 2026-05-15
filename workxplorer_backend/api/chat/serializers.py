@@ -11,6 +11,22 @@ from .models import Chat, ChatParticipant, Message
 
 User = get_user_model()
 ONLINE_WINDOW = timedelta(minutes=5)
+CHAT_ATTACHMENT_ALLOWED_EXTENSIONS = {
+    ".doc",
+    ".docx",
+    ".jpeg",
+    ".jpg",
+    ".mov",
+    ".mp4",
+    ".pdf",
+    ".png",
+    ".txt",
+    ".webm",
+    ".webp",
+}
+CHAT_ATTACHMENT_ALLOWED_EXTENSIONS_LABEL = ", ".join(
+    ext.removeprefix(".") for ext in sorted(CHAT_ATTACHMENT_ALLOWED_EXTENSIONS)
+)
 
 
 def build_user_display_name(user) -> str:
@@ -399,6 +415,18 @@ class MessageCreateSerializer(serializers.Serializer):
 
     def validate_text(self, value):
         return value.strip()
+
+    def validate_file(self, value):
+        if not value:
+            return value
+
+        extension = Path(value.name).suffix.lower()
+        if extension not in CHAT_ATTACHMENT_ALLOWED_EXTENSIONS:
+            raise serializers.ValidationError(
+                f"Недопустимый формат файла. Разрешены: "
+                f"{CHAT_ATTACHMENT_ALLOWED_EXTENSIONS_LABEL}."
+            )
+        return value
 
     def validate(self, attrs):
         text = (attrs.get("text") or "").strip()

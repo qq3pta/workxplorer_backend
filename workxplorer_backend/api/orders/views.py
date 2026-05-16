@@ -177,6 +177,12 @@ class OrdersViewSet(viewsets.ModelViewSet):
         if status_param:
             qs = qs.filter(status=status_param)
 
+        # Оплаченные (paid) ордеры не показываем в общем списке.
+        # Исключение — явный запрос ?status=paid (вкладка «Оплачено»).
+        # Деталь ордера по id и detail-экшены не трогаем — там paid доступен.
+        if self.action == "list" and status_param != Order.OrderStatus.PAID:
+            qs = qs.exclude(status=Order.OrderStatus.PAID)
+
         # ---------- ЦЕНА ----------
         qs = qs.annotate(price_uzs_anno=F("offer__price_value"))
 

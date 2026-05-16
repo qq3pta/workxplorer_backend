@@ -369,17 +369,20 @@ class OfferViewSet(ModelViewSet):
             if role == "CARRIER":
                 qs = qs.filter(
                     carrier=u,
-                ).filter(Q(initiator=Offer.Initiator.CARRIER) | Q(is_counter=True))
+                    original_initiator=Offer.Initiator.CARRIER,
+                )
 
             elif role == "LOGISTIC":
                 qs = qs.filter(
                     logistic=u,
+                    original_initiator=Offer.Initiator.LOGISTIC,
                 )
 
             elif role == "CUSTOMER":
                 qs = qs.filter(
                     cargo__customer=u,
-                ).filter(Q(initiator=Offer.Initiator.CUSTOMER) | Q(is_counter=True))
+                    original_initiator=Offer.Initiator.CUSTOMER,
+                )
 
         # =====================
         # INCOMING (предложили мне)
@@ -389,19 +392,25 @@ class OfferViewSet(ModelViewSet):
             if role == "CARRIER":
                 qs = qs.filter(
                     carrier=u,
-                    initiator=Offer.Initiator.CUSTOMER,
+                    original_initiator__in=[
+                        Offer.Initiator.CUSTOMER,
+                        Offer.Initiator.LOGISTIC,
+                    ],
                 )
 
             elif role == "CUSTOMER":
                 qs = qs.filter(
                     cargo__customer=u,
-                    initiator=Offer.Initiator.CARRIER,
+                    original_initiator__in=[
+                        Offer.Initiator.CARRIER,
+                        Offer.Initiator.LOGISTIC,
+                    ],
                 )
 
             elif role == "LOGISTIC":
                 qs = qs.filter(
                     logistic=u,
-                    initiator=Offer.Initiator.CARRIER,
+                    original_initiator=Offer.Initiator.CUSTOMER,
                 )
 
             else:

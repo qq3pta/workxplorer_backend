@@ -121,6 +121,12 @@ class Offer(models.Model):
         choices=Initiator.choices,
         default=Initiator.CARRIER,
     )
+    original_initiator = models.CharField(
+        max_length=16,
+        choices=Initiator.choices,
+        null=True,
+        blank=True,
+    )
 
     response_status = models.CharField(
         max_length=32,
@@ -154,6 +160,11 @@ class Offer(models.Model):
             f"Offer#{self.pk} cargo={self.cargo_id} carrier={self.carrier_id} by={self.initiator}"
         )
 
+    def save(self, *args, **kwargs):
+        if self._state.adding and not self.original_initiator:
+            self.original_initiator = self.initiator
+        super().save(*args, **kwargs)
+
     @property
     def is_handshake(self) -> bool:
         kind = self.deal_type
@@ -185,6 +196,7 @@ class Offer(models.Model):
                     "payment_method": self.payment_method,
                     "message": self.message,
                     "initiator": self.initiator,
+                    "original_initiator": self.original_initiator,
                     "is_active": self.is_active,
                     "is_counter": self.is_counter,
                     "response_status": self.response_status,

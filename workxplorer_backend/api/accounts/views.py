@@ -91,7 +91,7 @@ def issue_tokens(user, remember: bool):
     base_access = settings.SIMPLE_JWT["ACCESS_TOKEN_LIFETIME"]
     if remember:
         refresh.set_exp(lifetime=timedelta(days=30))
-        access.set_exp(lifetime=timedelta(hours=12))
+        access.set_exp(lifetime=timedelta(hours=24))
     else:
         access.set_exp(lifetime=base_access)
 

@@ -286,6 +286,10 @@ def emit_new_message(message: Message) -> None:
                             "message_id": message.id,
                             "sender_id": message.sender_id,
                             "sender_name": payload["sender_name"],
+                            "screen": "Chat",
+                            "route": f"/chat/{message.chat_id}",
+                            "entity_type": "chat",
+                            "entity_id": message.chat_id,
                         },
                         notification_type="chat_message_received",
                     )

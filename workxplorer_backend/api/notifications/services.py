@@ -13,6 +13,41 @@ EXPO_PUSH_SEND_URL = "https://exp.host/--/api/v2/push/send"
 EXPO_PUSH_RECEIPTS_URL = "https://exp.host/--/api/v2/push/getReceipts"
 EXPO_PUSH_CHUNK_SIZE = 100
 
+OFFER_NOTIFICATION_TYPES = {
+    "offer_sent",
+    "offer_received",
+    "offer_answer_received",
+    "offer_received_from_carrier",
+    "offer_received_from_customer",
+    "offer_received_from_logistic",
+    "offer_my_response_sent",
+    "offer_response_to_me",
+    "offer_from_customer",
+    "offer_from_forwarder",
+    "deal_confirm_required",
+    "deal_confirm_required_by_other",
+    "deal_confirmed_by_other",
+    "deal_rejected_by_other",
+}
+
+ORDER_NOTIFICATION_TYPES = {
+    "deal_success",
+    "cargo_status_changed",
+    "driver_status_changed",
+    "payment_required",
+    "rating_required",
+    "rating_received",
+    "rating_sent",
+    "rating_changed",
+    "document_added",
+}
+
+LOAD_NOTIFICATION_TYPES = {
+    "order_created",
+    "order_published",
+    "order_rejected",
+}
+
 
 def _expo_headers() -> dict:
     headers = {"Content-Type": "application/json"}
@@ -53,6 +88,160 @@ def _normalize_push_data(data: dict | None) -> dict:
             continue
         normalized[str(key)] = str(value)
     return normalized
+
+
+def _resolve_order_id(payload=None, cargo=None, offer=None) -> int | None:
+    payload = payload or {}
+
+    raw_order_id = payload.get("order_id") or payload.get("orderId")
+    if raw_order_id:
+        value = str(raw_order_id).replace("order_", "")
+        if value.isdigit():
+            return int(value)
+
+    if offer:
+        order = getattr(offer, "order", None)
+        if order:
+            return order.id
+
+    if cargo:
+        order = getattr(cargo, "orders", None)
+        if order is not None and hasattr(order, "first"):
+            order_obj = order.first()
+            if order_obj:
+                return order_obj.id
+
+    return None
+
+
+def _navigation_for_type(notification_type: str, *, order_id=None, cargo_id=None, offer_id=None):
+    data = {
+        "screen": "Notifications",
+        "route": "/notifications",
+        "entity_type": "notification",
+        "entity_id": "",
+    }
+
+    if notification_type in LOAD_NOTIFICATION_TYPES and cargo_id:
+        data.update(
+            {
+                "screen": "CargoDetail",
+                "route": f"/loads/{cargo_id}",
+                "entity_type": "cargo",
+                "entity_id": str(cargo_id),
+            }
+        )
+        return data
+
+    if notification_type in OFFER_NOTIFICATION_TYPES and offer_id:
+        data.update(
+            {
+                "screen": "OfferDetail",
+                "route": f"/offers/{offer_id}",
+                "entity_type": "offer",
+                "entity_id": str(offer_id),
+            }
+        )
+        return data
+
+    if notification_type in ORDER_NOTIFICATION_TYPES and order_id:
+        tab = ""
+        if notification_type == "payment_required":
+            tab = "payment"
+        elif notification_type == "document_added":
+            tab = "documents"
+        elif notification_type in {"driver_status_changed", "cargo_status_changed"}:
+            tab = "tracking"
+        elif notification_type in {"rating_required", "rating_received", "rating_sent"}:
+            tab = "details"
+
+        route = f"/orders/{order_id}"
+        if tab:
+            route = f"{route}?tab={tab}"
+
+        data.update(
+            {
+                "screen": "OrderDetail",
+                "route": route,
+                "entity_type": "order",
+                "entity_id": str(order_id),
+                "tab": tab,
+            }
+        )
+        return data
+
+    if order_id:
+        data.update(
+            {
+                "screen": "OrderDetail",
+                "route": f"/orders/{order_id}",
+                "entity_type": "order",
+                "entity_id": str(order_id),
+            }
+        )
+    elif offer_id:
+        data.update(
+            {
+                "screen": "OfferDetail",
+                "route": f"/offers/{offer_id}",
+                "entity_type": "offer",
+                "entity_id": str(offer_id),
+            }
+        )
+    elif cargo_id:
+        data.update(
+            {
+                "screen": "CargoDetail",
+                "route": f"/loads/{cargo_id}",
+                "entity_type": "cargo",
+                "entity_id": str(cargo_id),
+            }
+        )
+
+    return data
+
+
+def build_notification_push_data(
+    *,
+    notification: Notification,
+    notification_type: str,
+    title: str,
+    message: str = "",
+    payload=None,
+    cargo=None,
+    offer=None,
+) -> dict:
+    payload = payload or {}
+    cargo_id = cargo.id if cargo else payload.get("cargo_id")
+    offer_id = offer.id if offer else payload.get("offer_id")
+    order_id = _resolve_order_id(payload=payload, cargo=cargo, offer=offer)
+
+    data = {
+        "id": str(notification.id),
+        "notification_id": str(notification.id),
+        "event": notification_type,
+        "type": notification_type,
+        "title": title,
+        "message": message or "",
+        "cargo_id": str(cargo_id) if cargo_id else "",
+        "offer_id": str(offer_id) if offer_id else "",
+        "order_id": str(order_id) if order_id else "",
+        "orderId": f"order_{order_id}" if order_id else "",
+        "created_at": notification.created_at.isoformat(),
+    }
+    data.update(
+        _navigation_for_type(
+            notification_type,
+            order_id=order_id,
+            cargo_id=cargo_id,
+            offer_id=offer_id,
+        )
+    )
+
+    for key, value in payload.items():
+        data[key] = value
+
+    return data
 
 
 def _disable_device_if_needed(device: PushDevice, details: dict | None, message: str = "") -> None:
@@ -242,19 +431,15 @@ def notify(user, type: str, title: str, message: str = "", payload=None, cargo=N
         offer=offer,
     )
 
-    data = {
-        "id": str(notif.id),
-        "type": type,
-        "title": title,
-        "message": message or "",
-        "cargo_id": str(cargo.id) if cargo else "",
-        "offer_id": str(offer.id) if offer else "",
-        "created_at": notif.created_at.isoformat(),
-    }
-
-    if payload:
-        for k, v in payload.items():
-            data[k] = str(v)
+    data = build_notification_push_data(
+        notification=notif,
+        notification_type=type,
+        title=title,
+        message=message,
+        payload=payload,
+        cargo=cargo,
+        offer=offer,
+    )
 
     try:
         channel_layer = get_channel_layer()

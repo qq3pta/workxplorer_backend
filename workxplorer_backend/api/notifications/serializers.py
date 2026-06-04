@@ -8,6 +8,7 @@ class NotificationSerializer(serializers.ModelSerializer):
     cargo_id = serializers.IntegerField(source="cargo.id", read_only=True)
     offer_id = serializers.IntegerField(source="offer.id", read_only=True)
     payload = serializers.DictField(required=False)
+    navigation = serializers.SerializerMethodField()
 
     class Meta:
         model = Notification
@@ -19,9 +20,23 @@ class NotificationSerializer(serializers.ModelSerializer):
             "payload",
             "cargo_id",
             "offer_id",
+            "navigation",
             "is_read",
             "created_at",
         ]
+
+    def get_navigation(self, obj):
+        from .services import build_notification_push_data
+
+        return build_notification_push_data(
+            notification=obj,
+            notification_type=obj.type,
+            title=obj.title,
+            message=obj.message,
+            payload=obj.payload,
+            cargo=obj.cargo,
+            offer=obj.offer,
+        )
 
 
 class MarkReadSerializer(serializers.Serializer):

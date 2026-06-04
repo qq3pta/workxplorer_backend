@@ -888,7 +888,14 @@ class OrdersViewSet(viewsets.ModelViewSet):
         body = f"{requester_label} заказа №{order.id} просит обновить ваше местоположение"
         data = {
             "type": "geo_check",
+            "event": "geo_check",
             "orderId": f"order_{order.id}",
+            "order_id": str(order.id),
+            "screen": "OrderDetail",
+            "route": f"/orders/{order.id}?tab=tracking",
+            "entity_type": "order",
+            "entity_id": str(order.id),
+            "tab": "tracking",
         }
 
         tickets = send_expo_push_to_user(

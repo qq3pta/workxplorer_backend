@@ -1,11 +1,12 @@
 import os
 from collections.abc import Iterable
 
+from django.db.models import Avg, Count
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from api.payments.serializers import PaymentSerializer
 from api.loads.choices import Currency
+from api.payments.serializers import PaymentSerializer
 from api.payments.models import PaymentMethod
 
 from .models import Order, OrderDocument, OrderStatusHistory
@@ -274,6 +275,38 @@ class OrderListSerializer(serializers.ModelSerializer):
             return ""
         return u.get_full_name() or getattr(u, "name", "") or getattr(u, "username", "")
 
+    def _get_user_rating_info(self, u):
+        if not u:
+            return {
+                "rating": 0,
+                "avg_rating": 0,
+                "rating_count": 0,
+                "rating_as_customer": 0,
+                "rating_as_carrier": 0,
+            }
+
+        cache = getattr(self, "_user_rating_cache", None)
+        if cache is None:
+            cache = {}
+            self._user_rating_cache = cache
+
+        if u.id not in cache:
+            rating_data = u.ratings_received.aggregate(
+                avg_rating=Avg("score"),
+                rating_count=Count("id"),
+            )
+            avg_rating = round(float(rating_data["avg_rating"] or 0), 1)
+            rating_count = int(rating_data["rating_count"] or 0)
+            cache[u.id] = {
+                "rating": avg_rating,
+                "avg_rating": avg_rating,
+                "rating_count": rating_count,
+                "rating_as_customer": avg_rating,
+                "rating_as_carrier": avg_rating,
+            }
+
+        return cache[u.id]
+
     # --------------------------
     # GETTERS
     # --------------------------
@@ -315,6 +348,11 @@ class OrderListSerializer(serializers.ModelSerializer):
                 "phone": "",
                 "email": "",
                 "role": "",
+                "rating": 0,
+                "avg_rating": 0,
+                "rating_count": 0,
+                "rating_as_customer": 0,
+                "rating_as_carrier": 0,
                 "hidden": False,
                 "hidden_by": False,
             }
@@ -343,6 +381,8 @@ class OrderListSerializer(serializers.ModelSerializer):
                 else:
                     hidden_by = logistic_hidden
 
+            rating_info = self._get_user_rating_info(u)
+
             return {
                 "id": u.id,
                 "name": "" if mask_contacts else (self._get_user_full_name(u) or ""),
@@ -351,6 +391,7 @@ class OrderListSerializer(serializers.ModelSerializer):
                 "phone": "" if mask_contacts else (getattr(u, "phone", "") or ""),
                 "email": "" if mask_contacts else (getattr(u, "email", "") or ""),
                 "role": getattr(u, "role", "") or "",
+                **rating_info,
                 "hidden": hidden,
                 "hidden_by": hidden_by,
             }

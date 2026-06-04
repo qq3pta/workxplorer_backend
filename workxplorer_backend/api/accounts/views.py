@@ -2,6 +2,7 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.db import transaction
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import generics, serializers, status
@@ -25,6 +26,7 @@ from .models import Profile
 from .permissions import IsAuthenticatedAndVerified
 from .serializers import (
     AvatarUploadSerializer,
+    DeleteAccountSerializer,
     ForgotPasswordSerializer,
     LoginSerializer,
     MeSerializer,
@@ -395,6 +397,100 @@ class ChangePasswordView(APIView):
         )
         serializer.is_valid(raise_exception=True)
         return Response(serializer.save())
+
+
+@extend_schema(
+    tags=["auth"],
+    request=DeleteAccountSerializer,
+    responses=inline_serializer(
+        "DeleteAccountResponse",
+        {"detail": serializers.CharField()},
+    ),
+)
+class DeleteAccountView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = DeleteAccountSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        self._deactivate_account(request.user)
+        _notify_dashboard()
+        return Response({"detail": "Аккаунт удалён"}, status=status.HTTP_200_OK)
+
+    def delete(self, request):
+        return self.post(request)
+
+    def _deactivate_account(self, user):
+        deleted_username = f"deleted_user_{user.id}"
+
+        with transaction.atomic():
+            try:
+                if user.photo:
+                    user.photo.delete(save=False)
+            except Exception:
+                pass
+
+            for token in OutstandingToken.objects.filter(user=user):
+                BlacklistedToken.objects.get_or_create(token=token)
+
+            user.email = None
+            user.phone = None
+            user.username = deleted_username
+            user.first_name = ""
+            user.last_name = ""
+            user.company_name = ""
+            user.inn = ""
+            user.legal_address = ""
+            user.photo = None
+            user.fcm_token = None
+            user.is_active = False
+            user.is_verified = False
+            user.is_email_verified = False
+            user.is_phone_verified = False
+            user.is_accept_policy = False
+            user.policy_accepted_at = None
+            user.last_seen = None
+            user.set_unusable_password()
+            user.save(
+                update_fields=[
+                    "email",
+                    "phone",
+                    "username",
+                    "first_name",
+                    "last_name",
+                    "company_name",
+                    "inn",
+                    "legal_address",
+                    "photo",
+                    "fcm_token",
+                    "is_active",
+                    "is_verified",
+                    "is_email_verified",
+                    "is_phone_verified",
+                    "is_accept_policy",
+                    "policy_accepted_at",
+                    "last_seen",
+                    "password",
+                ]
+            )
+
+            user.otps.all().delete()
+
+            if hasattr(user, "profile"):
+                user.profile.country = ""
+                user.profile.country_code = ""
+                user.profile.region = ""
+                user.profile.city = ""
+                user.profile.save(update_fields=["country", "country_code", "region", "city"])
+
+            try:
+                user.push_devices.update(
+                    is_active=False,
+                    error="Account deleted",
+                    disabled_at=timezone.now(),
+                )
+            except Exception:
+                pass
 
 
 @extend_schema(

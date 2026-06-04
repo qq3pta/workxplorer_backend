@@ -188,6 +188,7 @@ class OrderListSerializer(serializers.ModelSerializer):
             "currency",
             "currency_display",
             "price_total",
+            "payment_method",
             "route_distance_km",
             "price_per_km",
             "origin_city",
@@ -396,6 +397,8 @@ class OrderDetailSerializer(OrderListSerializer):
     documents = OrderDocumentSerializer(many=True, read_only=True)
     payment = serializers.SerializerMethodField()
     driver_price = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
+    driver_currency = serializers.CharField(read_only=True)
+    driver_payment_method = serializers.CharField(read_only=True)
     logistic_margin = serializers.SerializerMethodField()
 
     class Meta(OrderListSerializer.Meta):
@@ -405,6 +408,8 @@ class OrderDetailSerializer(OrderListSerializer):
             "documents",
             "payment",
             "driver_price",
+            "driver_currency",
+            "driver_payment_method",
             "logistic_margin",
         )
 

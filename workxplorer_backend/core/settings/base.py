@@ -308,6 +308,7 @@ OTP_RECENT_MINUTES = int(getenv("OTP_RECENT_MINUTES", "10"))
 DEV_FAKE_WHATSAPP = getenv("DEV_FAKE_WHATSAPP", "false").lower() == "true"
 
 FIREBASE_CREDENTIAL_FILE = BASE_DIR / "core" / "firebase.json"
+EXPO_PUSH_ACCESS_TOKEN = getenv("EXPO_PUSH_ACCESS_TOKEN", "")
 
 try:
     if FIREBASE_CREDENTIAL_FILE.exists() and not firebase_admin._apps:

@@ -4,6 +4,7 @@ from django.urls import path
 from .views import (
     AvatarView,
     ChangeRoleView,
+    DeleteAccountView,
     ForgotPasswordView,
     LoginView,
     LogoutView,
@@ -37,6 +38,7 @@ urlpatterns = [
     path("me/", MeView.as_view()),
     path("me/update/", UpdateMeView.as_view()),
     path("me/avatar/", AvatarView.as_view()),
+    path("me/delete/", DeleteAccountView.as_view()),
     # Roles
     path("change-role/", ChangeRoleView.as_view()),
     # Password reset

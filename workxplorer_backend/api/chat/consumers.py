@@ -3,7 +3,7 @@ from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from django.utils.text import slugify
 
 from .models import ChatParticipant
-from .services import ws_chat_group, ws_user_group
+from .services import set_user_active_chat, ws_chat_group, ws_user_group
 
 
 class ChatConsumer(AsyncJsonWebsocketConsumer):
@@ -24,6 +24,9 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             await self._group_add(ws_chat_group(chat_id))
 
     async def disconnect(self, close_code):
+        if getattr(self, "user", None) and not self.user.is_anonymous:
+            await sync_to_async(set_user_active_chat)(self.user.id, None)
+
         for group_name in list(getattr(self, "joined_groups", set())):
             await self.channel_layer.group_discard(group_name, self.channel_name)
 
@@ -71,6 +74,22 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                     },
                 },
             )
+            return
+
+        if event_type == "active_chat":
+            chat_id = content.get("chat_id")
+            if chat_id is None:
+                await sync_to_async(set_user_active_chat)(self.user.id, None)
+                await self.send_json({"event": "active_chat_cleared"})
+                return
+
+            resolved_id = await self._resolve_chat_id(chat_id)
+            if resolved_id is None:
+                await self.send_json({"event": "error", "detail": "Чат не найден или нет доступа."})
+                return
+
+            await sync_to_async(set_user_active_chat)(self.user.id, resolved_id)
+            await self.send_json({"event": "active_chat_set", "chat_id": resolved_id})
 
     async def chat_event(self, event):
         await self.send_json(event["data"])

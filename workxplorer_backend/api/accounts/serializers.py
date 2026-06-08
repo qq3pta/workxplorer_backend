@@ -549,6 +549,18 @@ class ChangePasswordSerializer(serializers.Serializer):
         return {"detail": "Пароль успешно изменён"}
 
 
+class DeleteAccountSerializer(serializers.Serializer):
+    password = serializers.CharField(write_only=True)
+
+    def validate(self, attrs):
+        user = self.context["request"].user
+
+        if not user.check_password(attrs["password"]):
+            raise serializers.ValidationError({"password": "Неверный пароль"})
+
+        return attrs
+
+
 class RoleChangeSerializer(serializers.Serializer):
     role = serializers.ChoiceField(choices=UserRole.choices)
 

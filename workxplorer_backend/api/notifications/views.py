@@ -3,11 +3,13 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Notification
+from .models import Notification, NotificationPreference
 from .serializers import (
     MarkAllReadSerializer,
     MarkReadSerializer,
+    NotificationPreferenceSerializer,
     NotificationSerializer,
+    PushDeviceSerializer,
 )
 
 
@@ -45,3 +47,34 @@ class NotificationMarkAllReadView(APIView):
         Notification.objects.filter(user=request.user, is_read=False).update(is_read=True)
 
         return Response({"detail": "All notifications marked as read"})
+
+
+class PushDeviceRegisterView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = PushDeviceSerializer
+
+    def post(self, request):
+        serializer = PushDeviceSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        device = serializer.save()
+        return Response(PushDeviceSerializer(device).data, status=201)
+
+
+class NotificationPreferenceView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = NotificationPreferenceSerializer
+
+    def get(self, request):
+        preferences, _created = NotificationPreference.objects.get_or_create(user=request.user)
+        return Response(NotificationPreferenceSerializer(preferences).data)
+
+    def patch(self, request):
+        preferences, _created = NotificationPreference.objects.get_or_create(user=request.user)
+        serializer = NotificationPreferenceSerializer(
+            preferences,
+            data=request.data,
+            partial=True,
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)

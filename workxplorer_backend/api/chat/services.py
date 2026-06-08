@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+from api.notifications.services import send_expo_push_to_user
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from common.ws_utils import to_ws_safe
+from django.core.cache import cache
 
 from .models import Chat, ChatParticipant, Message
+
+ACTIVE_CHAT_CACHE_TIMEOUT_SECONDS = 120
 
 ROLE_DEFAULT_GROUP_TITLES = {
     "LOGISTIC": "Общий с логистами",
@@ -38,6 +42,22 @@ def ws_user_group(user_id: int) -> str:
 
 def ws_chat_group(chat_id: int) -> str:
     return f"chat_{chat_id}"
+
+
+def active_chat_cache_key(user_id: int) -> str:
+    return f"chat:active:{user_id}"
+
+
+def set_user_active_chat(user_id: int, chat_id: int | None) -> None:
+    key = active_chat_cache_key(user_id)
+    if chat_id is None:
+        cache.delete(key)
+        return
+    cache.set(key, str(chat_id), timeout=ACTIVE_CHAT_CACHE_TIMEOUT_SECONDS)
+
+
+def user_has_active_chat(user_id: int, chat_id: int) -> bool:
+    return cache.get(active_chat_cache_key(user_id)) == str(chat_id)
 
 
 def _ws_send(group_name: str, data: dict) -> None:
@@ -196,7 +216,10 @@ def emit_new_message(message: Message) -> None:
         },
     )
 
-    participants = ChatParticipant.objects.filter(chat_id=message.chat_id, is_active=True)
+    participants = ChatParticipant.objects.select_related("user").filter(
+        chat_id=message.chat_id,
+        is_active=True,
+    )
     for participant in participants:
         unread_count = _chat_unread_count_for_participant(participant)
 
@@ -247,6 +270,29 @@ def emit_new_message(message: Message) -> None:
                         }
                     ),
                 )
+
+                if not user_has_active_chat(participant.user_id, message.chat_id):
+                    body = message.text.strip() if message.text else ""
+                    if not body and message.attachment_name:
+                        body = f"Файл: {message.attachment_name}"
+                    send_expo_push_to_user(
+                        user=participant.user,
+                        title=payload["sender_name"],
+                        message=body or "Новое сообщение",
+                        data={
+                            "event": "chat_message_received",
+                            "type": "chat_message_received",
+                            "chat_id": message.chat_id,
+                            "message_id": message.id,
+                            "sender_id": message.sender_id,
+                            "sender_name": payload["sender_name"],
+                            "screen": "Chat",
+                            "route": f"/chat/{message.chat_id}",
+                            "entity_type": "chat",
+                            "entity_id": message.chat_id,
+                        },
+                        notification_type="chat_message_received",
+                    )
 
 
 def emit_added_to_group(chat: Chat, user_ids: list[int], added_by_id: int | None = None) -> None:

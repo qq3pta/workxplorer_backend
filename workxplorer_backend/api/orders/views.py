@@ -26,6 +26,7 @@ from common.ws_utils import to_ws_safe
 
 from .models import Order, OrderStatusHistory, DriverLocation
 from api.offers.models import Offer
+from api.notifications.services import send_expo_push_to_user
 from .permissions import IsOrderParticipant
 from .serializers import (
     InviteByIdSerializer,
@@ -856,6 +857,67 @@ class OrdersViewSet(viewsets.ModelViewSet):
                 "detail": "Заказ успешно отменён",
                 "order_id": order.id,
                 "new_status": order.status,
+            },
+            status=http_status.HTTP_200_OK,
+        )
+
+    @action(detail=True, methods=["post"], url_path="request-driver-location")
+    def request_driver_location(self, request, pk=None):
+        order = self.get_object()
+        user = request.user
+
+        allowed_requester_ids = {
+            user_id
+            for user_id in (order.customer_id, order.logistic_id, order.created_by_id)
+            if user_id
+        }
+        if user.id not in allowed_requester_ids or user.id == order.carrier_id:
+            return Response(
+                {"detail": "Запросить местоположение может только заказчик или логист заказа."},
+                status=http_status.HTTP_403_FORBIDDEN,
+            )
+
+        if not order.carrier:
+            return Response(
+                {"detail": "У заказа нет назначенного водителя."},
+                status=http_status.HTTP_400_BAD_REQUEST,
+            )
+
+        requester_label = "Логист" if getattr(user, "role", "") == "LOGISTIC" else "Заказчик"
+        title = "Запрос на местоположение"
+        body = f"{requester_label} заказа №{order.id} просит обновить ваше местоположение"
+        data = {
+            "type": "geo_check",
+            "event": "geo_check",
+            "orderId": f"order_{order.id}",
+            "order_id": str(order.id),
+            "screen": "OrderDetail",
+            "route": f"/orders/{order.id}?tab=tracking",
+            "entity_type": "order",
+            "entity_id": str(order.id),
+            "tab": "tracking",
+        }
+
+        tickets = send_expo_push_to_user(
+            user=order.carrier,
+            title=title,
+            message=body,
+            data=data,
+            notification_type="order_geo_check",
+        )
+
+        return Response(
+            {
+                "detail": "Запрос местоположения отправлен водителю.",
+                "order_id": order.id,
+                "driver_id": order.carrier_id,
+                "push_sent": bool(tickets),
+                "push_tickets_count": len(tickets),
+                "push": {
+                    "title": title,
+                    "body": body,
+                    "data": data,
+                },
             },
             status=http_status.HTTP_200_OK,
         )

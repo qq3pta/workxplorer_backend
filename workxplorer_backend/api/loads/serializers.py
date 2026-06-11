@@ -86,6 +86,13 @@ class CargoPublishSerializer(RouteKmMixin, serializers.ModelSerializer):
         max_value=10,
         help_text="Количество осей (3–10, необязательное поле)",
     )
+    volume_m3 = serializers.DecimalField(
+        max_digits=7,
+        decimal_places=2,
+        required=False,
+        allow_null=True,
+        help_text="Объём, м³ (необязательное поле)",
+    )
 
     weight_tons = serializers.FloatField(required=False, write_only=True, min_value=0.001)
 

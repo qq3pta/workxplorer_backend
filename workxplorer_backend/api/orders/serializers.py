@@ -1,7 +1,10 @@
 import os
 from collections.abc import Iterable
+from datetime import timedelta
 
+from django.contrib.auth import get_user_model
 from django.db.models import Avg, Count
+from django.utils import timezone
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
@@ -10,6 +13,10 @@ from api.payments.serializers import PaymentSerializer
 from api.payments.models import PaymentMethod
 
 from .models import Order, OrderDocument, OrderStatusHistory
+
+
+TRACKING_ONLINE_WINDOW = timedelta(minutes=5)
+User = get_user_model()
 
 
 def _field_choices(model, field_name: str) -> Iterable[tuple[str, str]]:
@@ -571,6 +578,60 @@ class GPSUpdateSerializer(serializers.Serializer):
     lat = serializers.FloatField(required=True, min_value=-90, max_value=90)
     lng = serializers.FloatField(required=True, min_value=-180, max_value=180)
     speed = serializers.FloatField(required=False, min_value=0)
+
+
+class ExpeditorCarrierMapSerializer(serializers.ModelSerializer):
+    name = serializers.SerializerMethodField()
+    is_online = serializers.SerializerMethodField()
+    lat = serializers.SerializerMethodField()
+    lng = serializers.SerializerMethodField()
+    speed = serializers.SerializerMethodField()
+    recorded_at = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = (
+            "id",
+            "name",
+            "company_name",
+            "is_online",
+            "last_seen",
+            "lat",
+            "lng",
+            "speed",
+            "recorded_at",
+        )
+        read_only_fields = fields
+
+    def get_name(self, obj):
+        return obj.get_full_name() or getattr(obj, "username", "") or ""
+
+    def get_is_online(self, obj):
+        last_seen = getattr(obj, "last_seen", None)
+        if not last_seen:
+            return False
+        return last_seen >= timezone.now() - TRACKING_ONLINE_WINDOW
+
+    def _gps(self, obj):
+        return getattr(obj, "gps", None)
+
+    def get_lat(self, obj):
+        gps = self._gps(obj)
+        return gps.point.y if gps and gps.point else None
+
+    def get_lng(self, obj):
+        gps = self._gps(obj)
+        return gps.point.x if gps and gps.point else None
+
+    def get_speed(self, obj):
+        gps = self._gps(obj)
+        return gps.speed if gps else None
+
+    def get_recorded_at(self, obj):
+        gps = self._gps(obj)
+        if not gps or not gps.recorded_at:
+            return None
+        return gps.recorded_at
 
 
 class SharedOrderTrackingSerializer(serializers.ModelSerializer):

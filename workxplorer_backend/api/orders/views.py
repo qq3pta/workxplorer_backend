@@ -29,15 +29,16 @@ from api.offers.models import Offer
 from api.notifications.services import send_expo_push_to_user
 from .permissions import IsOrderParticipant
 from .serializers import (
+    ExpeditorCarrierMapSerializer,
+    GPSUpdateSerializer,
     InviteByIdSerializer,
+    InvitePreviewSerializer,
     OrderDetailSerializer,
     OrderDocumentSerializer,
     OrderDriverStatusUpdateSerializer,
     OrderListSerializer,
     OrderStatusHistorySerializer,
-    InvitePreviewSerializer,
     PrivacyToggleSerializer,
-    GPSUpdateSerializer,
     SharedOrderTrackingSerializer,
 )
 
@@ -991,6 +992,46 @@ class OrdersViewSet(viewsets.ModelViewSet):
                 }
             }
         )
+
+    @extend_schema(
+        tags=["orders"],
+        summary="Карта перевозчиков компании для экспедитора",
+        description=(
+            "Возвращает последние GPS-точки перевозчиков с тем же названием компании, "
+            "что и у текущего экспедитора. Доступно только роли LOGISTIC."
+        ),
+        responses={200: ExpeditorCarrierMapSerializer(many=True)},
+    )
+    @action(detail=False, methods=["get"], url_path="expeditor-map")
+    def expeditor_map(self, request):
+        user = request.user
+
+        if getattr(user, "role", None) != "LOGISTIC":
+            return Response(
+                {"detail": "Карта перевозчиков доступна только экспедитору."},
+                status=http_status.HTTP_403_FORBIDDEN,
+            )
+
+        company_name = (getattr(user, "company_name", "") or "").strip()
+        if not company_name:
+            return Response([], status=http_status.HTTP_200_OK)
+
+        carriers = (
+            User.objects.filter(
+                role="CARRIER",
+                company_name__iexact=company_name,
+                gps__point__isnull=False,
+            )
+            .select_related("gps")
+            .order_by("id")
+        )
+
+        serializer = ExpeditorCarrierMapSerializer(
+            carriers,
+            many=True,
+            context=self.get_serializer_context(),
+        )
+        return Response(serializer.data, status=http_status.HTTP_200_OK)
 
     @extend_schema(
         request=PrivacyToggleSerializer,

@@ -12,7 +12,7 @@ from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from .emails import send_code_email
-from .models import EmailOTP, PhoneOTP, Profile, UserRole
+from .models import EmailOTP, FleetMembership, PhoneOTP, Profile, UserRole
 from .utils.sms import check_sms_otp, send_sms_otp
 
 User = get_user_model()
@@ -65,6 +65,85 @@ class UserDocumentSerializer(serializers.Serializer):
     file_name = serializers.CharField(read_only=True, allow_null=True)
     file_size = serializers.IntegerField(read_only=True, allow_null=True)
     created_at = serializers.DateTimeField(read_only=True)
+
+
+def _user_display_name(user) -> str:
+    if not user:
+        return ""
+    return user.get_full_name() or getattr(user, "username", "") or ""
+
+
+class FleetUserSerializer(serializers.ModelSerializer):
+    name = serializers.SerializerMethodField()
+    is_online = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = (
+            "id",
+            "name",
+            "username",
+            "company_name",
+            "role",
+            "phone",
+            "email",
+            "last_seen",
+            "is_online",
+        )
+        read_only_fields = fields
+
+    def get_name(self, obj):
+        return _user_display_name(obj)
+
+    def get_is_online(self, obj):
+        last_seen = getattr(obj, "last_seen", None)
+        if not last_seen:
+            return False
+        return last_seen >= timezone.now() - timedelta(minutes=5)
+
+
+class FleetMembershipSerializer(serializers.ModelSerializer):
+    user = serializers.SerializerMethodField()
+
+    class Meta:
+        model = FleetMembership
+        fields = (
+            "id",
+            "status",
+            "user",
+            "invited_at",
+            "responded_at",
+            "updated_at",
+        )
+        read_only_fields = fields
+
+    def get_user(self, obj):
+        request = self.context.get("request")
+        current_user = getattr(request, "user", None)
+        user = obj.member
+        if current_user and current_user.id == obj.member_id:
+            user = obj.owner
+        return FleetUserSerializer(user, context=self.context).data
+
+
+class FleetInviteSerializer(serializers.Serializer):
+    user_id = serializers.IntegerField()
+
+    def validate_user_id(self, value):
+        request = self.context["request"]
+        if value == request.user.id:
+            raise serializers.ValidationError("You cannot add yourself to the park.")
+
+        try:
+            user = User.objects.get(id=value, is_active=True)
+        except User.DoesNotExist as err:
+            raise serializers.ValidationError("User not found.") from err
+
+        if getattr(user, "role", None) not in {UserRole.CARRIER, UserRole.LOGISTIC}:
+            raise serializers.ValidationError("Only carriers and logistics can be added.")
+
+        self.context["invitee"] = user
+        return value
 
 
 class SendPhoneOTPSerializer(serializers.Serializer):

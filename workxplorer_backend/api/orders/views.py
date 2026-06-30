@@ -923,6 +923,63 @@ class OrdersViewSet(viewsets.ModelViewSet):
             status=http_status.HTTP_200_OK,
         )
 
+    @extend_schema(
+        tags=["orders"],
+        summary="Add assigned driver to tracking map",
+    )
+    @action(detail=True, methods=["post"], url_path="add-driver-to-map")
+    def add_driver_to_map(self, request, pk=None):
+        order = self.get_object()
+        user = request.user
+
+        allowed_requester_ids = {
+            user_id
+            for user_id in (order.customer_id, order.logistic_id, order.created_by_id)
+            if user_id
+        }
+        is_staff = getattr(user, "is_staff", False) or getattr(user, "is_superuser", False)
+        if not is_staff and user.id not in allowed_requester_ids:
+            return Response(
+                {"detail": "Only the order customer or logistic can add the driver to the map."},
+                status=http_status.HTTP_403_FORBIDDEN,
+            )
+
+        if not order.carrier:
+            return Response(
+                {"detail": "Order has no assigned driver."},
+                status=http_status.HTTP_400_BAD_REQUEST,
+            )
+
+        gps, created = DriverLocation.objects.get_or_create(driver=order.carrier)
+
+        channel_layer = get_channel_layer()
+        payload = {
+            "event": "driver_added_to_map",
+            "order_id": order.id,
+            "driver_id": order.carrier_id,
+        }
+        for user_id in filter(None, {order.customer_id, order.carrier_id, order.logistic_id}):
+            async_to_sync(channel_layer.group_send)(
+                f"user_{user_id}",
+                to_ws_safe({"type": "notify", "data": payload}),
+            )
+
+        driver_data = ExpeditorCarrierMapSerializer(
+            order.carrier,
+            context=self.get_serializer_context(),
+        ).data
+
+        return Response(
+            {
+                "detail": "Driver added to tracking map.",
+                "order_id": order.id,
+                "driver": driver_data,
+                "created": created,
+                "has_location": bool(gps.point),
+            },
+            status=http_status.HTTP_200_OK,
+        )
+
     # ================= GPS TRACKING =================
     @extend_schema(
         request=GPSUpdateSerializer,
@@ -1013,16 +1070,44 @@ class OrdersViewSet(viewsets.ModelViewSet):
             )
 
         company_name = (getattr(user, "company_name", "") or "").strip()
-        if not company_name:
-            return Response([], status=http_status.HTTP_200_OK)
+
+        from api.accounts.models import FleetMembership
+
+        tracked_carrier_ids = (
+            Order.objects.filter(
+                Q(logistic=user)
+                | Q(created_by=user)
+                | Q(customer=user)
+                | Q(cargo__created_by=user)
+            )
+            .exclude(carrier__isnull=True)
+            .exclude(status__in=["finished", "canceled"])
+            .values_list("carrier_id", flat=True)
+        )
+        fleet_carrier_ids = FleetMembership.objects.filter(
+            owner=user,
+            status=FleetMembership.Status.ACCEPTED,
+            member__role="CARRIER",
+        ).values_list("member_id", flat=True)
+
+        company_carriers_with_location = Q()
+        if company_name:
+            company_carriers_with_location = Q(
+                company_name__iexact=company_name,
+                gps__point__isnull=False,
+            )
 
         carriers = (
             User.objects.filter(
                 role="CARRIER",
-                company_name__iexact=company_name,
-                gps__point__isnull=False,
+            )
+            .filter(
+                company_carriers_with_location
+                | Q(id__in=tracked_carrier_ids)
+                | Q(id__in=fleet_carrier_ids)
             )
             .select_related("gps")
+            .distinct()
             .order_by("id")
         )
 

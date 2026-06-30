@@ -253,3 +253,42 @@ class Profile(models.Model):
 
     def __str__(self):
         return f"Profile<{self.user_id}> {self.country}/{self.city}"
+
+
+class FleetMembership(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        ACCEPTED = "accepted", "Accepted"
+        DECLINED = "declined", "Declined"
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="fleet_memberships",
+    )
+    member = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="fleet_invites",
+    )
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING)
+    invited_at = models.DateTimeField(auto_now_add=True)
+    responded_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at"]
+        constraints = [
+            models.UniqueConstraint(fields=["owner", "member"], name="uniq_fleet_owner_member"),
+            models.CheckConstraint(
+                check=~models.Q(owner=models.F("member")),
+                name="fleet_owner_member_distinct",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["owner", "status"]),
+            models.Index(fields=["member", "status"]),
+        ]
+
+    def __str__(self):
+        return f"FleetMembership<{self.owner_id}->{self.member_id}:{self.status}>"

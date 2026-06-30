@@ -5,6 +5,13 @@ from .views import (
     AvatarView,
     ChangeRoleView,
     DeleteAccountView,
+    FleetCandidateListView,
+    FleetIncomingInviteListView,
+    FleetInviteAcceptView,
+    FleetInviteDeclineView,
+    FleetInviteView,
+    FleetListView,
+    FleetMembershipDeleteView,
     ForgotPasswordView,
     LoginView,
     LogoutView,
@@ -46,6 +53,14 @@ urlpatterns = [
     path("change-password/", ChangePasswordView.as_view()),
     # FCM
     path("fcm-token/", UpdateFCMTokenView.as_view()),
+    # Fleet / park
+    path("park/", FleetListView.as_view(), name="fleet-list"),
+    path("park/candidates/", FleetCandidateListView.as_view(), name="fleet-candidates"),
+    path("park/invite/", FleetInviteView.as_view(), name="fleet-invite"),
+    path("park/incoming/", FleetIncomingInviteListView.as_view(), name="fleet-incoming"),
+    path("park/invitations/<int:pk>/accept/", FleetInviteAcceptView.as_view(), name="fleet-accept"),
+    path("park/invitations/<int:pk>/decline/", FleetInviteDeclineView.as_view(), name="fleet-decline"),
+    path("park/<int:pk>/", FleetMembershipDeleteView.as_view(), name="fleet-delete"),
     path("dashboard-stats/", dashboard_stats, name="dashboard-stats"),
     # Email verification from profile
     path("me/email/send/", SendEmailVerifyFromProfileView.as_view()),

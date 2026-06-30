@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import EmailOTP, Profile, User
+from .models import EmailOTP, FleetMembership, Profile, User
 
 
 class ProfileInline(admin.StackedInline):
@@ -73,3 +73,18 @@ class EmailOTPAdmin(admin.ModelAdmin):
     )
     list_filter = ("purpose", "is_used")
     search_fields = ("user__username", "user__email", "code")
+
+
+@admin.register(FleetMembership)
+class FleetMembershipAdmin(admin.ModelAdmin):
+    list_display = ("id", "owner", "member", "status", "invited_at", "responded_at")
+    list_filter = ("status", "owner__role", "member__role")
+    search_fields = (
+        "owner__username",
+        "owner__email",
+        "owner__company_name",
+        "member__username",
+        "member__email",
+        "member__company_name",
+    )
+    autocomplete_fields = ("owner", "member")

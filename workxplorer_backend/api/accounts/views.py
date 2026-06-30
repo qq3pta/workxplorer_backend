@@ -3,6 +3,7 @@ from datetime import timedelta
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import generics, serializers, status
@@ -15,6 +16,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.decorators import api_view
 from api.loads.models import Cargo
+from api.notifications.services import notify
 from rest_framework_simplejwt.tokens import (
     BlacklistedToken,
     OutstandingToken,
@@ -22,12 +24,15 @@ from rest_framework_simplejwt.tokens import (
 )
 
 
-from .models import Profile
+from .models import FleetMembership, Profile
 from .permissions import IsAuthenticatedAndVerified
 from .serializers import (
     AvatarUploadSerializer,
     DeleteAccountSerializer,
     ForgotPasswordSerializer,
+    FleetInviteSerializer,
+    FleetMembershipSerializer,
+    FleetUserSerializer,
     LoginSerializer,
     MeSerializer,
     RegisterSerializer,
@@ -43,6 +48,15 @@ from .serializers import (
 )
 
 User = get_user_model()
+
+
+def _emit_fleet_event(user_ids, payload):
+    channel_layer = get_channel_layer()
+    for user_id in filter(None, user_ids):
+        async_to_sync(channel_layer.group_send)(
+            f"user_{user_id}",
+            to_ws_safe({"type": "notify", "data": payload}),
+        )
 
 
 def _notify_dashboard(event="dashboard_updated"):
@@ -346,6 +360,205 @@ class UpdateFCMTokenView(APIView):
         request.user.save(update_fields=["fcm_token"])
 
         return Response({"detail": "FCM токен обновлён"})
+
+
+@extend_schema(tags=["fleet"], responses=FleetUserSerializer(many=True))
+class FleetCandidateListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        query = (request.query_params.get("q") or "").strip()
+        role = (request.query_params.get("role") or "CARRIER").upper()
+
+        if role not in {"CARRIER", "LOGISTIC"}:
+            return Response({"detail": "Invalid role."}, status=status.HTTP_400_BAD_REQUEST)
+
+        relations = {
+            item.member_id: item.status
+            for item in FleetMembership.objects.filter(owner=request.user)
+        }
+
+        users = User.objects.filter(is_active=True, role=role).exclude(id=request.user.id)
+        if query:
+            users = users.filter(
+                Q(username__icontains=query)
+                | Q(first_name__icontains=query)
+                | Q(last_name__icontains=query)
+                | Q(company_name__icontains=query)
+                | Q(phone__icontains=query)
+                | Q(email__icontains=query)
+            )
+
+        users = users.order_by("first_name", "username", "id")[:50]
+        data = FleetUserSerializer(users, many=True, context={"request": request}).data
+        for item in data:
+            item["fleet_status"] = relations.get(item["id"])
+            item["is_sent"] = item["fleet_status"] == FleetMembership.Status.PENDING
+            item["is_in_park"] = item["fleet_status"] == FleetMembership.Status.ACCEPTED
+
+        return Response(data)
+
+
+@extend_schema(tags=["fleet"], responses=FleetMembershipSerializer(many=True))
+class FleetListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        status_param = request.query_params.get("status") or FleetMembership.Status.ACCEPTED
+        qs = (
+            FleetMembership.objects.filter(owner=request.user, status=status_param)
+            .select_related("owner", "member")
+            .order_by("member__role", "member__first_name", "member__username")
+        )
+        serializer = FleetMembershipSerializer(qs, many=True, context={"request": request})
+        return Response(serializer.data)
+
+
+@extend_schema(tags=["fleet"], request=FleetInviteSerializer, responses=FleetMembershipSerializer)
+class FleetInviteView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = FleetInviteSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+
+        invitee = serializer.context["invitee"]
+        membership = FleetMembership.objects.filter(owner=request.user, member=invitee).first()
+        if membership and membership.status == FleetMembership.Status.ACCEPTED:
+            data = FleetMembershipSerializer(membership, context={"request": request}).data
+            return Response(data, status=status.HTTP_200_OK)
+
+        if membership:
+            membership.status = FleetMembership.Status.PENDING
+            membership.responded_at = None
+            membership.save(update_fields=["status", "responded_at", "updated_at"])
+            created = False
+        else:
+            membership = FleetMembership.objects.create(owner=request.user, member=invitee)
+            created = True
+
+        owner_name = request.user.get_full_name() or request.user.username
+        notify(
+            user=invitee,
+            type="fleet_invite",
+            title="Vam otpravleno predlozhenie dobavit v park?",
+            message="Vy mozhete prinyat libo otkazatsya ot predlozheniya.",
+            payload={
+                "membership_id": membership.id,
+                "owner_id": request.user.id,
+                "owner_name": owner_name,
+                "event": "fleet_invite",
+                "screen": "Notifications",
+                "route": "/notifications",
+            },
+        )
+
+        _emit_fleet_event(
+            {request.user.id, invitee.id},
+            {
+                "event": "fleet_invite_sent",
+                "membership_id": membership.id,
+                "owner_id": request.user.id,
+                "member_id": invitee.id,
+                "status": membership.status,
+            },
+        )
+
+        data = FleetMembershipSerializer(membership, context={"request": request}).data
+        return Response(data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
+
+@extend_schema(tags=["fleet"], responses=FleetMembershipSerializer(many=True))
+class FleetIncomingInviteListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        qs = (
+            FleetMembership.objects.filter(
+                member=request.user,
+                status=FleetMembership.Status.PENDING,
+            )
+            .select_related("owner", "member")
+            .order_by("-invited_at")
+        )
+        serializer = FleetMembershipSerializer(qs, many=True, context={"request": request})
+        return Response(serializer.data)
+
+
+class FleetInviteDecisionView(APIView):
+    permission_classes = [IsAuthenticated]
+    decision = None
+
+    def post(self, request, pk):
+        membership = (
+            FleetMembership.objects.select_related("owner", "member")
+            .filter(pk=pk, member=request.user)
+            .first()
+        )
+        if not membership:
+            return Response({"detail": "Invite not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if membership.status != FleetMembership.Status.PENDING:
+            return Response(
+                {"detail": "Invite has already been processed."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        membership.status = self.decision
+        membership.responded_at = timezone.now()
+        membership.save(update_fields=["status", "responded_at", "updated_at"])
+
+        event = (
+            "fleet_invite_accepted"
+            if self.decision == FleetMembership.Status.ACCEPTED
+            else "fleet_invite_declined"
+        )
+        _emit_fleet_event(
+            {membership.owner_id, membership.member_id},
+            {
+                "event": event,
+                "membership_id": membership.id,
+                "owner_id": membership.owner_id,
+                "member_id": membership.member_id,
+                "status": membership.status,
+            },
+        )
+
+        serializer = FleetMembershipSerializer(membership, context={"request": request})
+        return Response(serializer.data)
+
+
+class FleetInviteAcceptView(FleetInviteDecisionView):
+    decision = FleetMembership.Status.ACCEPTED
+
+
+class FleetInviteDeclineView(FleetInviteDecisionView):
+    decision = FleetMembership.Status.DECLINED
+
+
+class FleetMembershipDeleteView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, pk):
+        membership = FleetMembership.objects.filter(owner=request.user, pk=pk).first()
+        if not membership:
+            return Response({"detail": "Fleet member not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        owner_id = membership.owner_id
+        member_id = membership.member_id
+        membership.delete()
+
+        _emit_fleet_event(
+            {owner_id, member_id},
+            {
+                "event": "fleet_member_removed",
+                "membership_id": pk,
+                "owner_id": owner_id,
+                "member_id": member_id,
+            },
+        )
+
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 @extend_schema(

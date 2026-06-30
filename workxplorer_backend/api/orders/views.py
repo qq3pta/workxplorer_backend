@@ -1075,10 +1075,7 @@ class OrdersViewSet(viewsets.ModelViewSet):
 
         tracked_carrier_ids = (
             Order.objects.filter(
-                Q(logistic=user)
-                | Q(created_by=user)
-                | Q(customer=user)
-                | Q(cargo__created_by=user)
+                Q(logistic=user) | Q(created_by=user) | Q(customer=user) | Q(cargo__created_by=user)
             )
             .exclude(carrier__isnull=True)
             .exclude(status__in=["finished", "canceled"])

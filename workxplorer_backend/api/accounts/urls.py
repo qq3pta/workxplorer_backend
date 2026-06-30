@@ -59,7 +59,9 @@ urlpatterns = [
     path("park/invite/", FleetInviteView.as_view(), name="fleet-invite"),
     path("park/incoming/", FleetIncomingInviteListView.as_view(), name="fleet-incoming"),
     path("park/invitations/<int:pk>/accept/", FleetInviteAcceptView.as_view(), name="fleet-accept"),
-    path("park/invitations/<int:pk>/decline/", FleetInviteDeclineView.as_view(), name="fleet-decline"),
+    path(
+        "park/invitations/<int:pk>/decline/", FleetInviteDeclineView.as_view(), name="fleet-decline"
+    ),
     path("park/<int:pk>/", FleetMembershipDeleteView.as_view(), name="fleet-delete"),
     path("dashboard-stats/", dashboard_stats, name="dashboard-stats"),
     # Email verification from profile

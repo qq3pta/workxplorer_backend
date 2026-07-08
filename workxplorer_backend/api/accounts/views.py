@@ -1,5 +1,8 @@
 from datetime import timedelta
 
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
+from common.ws_utils import to_ws_safe
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import transaction
@@ -7,27 +10,26 @@ from django.db.models import Q
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import generics, serializers, status
-from channels.layers import get_channel_layer
-from asgiref.sync import async_to_sync
-from common.ws_utils import to_ws_safe
+from rest_framework.decorators import api_view
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.decorators import api_view
-from api.loads.models import Cargo
-from api.notifications.services import notify
 from rest_framework_simplejwt.tokens import (
     BlacklistedToken,
     OutstandingToken,
     RefreshToken,
 )
 
+from api.loads.models import Cargo
+from api.notifications.models import Notification
+from api.notifications.services import notify
 
 from .models import FleetMembership, Profile
 from .permissions import IsAuthenticatedAndVerified
 from .serializers import (
     AvatarUploadSerializer,
+    ChangePasswordSerializer,
     DeleteAccountSerializer,
     ForgotPasswordSerializer,
     FleetInviteSerializer,
@@ -37,14 +39,13 @@ from .serializers import (
     MeSerializer,
     RegisterSerializer,
     ResendVerifySerializer,
-    ChangePasswordSerializer,
     RoleChangeSerializer,
+    SendEmailVerifyFromProfileSerializer,
     SendPhoneOTPSerializer,
     UpdateMeSerializer,
     VerifyEmailSerializer,
-    VerifyPhoneOTPSerializer,
-    SendEmailVerifyFromProfileSerializer,
     VerifyEmailFromProfileSerializer,
+    VerifyPhoneOTPSerializer,
 )
 
 User = get_user_model()
@@ -57,6 +58,14 @@ def _emit_fleet_event(user_ids, payload):
             f"user_{user_id}",
             to_ws_safe({"type": "notify", "data": payload}),
         )
+
+
+def _delete_fleet_invite_notifications(membership):
+    return Notification.objects.filter(
+        user=membership.member,
+        type="fleet_invite",
+        payload__membership_id=membership.id,
+    ).delete()[0]
 
 
 def _notify_dashboard(event="dashboard_updated"):
@@ -437,6 +446,8 @@ class FleetInviteView(APIView):
             membership = FleetMembership.objects.create(owner=request.user, member=invitee)
             created = True
 
+        _delete_fleet_invite_notifications(membership)
+
         owner_name = request.user.get_full_name() or request.user.username
         notify(
             user=invitee,
@@ -507,6 +518,7 @@ class FleetInviteDecisionView(APIView):
         membership.status = self.decision
         membership.responded_at = timezone.now()
         membership.save(update_fields=["status", "responded_at", "updated_at"])
+        deleted_notification_count = _delete_fleet_invite_notifications(membership)
 
         event = (
             "fleet_invite_accepted"
@@ -521,11 +533,14 @@ class FleetInviteDecisionView(APIView):
                 "owner_id": membership.owner_id,
                 "member_id": membership.member_id,
                 "status": membership.status,
+                "deleted_notification_count": deleted_notification_count,
             },
         )
 
         serializer = FleetMembershipSerializer(membership, context={"request": request})
-        return Response(serializer.data)
+        data = serializer.data
+        data["deleted_notification_count"] = deleted_notification_count
+        return Response(data)
 
 
 class FleetInviteAcceptView(FleetInviteDecisionView):
@@ -552,6 +567,55 @@ class FleetMembershipDeleteView(APIView):
             {owner_id, member_id},
             {
                 "event": "fleet_member_removed",
+                "membership_id": pk,
+                "owner_id": owner_id,
+                "member_id": member_id,
+            },
+        )
+
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@extend_schema(tags=["fleet"], responses=FleetMembershipSerializer(many=True))
+class FleetMyParksView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        qs = (
+            FleetMembership.objects.filter(
+                member=request.user,
+                status=FleetMembership.Status.ACCEPTED,
+            )
+            .select_related("owner", "member")
+            .order_by("owner__company_name", "owner__first_name", "owner__username")
+        )
+        serializer = FleetMembershipSerializer(qs, many=True, context={"request": request})
+        return Response(serializer.data)
+
+
+class FleetLeaveParkView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, pk):
+        membership = FleetMembership.objects.filter(
+            member=request.user,
+            pk=pk,
+            status=FleetMembership.Status.ACCEPTED,
+        ).first()
+        if not membership:
+            return Response(
+                {"detail": "Park membership not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        owner_id = membership.owner_id
+        member_id = membership.member_id
+        membership.delete()
+
+        _emit_fleet_event(
+            {owner_id, member_id},
+            {
+                "event": "fleet_member_left",
                 "membership_id": pk,
                 "owner_id": owner_id,
                 "member_id": member_id,

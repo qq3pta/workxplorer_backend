@@ -10,8 +10,10 @@ from .views import (
     FleetInviteAcceptView,
     FleetInviteDeclineView,
     FleetInviteView,
+    FleetLeaveParkView,
     FleetListView,
     FleetMembershipDeleteView,
+    FleetMyParksView,
     ForgotPasswordView,
     LoginView,
     LogoutView,
@@ -58,6 +60,8 @@ urlpatterns = [
     path("park/candidates/", FleetCandidateListView.as_view(), name="fleet-candidates"),
     path("park/invite/", FleetInviteView.as_view(), name="fleet-invite"),
     path("park/incoming/", FleetIncomingInviteListView.as_view(), name="fleet-incoming"),
+    path("park/my/", FleetMyParksView.as_view(), name="fleet-my-parks"),
+    path("park/my/<int:pk>/", FleetLeaveParkView.as_view(), name="fleet-leave-park"),
     path("park/invitations/<int:pk>/accept/", FleetInviteAcceptView.as_view(), name="fleet-accept"),
     path(
         "park/invitations/<int:pk>/decline/", FleetInviteDeclineView.as_view(), name="fleet-decline"

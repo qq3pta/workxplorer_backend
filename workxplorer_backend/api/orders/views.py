@@ -1094,7 +1094,7 @@ class OrdersViewSet(viewsets.ModelViewSet):
                 gps__point__isnull=False,
             )
 
-        carriers = (
+        carriers = list(
             User.objects.filter(
                 role="CARRIER",
             )
@@ -1107,11 +1107,28 @@ class OrdersViewSet(viewsets.ModelViewSet):
             .distinct()
             .order_by("id")
         )
+        carrier_ids = [carrier.id for carrier in carriers]
+        active_orders_by_carrier = {}
+        active_orders = (
+            Order.objects.filter(
+                carrier_id__in=carrier_ids,
+                status__in=[
+                    Order.OrderStatus.PENDING,
+                    Order.OrderStatus.EN_ROUTE,
+                ],
+            )
+            .select_related("cargo")
+            .order_by("carrier_id", "-updated_at")
+        )
+        for order in active_orders:
+            active_orders_by_carrier.setdefault(order.carrier_id, order)
 
+        serializer_context = self.get_serializer_context()
+        serializer_context["active_orders_by_carrier"] = active_orders_by_carrier
         serializer = ExpeditorCarrierMapSerializer(
             carriers,
             many=True,
-            context=self.get_serializer_context(),
+            context=serializer_context,
         )
         return Response(serializer.data, status=http_status.HTTP_200_OK)
 

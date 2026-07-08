@@ -587,6 +587,8 @@ class ExpeditorCarrierMapSerializer(serializers.ModelSerializer):
     lng = serializers.SerializerMethodField()
     speed = serializers.SerializerMethodField()
     recorded_at = serializers.SerializerMethodField()
+    has_active_order = serializers.SerializerMethodField()
+    active_order = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -600,6 +602,8 @@ class ExpeditorCarrierMapSerializer(serializers.ModelSerializer):
             "lng",
             "speed",
             "recorded_at",
+            "has_active_order",
+            "active_order",
         )
         read_only_fields = fields
 
@@ -632,6 +636,52 @@ class ExpeditorCarrierMapSerializer(serializers.ModelSerializer):
         if not gps or not gps.recorded_at:
             return None
         return gps.recorded_at
+
+    def get_has_active_order(self, obj):
+        return self._active_order(obj) is not None
+
+    def _active_order(self, obj):
+        if "active_orders_by_carrier" in self.context:
+            return (self.context.get("active_orders_by_carrier") or {}).get(obj.id)
+
+        return (
+            Order.objects.filter(
+                carrier_id=obj.id,
+                status__in=[
+                    Order.OrderStatus.PENDING,
+                    Order.OrderStatus.EN_ROUTE,
+                ],
+            )
+            .select_related("cargo")
+            .order_by("-updated_at")
+            .first()
+        )
+
+    def get_active_order(self, obj):
+        order = self._active_order(obj)
+        if not order:
+            return None
+
+        cargo = getattr(order, "cargo", None)
+        share_token = str(order.share_token) if order.share_token else None
+        shared_url = f"/api/orders/shared/{share_token}/" if share_token else None
+
+        return {
+            "id": order.id,
+            "order_id": order.id,
+            "share_token": share_token,
+            "shared_url": shared_url,
+            "status": order.status,
+            "driver_status": order.driver_status,
+            "cargo_id": order.cargo_id,
+            "cargo_uuid": str(cargo.uuid) if cargo and cargo.uuid else None,
+            "product": getattr(cargo, "product", "") if cargo else "",
+            "origin_city": getattr(cargo, "origin_city", None) if cargo else None,
+            "destination_city": getattr(cargo, "destination_city", None) if cargo else None,
+            "load_date": getattr(cargo, "load_date", None) if cargo else None,
+            "delivery_date": getattr(cargo, "delivery_date", None) if cargo else None,
+            "route_distance_km": order.route_distance_km,
+        }
 
 
 class SharedOrderTrackingSerializer(serializers.ModelSerializer):

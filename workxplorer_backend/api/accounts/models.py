@@ -36,6 +36,14 @@ class User(AbstractUser):
     is_verified = models.BooleanField("Верифицирован", default=False)
     is_accept_policy = models.BooleanField(default=False)
     policy_accepted_at = models.DateTimeField(null=True, blank=True)
+    has_signed_contract = models.BooleanField(
+        default=False,
+        help_text="Unlocks paid features and removes demo limits.",
+    )
+    demo_request_limit = models.PositiveIntegerField(
+        default=5,
+        help_text="Cargo/order limit while contract is not signed.",
+    )
     last_seen = models.DateTimeField(null=True, blank=True, db_index=True)
 
     fcm_token = models.CharField(max_length=255, blank=True, null=True)

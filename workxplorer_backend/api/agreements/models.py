@@ -7,6 +7,7 @@ from decimal import Decimal
 from django.db import models, transaction
 from django.utils import timezone
 
+from api.accounts.access import ensure_can_take_demo_transport
 from api.loads.models import Cargo, CargoStatus
 from api.orders.models import Order
 
@@ -184,6 +185,11 @@ class Agreement(models.Model):
                 raise ValidationError("Не удалось рассчитать расстояние маршрута")
 
             price_total = offer.price_value or Decimal("0.00")
+            for transport_user in filter(
+                None,
+                {offer.carrier, offer.intermediary or offer.logistic},
+            ):
+                ensure_can_take_demo_transport(transport_user)
 
             Order.objects.create(
                 cargo=cargo,

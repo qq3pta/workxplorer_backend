@@ -34,7 +34,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from api.accounts.models import UserRole
-from api.accounts.permissions import IsAuthenticatedAndVerified
+from api.accounts.permissions import HasSignedContractAccess, IsAuthenticatedAndVerified
 from api.loads.choices import CargoCategory, Currency, TransportType
 from api.orders.models import Order
 
@@ -1202,7 +1202,7 @@ class BaseAnalyticsMixin:
 
 @extend_schema(responses=MyAnalyticsSerializer)
 class MyAnalyticsView(BaseAnalyticsMixin, APIView):
-    permission_classes = [IsAuthenticatedAndVerified]
+    permission_classes = [IsAuthenticatedAndVerified, HasSignedContractAccess]
 
     def get(self, request):
         user = request.user
@@ -1224,7 +1224,7 @@ class MyAnalyticsView(BaseAnalyticsMixin, APIView):
 
 @extend_schema(responses=GlobalAnalyticsSerializer)
 class GlobalAnalyticsView(BaseAnalyticsMixin, APIView):
-    permission_classes = [IsAuthenticatedAndVerified]
+    permission_classes = [IsAuthenticatedAndVerified, HasSignedContractAccess]
 
     def get(self, request):
         qs = Order.objects.filter(status__in=self.completed_statuses)
@@ -1238,7 +1238,7 @@ class GlobalAnalyticsView(BaseAnalyticsMixin, APIView):
 
 @extend_schema(responses=DirectionDetailSerializer)
 class DirectionDetailView(BaseAnalyticsMixin, APIView):
-    permission_classes = [IsAuthenticatedAndVerified]
+    permission_classes = [IsAuthenticatedAndVerified, HasSignedContractAccess]
 
     def get(self, request, direction_id):
         import hashlib
@@ -1299,7 +1299,7 @@ class DirectionDetailView(BaseAnalyticsMixin, APIView):
 
 @extend_schema(responses=CountryDirectionDetailSerializer)
 class CountryDirectionDetailView(BaseAnalyticsMixin, APIView):
-    permission_classes = [IsAuthenticatedAndVerified]
+    permission_classes = [IsAuthenticatedAndVerified, HasSignedContractAccess]
 
     def get(self, request, direction_id):
         import hashlib
@@ -1360,7 +1360,7 @@ class CountryDirectionDetailView(BaseAnalyticsMixin, APIView):
 
 @extend_schema(responses=CountryDirectionsListResponseSerializer)
 class CountryDirectionsListView(BaseAnalyticsMixin, APIView):
-    permission_classes = [IsAuthenticatedAndVerified]
+    permission_classes = [IsAuthenticatedAndVerified, HasSignedContractAccess]
 
     def get(self, request):
         qs = self.scoped_completed_orders_qs(request)
@@ -1451,7 +1451,7 @@ class CountryDirectionsListView(BaseAnalyticsMixin, APIView):
 
 @extend_schema(responses=CountryDirectionsListResponseSerializer)
 class MyCountryDirectionsListView(BaseAnalyticsMixin, APIView):
-    permission_classes = [IsAuthenticatedAndVerified]
+    permission_classes = [IsAuthenticatedAndVerified, HasSignedContractAccess]
 
     def get(self, request):
         qs = self.my_completed_orders_qs(request)
@@ -1542,7 +1542,7 @@ class MyCountryDirectionsListView(BaseAnalyticsMixin, APIView):
 
 @extend_schema(responses=PartnerAnalyticsSerializer)
 class PartnerAnalyticsView(BaseAnalyticsMixin, APIView):
-    permission_classes = [IsAuthenticatedAndVerified]
+    permission_classes = [IsAuthenticatedAndVerified, HasSignedContractAccess]
 
     def get(self, request, partner_id):
         qs = Order.objects.filter(status__in=self.completed_statuses).filter(
@@ -1577,7 +1577,7 @@ class PartnerAnalyticsView(BaseAnalyticsMixin, APIView):
 
 
 class ExportAnalyticsView(BaseAnalyticsMixin, APIView):
-    permission_classes = [IsAuthenticatedAndVerified]
+    permission_classes = [IsAuthenticatedAndVerified, HasSignedContractAccess]
 
     def get(self, request):
         qs = self.scoped_completed_orders_qs(request)
@@ -1586,7 +1586,7 @@ class ExportAnalyticsView(BaseAnalyticsMixin, APIView):
 
 
 class ExportMyAnalyticsView(BaseAnalyticsMixin, APIView):
-    permission_classes = [IsAuthenticatedAndVerified]
+    permission_classes = [IsAuthenticatedAndVerified, HasSignedContractAccess]
 
     def get(self, request):
         qs = Order.objects.filter(status__in=self.completed_statuses).select_related("cargo")
@@ -1609,7 +1609,7 @@ class ExportMyAnalyticsView(BaseAnalyticsMixin, APIView):
     responses={200: OpenApiTypes.BINARY},
 )
 class ExportMyDirectionAnalyticsView(BaseAnalyticsMixin, APIView):
-    permission_classes = [IsAuthenticatedAndVerified]
+    permission_classes = [IsAuthenticatedAndVerified, HasSignedContractAccess]
 
     def get(self, request, direction_id):
         qs = Order.objects.filter(status__in=self.completed_statuses).select_related("cargo")
@@ -1665,7 +1665,7 @@ class ExportMyDirectionAnalyticsView(BaseAnalyticsMixin, APIView):
     responses={200: OpenApiTypes.BINARY},
 )
 class ExportDirectionAnalyticsView(BaseAnalyticsMixin, APIView):
-    permission_classes = [IsAuthenticatedAndVerified]
+    permission_classes = [IsAuthenticatedAndVerified, HasSignedContractAccess]
 
     def get(self, request, direction_id):
         qs = self.scoped_completed_orders_qs(request)

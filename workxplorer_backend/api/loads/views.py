@@ -25,6 +25,7 @@ from common.ws_utils import to_ws_safe
 from api.loads.models import LoadInvite
 from api.offers.models import Offer
 
+from ..accounts.access import ensure_can_publish_demo_cargo, user_role
 from ..accounts.permissions import (
     IsAuthenticatedAndVerified,
     IsCustomerOrCarrierOrLogistic,
@@ -80,7 +81,7 @@ class PublishCargoView(generics.CreateAPIView):
     def perform_create(self, serializer):
         user = self.request.user
 
-        cargo = serializer.save(created_by=user if user.role == "logistic" else None)
+        cargo = serializer.save(created_by=user if user_role(user) == "LOGISTIC" else None)
 
         cargo.update_price_uzs()
 
@@ -104,6 +105,7 @@ class PublishCargoView(generics.CreateAPIView):
     def create(self, request, *args, **kwargs):
         s = self.get_serializer(data=request.data)
         s.is_valid(raise_exception=True)
+        ensure_can_publish_demo_cargo(request.user)
         cargo = self.perform_create(s)
         data = self.get_serializer(cargo).data
 

@@ -448,6 +448,7 @@ class MeSerializer(serializers.ModelSerializer):
     documents = serializers.SerializerMethodField()
     rating_as_customer = serializers.SerializerMethodField()
     rating_as_carrier = serializers.SerializerMethodField()
+    can_access_paid_features = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -473,6 +474,9 @@ class MeSerializer(serializers.ModelSerializer):
             "fcm_token",
             "is_accept_policy",
             "policy_accepted_at",
+            "has_signed_contract",
+            "demo_request_limit",
+            "can_access_paid_features",
         )
 
         read_only_fields = (
@@ -484,9 +488,17 @@ class MeSerializer(serializers.ModelSerializer):
             "rating_as_customer",
             "rating_as_carrier",
             "is_email_verified",
+            "has_signed_contract",
+            "demo_request_limit",
+            "can_access_paid_features",
             "profile",
             "documents",
         )
+
+    def get_can_access_paid_features(self, obj):
+        from .access import has_signed_contract_access
+
+        return has_signed_contract_access(obj)
 
     @extend_schema_field(UserDocumentSerializer(many=True))
     def get_documents(self, obj):

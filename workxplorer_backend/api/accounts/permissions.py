@@ -9,6 +9,7 @@ __all__ = [
     "IsCarrierOrLogistic",
     "IsCustomerOrLogistic",
     "IsCustomerOrCarrierOrLogistic",
+    "HasSignedContractAccess",
 ]
 
 
@@ -59,3 +60,12 @@ class IsCustomerOrCarrierOrLogistic(BasePermission):
             or IsCarrier().has_permission(request, view)
             or IsLogistic().has_permission(request, view)
         )
+
+
+class HasSignedContractAccess(BasePermission):
+    message = "Available after contract signing. Contact support to unlock access."
+
+    def has_permission(self, request, view) -> bool:
+        from .access import has_signed_contract_access
+
+        return has_signed_contract_access(getattr(request, "user", None))

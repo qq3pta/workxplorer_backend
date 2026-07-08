@@ -24,6 +24,11 @@ from asgiref.sync import async_to_sync
 from common.ws_utils import to_ws_safe
 
 
+from api.accounts.access import (
+    ensure_can_access_paid_feature,
+    ensure_can_take_demo_transport,
+    user_role,
+)
 from .models import Order, OrderStatusHistory, DriverLocation
 from api.offers.models import Offer
 from api.notifications.services import send_expo_push_to_user
@@ -623,6 +628,8 @@ class OrdersViewSet(viewsets.ModelViewSet):
         if user.role != "CARRIER":
             return Response({"detail": "Только перевозчики могут принять заказ"}, status=403)
 
+        ensure_can_take_demo_transport(user)
+
         order.carrier = user
         order.invited_carrier = None
         order.invite_token = None
@@ -931,6 +938,8 @@ class OrdersViewSet(viewsets.ModelViewSet):
     def add_driver_to_map(self, request, pk=None):
         order = self.get_object()
         user = request.user
+        if user_role(user) == "LOGISTIC":
+            ensure_can_access_paid_feature(user, "Map")
 
         allowed_requester_ids = {
             user_id
@@ -1068,6 +1077,8 @@ class OrdersViewSet(viewsets.ModelViewSet):
                 {"detail": "Карта перевозчиков доступна только экспедитору."},
                 status=http_status.HTTP_403_FORBIDDEN,
             )
+
+        ensure_can_access_paid_feature(user, "Map")
 
         company_name = (getattr(user, "company_name", "") or "").strip()
 

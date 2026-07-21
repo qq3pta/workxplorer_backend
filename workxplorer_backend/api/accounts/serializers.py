@@ -13,7 +13,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from .emails import send_code_email
 from .models import EmailOTP, FleetMembership, PhoneOTP, Profile, UserRole
-from .utils.sms import check_sms_otp, send_sms_otp
+from .utils.sms import send_sms_otp
 
 User = get_user_model()
 
@@ -175,13 +175,12 @@ class SendPhoneOTPSerializer(serializers.Serializer):
                     {"detail": "Код уже отправлен. Подождите.", "seconds_left": left}
                 )
 
-        send_sms_otp(phone)
-
-        PhoneOTP.objects.create(
-            phone=phone,
-            purpose=purpose,
-            expires_at=timezone.now() + timedelta(minutes=5),
-        )
+        otp, raw_code = PhoneOTP.create_otp(phone, purpose, ttl_min=5)
+        try:
+            send_sms_otp(phone, raw_code, purpose=purpose)
+        except Exception:
+            otp.delete()
+            raise
 
         return {
             "detail": "Код отправлен по SMS",
@@ -209,9 +208,6 @@ class VerifyPhoneOTPSerializer(serializers.Serializer):
         code = self.validated_data["code"]
         purpose = self.validated_data["purpose"]
 
-        # Проверяем SMS код через Twilio
-        check_sms_otp(phone, code)
-
         # Проверяем OTP запись в БД
         otp = (
             PhoneOTP.objects.filter(phone=phone, purpose=purpose, is_used=False)
@@ -222,8 +218,8 @@ class VerifyPhoneOTPSerializer(serializers.Serializer):
         if not otp:
             raise serializers.ValidationError({"detail": "OTP не найден. Запросите код заново."})
 
-        otp.is_used = True
-        otp.save(update_fields=["is_used"])
+        if not otp.check_and_consume(code):
+            raise serializers.ValidationError({"code": "Код неверный или просроченный"})
 
         # Если пользователь существует — отмечаем verified
         user = User.objects.filter(phone=phone).first()

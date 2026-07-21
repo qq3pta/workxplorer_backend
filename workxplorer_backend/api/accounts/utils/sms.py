@@ -3,7 +3,7 @@ import logging
 import requests
 from django.conf import settings
 from django.core.cache import cache
-from django.core.exceptions import ValidationError
+from rest_framework.exceptions import ValidationError
 
 log = logging.getLogger(__name__)
 
@@ -90,6 +90,12 @@ def send_sms(e164_phone: str, message: str) -> None:
             if response.status_code == 401 and attempt == 0:
                 cache.delete(ESKIZ_TOKEN_CACHE_KEY)
                 continue
+            if response.status_code >= 400:
+                log.error(
+                    "Eskiz SMS send rejected: status=%s body=%s",
+                    response.status_code,
+                    response.text,
+                )
             response.raise_for_status()
             payload = response.json()
         except Exception as exc:

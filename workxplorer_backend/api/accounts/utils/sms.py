@@ -44,7 +44,9 @@ def _get_eskiz_token(force_refresh: bool = False) -> str:
         payload = response.json()
     except Exception as exc:
         log.exception("Eskiz auth failed: %s", exc)
-        raise _sms_validation_error("Не удалось подключиться к SMS шлюзу. Попробуйте позже.") from None
+        raise _sms_validation_error(
+            "Не удалось подключиться к SMS шлюзу. Попробуйте позже."
+        ) from None
 
     token = (payload.get("data") or {}).get("token")
     if not token:

@@ -11,6 +11,10 @@ ESKIZ_TOKEN_CACHE_KEY = "eskiz_sms_token"
 ESKIZ_TOKEN_CACHE_SECONDS = 60 * 60 * 24 * 25
 
 
+def _sms_validation_error(message: str) -> ValidationError:
+    return ValidationError({"detail": message})
+
+
 def _eskiz_base_url() -> str:
     return str(getattr(settings, "ESKIZ_BASE_URL", "https://notify.eskiz.uz")).rstrip("/")
 
@@ -19,7 +23,7 @@ def _eskiz_credentials() -> tuple[str, str]:
     email = getattr(settings, "ESKIZ_EMAIL", "")
     password = getattr(settings, "ESKIZ_PASSWORD", "")
     if not email or not password:
-        raise ValidationError("SMS gateway is not configured.")
+        raise _sms_validation_error("SMS gateway is not configured.")
     return email, password
 
 
@@ -40,12 +44,12 @@ def _get_eskiz_token(force_refresh: bool = False) -> str:
         payload = response.json()
     except Exception as exc:
         log.exception("Eskiz auth failed: %s", exc)
-        raise ValidationError("Не удалось подключиться к SMS шлюзу. Попробуйте позже.") from None
+        raise _sms_validation_error("Не удалось подключиться к SMS шлюзу. Попробуйте позже.") from None
 
     token = (payload.get("data") or {}).get("token")
     if not token:
         log.error("Eskiz auth response does not contain token: %s", payload)
-        raise ValidationError("SMS шлюз не вернул токен авторизации.")
+        raise _sms_validation_error("SMS шлюз не вернул токен авторизации.")
 
     cache.set(ESKIZ_TOKEN_CACHE_KEY, token, ESKIZ_TOKEN_CACHE_SECONDS)
     return token
@@ -57,8 +61,8 @@ def _normalize_eskiz_phone(e164_phone: str) -> str:
 
 def _build_otp_message(code: str, purpose: str) -> str:
     if purpose == "reset":
-        return f"Код восстановления пароля для KAD-ONE: {code}"
-    return f"Код подтверждения для регистрации в KAD-ONE: {code}"
+        return f"Восстановление пароля для сайта KAD-ONE: {code}"
+    return f"Код подтверждения для регистрации на сайте KAD-ONE: {code}"
 
 
 def send_sms_otp(e164_phone: str, code: str, purpose: str = "verify") -> None:
@@ -66,11 +70,19 @@ def send_sms_otp(e164_phone: str, code: str, purpose: str = "verify") -> None:
     send_sms(e164_phone=e164_phone, message=message)
 
 
+def _eskiz_error_message(response) -> str:
+    try:
+        payload = response.json()
+    except ValueError:
+        return ""
+    return payload.get("message") or ""
+
+
 def send_sms(e164_phone: str, message: str) -> None:
     phone = _normalize_eskiz_phone(e164_phone)
     sender = getattr(settings, "ESKIZ_FROM", "")
     if not sender:
-        raise ValidationError("SMS sender is not configured.")
+        raise _sms_validation_error("SMS sender is not configured.")
 
     data = {
         "mobile_phone": phone,
@@ -96,15 +108,20 @@ def send_sms(e164_phone: str, message: str) -> None:
                     response.status_code,
                     response.text,
                 )
+                error_message = _eskiz_error_message(response)
+                if error_message:
+                    raise _sms_validation_error(error_message)
             response.raise_for_status()
             payload = response.json()
+        except ValidationError:
+            raise
         except Exception as exc:
             log.exception("Eskiz SMS send failed: %s", exc)
-            raise ValidationError("Не удалось отправить код. Попробуйте позже.") from None
+            raise _sms_validation_error("Не удалось отправить код. Попробуйте позже.") from None
 
         if payload.get("status") not in {"success", "waiting"}:
             log.error("Eskiz SMS send returned unexpected response: %s", payload)
-            raise ValidationError("SMS шлюз не принял сообщение.")
+            raise _sms_validation_error("SMS шлюз не принял сообщение.")
         return
 
-    raise ValidationError("Не удалось авторизоваться в SMS шлюзе.")
+    raise _sms_validation_error("Не удалось авторизоваться в SMS шлюзе.")

@@ -151,8 +151,9 @@ class EmailOTP(models.Model):
             "-created_at"
         )
 
-        if old_qs.count() > 5:
-            old_qs[5:].delete()
+        old_ids = list(old_qs.values_list("pk", flat=True)[5:])
+        if old_ids:
+            EmailOTP.objects.filter(pk__in=old_ids).delete()
 
         raw = f"{secrets.randbelow(10**6):06d}"
 
@@ -210,8 +211,9 @@ class PhoneOTP(models.Model):
             "-created_at"
         )
 
-        if old_qs.count() > 5:
-            old_qs[5:].delete()
+        old_ids = list(old_qs.values_list("pk", flat=True)[5:])
+        if old_ids:
+            PhoneOTP.objects.filter(pk__in=old_ids).delete()
 
         raw = f"{secrets.randbelow(10**6):06d}"
 

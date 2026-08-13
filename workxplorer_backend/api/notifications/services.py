@@ -1,4 +1,6 @@
+import re
 from datetime import timedelta
+from html import unescape
 
 import requests
 from asgiref.sync import async_to_sync
@@ -6,12 +8,18 @@ from channels.layers import get_channel_layer
 from django.conf import settings
 from django.core.mail import send_mail
 from django.utils import timezone
+from django.utils.html import strip_tags
 
 from .models import ExpoPushTicket, Notification, NotificationPreference, PushDevice
 
 EXPO_PUSH_SEND_URL = "https://exp.host/--/api/v2/push/send"
 EXPO_PUSH_RECEIPTS_URL = "https://exp.host/--/api/v2/push/getReceipts"
 EXPO_PUSH_CHUNK_SIZE = 100
+PUSH_BLOCK_TAG_RE = re.compile(
+    r"</?(?:br|p|div|li|ul|ol|h[1-6]|blockquote|section|article|tr|td|th)\b[^>]*>",
+    re.IGNORECASE,
+)
+PUSH_WHITESPACE_RE = re.compile(r"\s+")
 
 OFFER_NOTIFICATION_TYPES = {
     "offer_sent",
@@ -60,6 +68,17 @@ def _expo_headers() -> dict:
 def _chunks(items: list, size: int):
     for index in range(0, len(items), size):
         yield items[index : index + size]
+
+
+def normalize_push_text(value: str | None) -> str:
+    if not value:
+        return ""
+
+    text = str(value)
+    text = PUSH_BLOCK_TAG_RE.sub(" ", text)
+    text = strip_tags(text)
+    text = unescape(text)
+    return PUSH_WHITESPACE_RE.sub(" ", text).strip()
 
 
 def _is_push_allowed(user, notification_type: str | None = None) -> bool:
@@ -221,8 +240,8 @@ def build_notification_push_data(
         "notification_id": str(notification.id),
         "event": notification_type,
         "type": notification_type,
-        "title": title,
-        "message": message or "",
+        "title": normalize_push_text(title),
+        "message": normalize_push_text(message),
         "cargo_id": str(cargo_id) if cargo_id else "",
         "offer_id": str(offer_id) if offer_id else "",
         "order_id": str(order_id) if order_id else "",
@@ -265,8 +284,8 @@ def send_expo_push_to_user(
     if not _is_push_allowed(user, notification_type):
         return []
 
-    title = (title or "").strip() or "Уведомление"
-    message = (message or "").strip()
+    title = normalize_push_text(title) or "Уведомление"
+    message = normalize_push_text(message)
     push_data = _normalize_push_data(data)
 
     devices = list(
@@ -394,8 +413,8 @@ def send_push(token: str, title: str, message: str, data=None):
     if not token:
         return
 
-    title = (title or "").strip()
-    message = (message or "").strip()
+    title = normalize_push_text(title)
+    message = normalize_push_text(message)
 
     try:
         response = requests.post(
